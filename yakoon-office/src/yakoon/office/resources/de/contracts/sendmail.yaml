@@ -1,0 +1,15 @@
+kind: command_view
+
+views:
+
+  send_mail:
+    role: info
+    title: 
+    blocks:
+      - type: text
+        text: | 
+          📧 Mail sent!
+          Message:
+          {{ message }}
+
+inputs: {}
