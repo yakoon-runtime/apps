@@ -1,0 +1,11 @@
+kind: state
+
+state:
+
+  role: info
+  title: General Commands Manual 
+  blocks:
+    - type: text
+      text: | 
+        'su'
+

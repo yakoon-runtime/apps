@@ -16,4 +16,4 @@ class CmdSendMail(Command):
         message = await presenter.inputs.ask("ask_message")
 
         await audits.audit(f"Mail sent: {message}")
-        await presenter.views.emit("send_mail", message=message)
+        await presenter.views.emit("show", message=message)

@@ -1,15 +1,12 @@
-kind: command_view
+kind: state
 
-views:
-
-  send_mail:
-    role: info
-    title: 
+state:
+  role: infi
+  title: "Bestätigung"
+  blocks:
     blocks:
       - type: text
         text: | 
           📧 Mail sent!
           Message:
           {{ message }}
-
-inputs: {}
