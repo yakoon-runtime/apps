@@ -9,4 +9,4 @@ state:
         text: | 
           📧 Mail sent!
           Message:
-          {{ data.message }}
+          {{ message }}
