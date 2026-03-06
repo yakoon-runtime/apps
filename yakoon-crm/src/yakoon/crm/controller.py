@@ -3,15 +3,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from yakoon.base.controllers import BaseController
-from yakoon.base.resources.reference import ResourceReferences
+from yakoon.base.runtime.controllers import Controller
+from yakoon.base.runtime.controllers.resources import ResourceReferences
 from yakoon.crm.customer.commands.cmdset import CrmCustomerCommands
 
 if TYPE_CHECKING:
-    from yakoon.base.commands.commandset import CommandSet
+    from yakoon.base.runtime import CommandSet
 
 
-class CrmCustomerCoreController(BaseController):
+class CrmCustomerCoreController(Controller):
     """Controller for CRM customer management.
 
     Provides:

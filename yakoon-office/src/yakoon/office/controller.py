@@ -3,15 +3,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from yakoon.base.controllers import BaseController
-from yakoon.base.resources.reference import ResourceReferences
+from yakoon.base.runtime.controllers import Controller
+from yakoon.base.runtime.controllers.resources import ResourceReferences
 from yakoon.office.commands.cmdset import MailingCommands
 
 if TYPE_CHECKING:
-    from yakoon.base.commands.commandset import CommandSet
+    from yakoon.base.runtime import CommandSet
 
 
-class OfficeMailingCoreController(BaseController):
+class OfficeMailingCoreController(Controller):
     """Controller for the Office Mailing domain.
 
     Provides:

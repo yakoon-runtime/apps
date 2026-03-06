@@ -1,10 +1,13 @@
 from uuid import uuid4
 
-from yakoon.base.commands.command import Command
-from yakoon.base.commands.request import Request
-from yakoon.base.models.command import CommandKind, CommandVisibility
 from yakoon.base.ports import AuditLogService
-from yakoon.base.runtime.session import Session
+from yakoon.base.runtime import (
+    Command,
+    CommandKind,
+    CommandVisibility,
+    Request,
+    Session,
+)
 
 
 class CmdCustomerStore(Command):
