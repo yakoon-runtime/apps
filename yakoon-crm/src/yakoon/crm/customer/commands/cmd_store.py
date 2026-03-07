@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from yakoon.base.ports import AuditLogService
+from yakoon.base.capabilities.audit import AuditLogService
 from yakoon.base.runtime import (
     Command,
     CommandKind,
