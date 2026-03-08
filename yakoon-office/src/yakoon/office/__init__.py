@@ -1,17 +1,17 @@
-from yakoon.base.plugins.plugin import PluginExport, PluginMeta
+from yakoon.base.plugins.module import ModuleExport, ModuleMeta
 from yakoon.base.runtime.services import ServiceDirectory
 from yakoon.office.controller import OfficeMailingCoreController
 
-meta = PluginMeta(
+meta = ModuleMeta(
     name="yakoon.office",
     version="0.1.0",
     description="Office ...",
 )
 
 
-def register(services: ServiceDirectory) -> PluginExport:
+def register(services: ServiceDirectory) -> ModuleExport:
 
-    return PluginExport(
+    return ModuleExport(
         meta,
         controllers=[
             OfficeMailingCoreController,
