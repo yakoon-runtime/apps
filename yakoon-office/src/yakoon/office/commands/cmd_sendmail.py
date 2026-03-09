@@ -11,7 +11,7 @@ class CmdSendMail(Command):
         presenter = await self.get_presenter(session)
         audits = self.services.get(AuditLogService)
 
-        message = await presenter.inputs.ask("ask_message")
+        message = await presenter.present("ask_message")
 
         await audits.audit(f"Mail sent: {message}")
-        await presenter.views.emit("show", message=message)
+        await presenter.present("show", message=message)

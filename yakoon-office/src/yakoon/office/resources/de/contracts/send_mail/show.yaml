@@ -1,7 +1,7 @@
-kind: state
+kind: view
 
-state:
-  role: infi
+view:
+  role: info
   title: "Bestätigung"
   blocks:
     blocks:

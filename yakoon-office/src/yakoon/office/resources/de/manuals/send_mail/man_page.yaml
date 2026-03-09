@@ -1,7 +1,6 @@
-kind: state
+kind: view
 
-state:
-
+view:
   role: info
   title: General Commands Manual 
   blocks:
