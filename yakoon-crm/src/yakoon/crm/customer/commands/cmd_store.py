@@ -38,4 +38,4 @@ class CmdCustomerStore(Command):
         customer_id = f"CUST-{uuid4().hex[:8]}"
 
         # “Ernte”: audit + event
-        await audits.audit(f"Customer created: {first} {last} id={customer_id}")
+        audits.audit(f"Customer created: {first} {last} id={customer_id}")
