@@ -1,0 +1,16 @@
+kind: view
+
+view:
+
+  role: info
+  title: General Commands Manual 
+  blocks:
+    - type: text
+      text: | 
+        'use'
+
+
+
+
+
+

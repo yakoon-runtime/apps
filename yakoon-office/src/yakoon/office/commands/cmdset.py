@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from yakoon.base.runtime import Command, CommandSet
+from yakoon.base.api import Command, CommandSet
 from yakoon.office.commands.cmd_sendmail import CmdSendMail
 
 

@@ -1,12 +1,12 @@
+from yakoon.base.api import Command, Request
 from yakoon.base.capabilities.audit import AuditLogService
-from yakoon.base.runtime import Command, Request, Session
 
 
 class CmdSendMail(Command):
 
     key = "sendmail"
 
-    async def run(self, session: Session, request: Request) -> None:  # noqa: ARG002
+    async def run(self, request: Request) -> None:  # noqa: ARG002
 
         presenter = await self.get_presenter(session)
         audits = self.services.get(AuditLogService)

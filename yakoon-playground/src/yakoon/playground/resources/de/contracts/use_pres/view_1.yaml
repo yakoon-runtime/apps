@@ -1,0 +1,11 @@
+kind: view
+
+view:
+  role: info
+  title: "Commands"
+  blocks:
+    - type: text
+      text: "Das ist eine Zeile Text."
+
+    - type: text
+      text: "Und das ist eine zweite Zeile Text."

@@ -1,13 +1,8 @@
 from uuid import uuid4
 
+from yakoon.base.api import Command, Request
+from yakoon.base.api.command import CommandKind, CommandVisibility
 from yakoon.base.capabilities.audit import AuditLogService
-from yakoon.base.runtime import (
-    Command,
-    CommandKind,
-    CommandVisibility,
-    Request,
-    Session,
-)
 
 
 class CmdCustomerStore(Command):
@@ -19,7 +14,7 @@ class CmdCustomerStore(Command):
 
     requires_workflow = True
 
-    async def run(self, session: Session, request: Request) -> None:  # noqa: ARG002
+    async def run(self, request: Request) -> None:  # noqa: ARG002
 
         audits = self.services.get(AuditLogService)
 

@@ -1,11 +1,6 @@
 from yakoon.base import ports
-from yakoon.base.runtime import (
-    Command,
-    CommandKind,
-    CommandVisibility,
-    Request,
-    Session,
-)
+from yakoon.base.api import Command, Request
+from yakoon.base.api.command import CommandKind, CommandVisibility
 
 
 class CmdCustomerValidate(Command):
@@ -16,7 +11,7 @@ class CmdCustomerValidate(Command):
     visibility = CommandVisibility.INTERNAL
     requires_workflow = True
 
-    async def run(self, session: Session, request: Request) -> None:  # noqa: ARG002
+    async def run(self, request: Request) -> None:  # noqa: ARG002
 
         wf = self.services.get(ports.WorkflowPublic)
         batch_id = self.context.batch_id

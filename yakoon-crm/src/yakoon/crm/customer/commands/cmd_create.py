@@ -1,14 +1,13 @@
-from yakoon.base import ports
-from yakoon.base.runtime import Command, Request, Session
+from yakoon.base.api import Command, Request
 
 
 class CmdCustomerCreate(Command):
 
     key = "customer-create"
 
-    async def run(self, session: Session, request: Request) -> None:  # noqa: ARG002
+    async def run(self, request: Request) -> None:  # noqa: ARG002
 
-        wf = self.services.get(ports.WorkflowPublic)
+        wf = self.services.get(WorkflowPublic)
         if not self.context:
             raise RuntimeError("Context cannot be None.")
 
