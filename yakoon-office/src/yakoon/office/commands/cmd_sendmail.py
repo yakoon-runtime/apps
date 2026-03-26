@@ -1,5 +1,5 @@
-from yakoon.base.api import Command, Request
 from yakoon.base.capabilities.audit import AuditLogService
+from yakoon.base.runtime.commands import Command, Request
 
 
 class CmdSendMail(Command):

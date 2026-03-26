@@ -1,5 +1,4 @@
-from yakoon.base.api import Command, Request
-from yakoon.base.api.flow import ask, text
+from yakoon.base.runtime.commands import Command, Request
 
 
 class CmdUseAsk(Command):
@@ -11,7 +10,7 @@ class CmdUseAsk(Command):
         presenter = await self.get_presenter()
         view = await presenter.render("view_1")
 
-        event = yield ask(view)
+        event = yield self.op.ask(view)
 
         value = event.require("result")
         yield text(f"Ihre Eingabe: {value}")

@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
 
-from yakoon.base.api.controller import Controller, ResourceReferences
+from yakoon.base.runtime.commands.commandset import CommandSet
+from yakoon.base.runtime.controllers import Controller, ResourceReferences
 
 from .commands.core.cmdset import CoreCommands
-
-if TYPE_CHECKING:
-    from yakoon.base.api import CommandSet
 
 
 class PlaygroundController(Controller):

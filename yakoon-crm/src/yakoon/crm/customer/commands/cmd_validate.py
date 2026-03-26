@@ -1,6 +1,10 @@
 from yakoon.base import ports
-from yakoon.base.api import Command, Request
-from yakoon.base.api.command import CommandKind, CommandVisibility
+from yakoon.base.runtime.commands import (
+    Command,
+    CommandKind,
+    CommandVisibility,
+    Request,
+)
 
 
 class CmdCustomerValidate(Command):
