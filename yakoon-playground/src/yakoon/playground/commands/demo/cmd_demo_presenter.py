@@ -1,9 +1,10 @@
 from yakoon.base.runtime.commands import Command, Request
+from yakoon.base.runtime.flow import show
 
 
-class CmdUsePresenter(Command):
+class CmdDemoPresenter(Command):
 
-    key = "use_pres"
+    key = "demo.presenter"
 
     async def run(self, request: Request):
 

@@ -1,10 +1,11 @@
 from yakoon.base.runtime.commands import Command, Request
-from yakoon.base.runtime.steps.outcome import Outcome
+from yakoon.base.runtime.flow import ask, text
+from yakoon.base.runtime.steps import Outcome
 
 
-class CmdSub(Command):
+class CmdDemoSubflow(Command):
 
-    key = "use_sub"
+    key = "demo.subflow"
 
     async def run(self, request: Request):
 

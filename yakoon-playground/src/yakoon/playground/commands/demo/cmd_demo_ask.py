@@ -2,9 +2,9 @@ from yakoon.base.runtime.commands import Command, Request
 from yakoon.base.runtime.flow import ask, text
 
 
-class CmdUseAsk(Command):
+class CmdDemoAskSimple(Command):
 
-    key = "use_ask"
+    key = "demo.ask.simple"
 
     async def run(self, request: Request):
 

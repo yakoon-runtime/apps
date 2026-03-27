@@ -5,16 +5,16 @@ from collections.abc import Sequence
 from yakoon.base.runtime.commands.commandset import CommandSet
 from yakoon.base.runtime.controllers import Controller, ResourceReferences
 
-from .commands.core.cmdset import CoreCommands
+from .commands.demo.cmdset import DemoCommands
 
 
-class PlaygroundController(Controller):
+class Demo1Controller(Controller):
     """Playground controller.
 
     This controller provides the default interactive environment.
     """
 
-    id: str = "pg"
+    id: str = "demo"
     is_listed: bool = True
     is_activatable: bool = True
 
@@ -24,4 +24,4 @@ class PlaygroundController(Controller):
 
     @property
     def commandsets(self) -> Sequence[type[CommandSet]]:
-        return (CoreCommands,)
+        return (DemoCommands,)
