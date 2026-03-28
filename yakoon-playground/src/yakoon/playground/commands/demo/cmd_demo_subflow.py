@@ -1,6 +1,6 @@
+from yakoon.base.commands import Command, Request
 from yakoon.base.flow.dsl import ask, text
 from yakoon.base.flow.primitives import Outcome
-from yakoon.base.runtime.commands import Command, Request
 
 
 class CmdDemoSubflow(Command):

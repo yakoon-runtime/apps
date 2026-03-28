@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from yakoon.base.runtime.commands import Command, CommandSet
+from yakoon.base.commands import Command, CommandSet
 
 from .cmd_demo_ask import CmdDemoAskSimple
 from .cmd_demo_ask_validate import CmdDemoAskValidateSimple

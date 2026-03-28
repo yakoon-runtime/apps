@@ -1,5 +1,5 @@
 from yakoon.base import ports
-from yakoon.base.runtime.commands import (
+from yakoon.base.commands import (
     Command,
     CommandKind,
     CommandVisibility,
