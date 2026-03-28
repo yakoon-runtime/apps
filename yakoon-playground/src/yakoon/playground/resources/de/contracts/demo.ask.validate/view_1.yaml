@@ -1,0 +1,12 @@
+kind: view
+
+view:
+  role: info
+  title: "Commands"
+  blocks:
+
+    - type: fields
+      input_mode: prompt
+      fields:
+        - { var: result, policy: system:int, title: "Zahl" } 
+
