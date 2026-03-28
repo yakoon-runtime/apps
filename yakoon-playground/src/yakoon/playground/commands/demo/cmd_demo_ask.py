@@ -1,5 +1,5 @@
+from yakoon.base.flow import ask, text
 from yakoon.base.runtime.commands import Command, Request
-from yakoon.base.runtime.flow import ask, text
 
 
 class CmdDemoAskSimple(Command):

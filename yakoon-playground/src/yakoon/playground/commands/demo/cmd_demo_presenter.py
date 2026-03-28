@@ -1,5 +1,5 @@
+from yakoon.base.flow import show
 from yakoon.base.runtime.commands import Command, Request
-from yakoon.base.runtime.flow import show
 
 
 class CmdDemoPresenter(Command):

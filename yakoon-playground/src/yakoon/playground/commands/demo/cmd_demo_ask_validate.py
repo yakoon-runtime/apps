@@ -1,5 +1,5 @@
+from yakoon.base.flow import apply_errors, ask, text, validate
 from yakoon.base.runtime.commands import Command, Request
-from yakoon.base.runtime.flow import apply_errors, ask, text, validate
 
 
 class CmdDemoAskValidateSimple(Command):

@@ -1,5 +1,5 @@
+from yakoon.base.flow import delay, show
 from yakoon.base.runtime.commands import Command, Request
-from yakoon.base.runtime.flow import delay, show
 from yakoon.base.ui import v_text
 
 
