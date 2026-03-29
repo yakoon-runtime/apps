@@ -1,5 +1,5 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow import delay, receive, text
+from yakoon.base.flow import delay, receive, write
 
 
 class CmdDemoReceiveSimple(Command):
@@ -8,10 +8,10 @@ class CmdDemoReceiveSimple(Command):
 
     async def run(self, request: Request):
 
-        yield text("is running...")
+        yield write("is running...")
         while True:
             event = yield receive()
             if not event:
                 yield delay(5)
             else:
-                yield text(f"Ihre Eingabe: {event}")
+                yield write(f"Ihre Eingabe: {event}")

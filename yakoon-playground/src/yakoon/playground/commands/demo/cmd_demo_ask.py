@@ -1,5 +1,5 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow import ask, text
+from yakoon.base.flow import ask, write
 
 
 class CmdDemoAskSimple(Command):
@@ -14,7 +14,7 @@ class CmdDemoAskSimple(Command):
         event = yield ask(view)
 
         value = event.require("result")
-        yield text(f"Ihre Eingabe: {value}")
+        yield write(f"Ihre Eingabe: {value}")
 
 
 # name = (yield ask(view1)).require("name")

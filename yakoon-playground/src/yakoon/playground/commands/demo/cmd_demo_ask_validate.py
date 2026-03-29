@@ -1,5 +1,6 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow import apply_errors, ask, text, validate
+from yakoon.base.flow import write
+from yakoon.base.flow.patterns import form
 
 
 class CmdDemoAskValidateSimple(Command):
@@ -11,14 +12,7 @@ class CmdDemoAskValidateSimple(Command):
         presenter = await self.get_presenter()
         view = await presenter.render("view_1")
 
-        while True:
-            event = yield ask(view)
+        result = yield form(view, self.services)
 
-            result = validate(view, event, self.services)
-            if not result.ok:
-                view = apply_errors(view, result.errors)
-                continue
-
-            values = result.values
-            yield text(f"Ihre Eingabe: {values}")
-            break
+        values = result.values
+        yield write(f"Ihre Eingabe: {values}")
