@@ -8,10 +8,10 @@ class CmdCustomerCreate(Command):
     async def run(self, request: Request) -> None:  # noqa: ARG002
 
         wf = self.services.get(WorkflowPublic)
-        if not self.context:
+        if not self.ctx:
             raise RuntimeError("Context cannot be None.")
 
-        controller_id = self.context.controller.id
+        controller_id = self.ctx.controller.id
 
         wf.start(
             session,

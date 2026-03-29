@@ -18,7 +18,7 @@ class CmdCustomerValidate(Command):
     async def run(self, request: Request) -> None:  # noqa: ARG002
 
         wf = self.services.get(ports.WorkflowPublic)
-        batch_id = self.context.batch_id
+        batch_id = self.ctx.batch_id
         batch = wf.runtime(session).get(
             batch_id
         )  # TODO: hier brauchen wir eine Methode aus public. get ba
