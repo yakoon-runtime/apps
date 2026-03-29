@@ -1,6 +1,5 @@
 from yakoon.base.commands import Command, Request
 from yakoon.base.flow.dsl import ask, text
-from yakoon.base.flow.primitives import Outcome
 
 
 class CmdDemoSubflow(Command):
@@ -9,17 +8,21 @@ class CmdDemoSubflow(Command):
 
     async def run(self, request: Request):
 
-        result = yield self.ask_for_input("view_1")
+        yield text("\nA start")
+        yield self.sub()
+        yield text("\nA end")
+        yield text("\nA start again")
+        yield self.sub()
+        yield text("\nA end again")
 
-        value = result.require("result")
-        yield text(f"Ihre Eingabe: {value}")
+    async def sub(self):
 
-    async def ask_for_input(self, view_name: str):
         presenter = await self.get_presenter()
-        view = await presenter.render(view_name)
+        view = await presenter.render("view_1")
 
-        event = yield ask(view)
-        yield Outcome(value=event)
+        yield text("\nB start")
+        value = yield ask(view)
+        yield text("\n" + f"B got {value}")
 
 
 # name = (yield ask(view1)).require("name")
