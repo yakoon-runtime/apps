@@ -1,5 +1,5 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow.dsl import ask, write
+from yakoon.base.flow.dsl import ask, receive, write
 
 
 class CmdDemoSubflow(Command):
@@ -21,7 +21,8 @@ class CmdDemoSubflow(Command):
         view = await presenter.render("view_1")
 
         yield write("\nB start")
-        value = yield ask(view)
+        yield ask(view)
+        value = yield receive()
         yield write("\n" + f"B got {value}")
 
 

@@ -11,4 +11,4 @@ class CmdDemoDelay(Command):
 
         yield show(v_text("Start"))
         yield delay(5)
-        yield show(v_text("Done"))
+        yield show(v_text("\nDone"))
