@@ -9,17 +9,17 @@ class CmdDemoAskValidateSimple(Command):
 
     async def run(self, request: Request):
 
-        presenter = await self.get_presenter()
-        view = await presenter.render("view_1")
+        projector = await self.create_projector()
+        projection = await projector.project("view_1")
 
         while True:
-            yield ask(view)
+            yield ask(projection)
 
             event = yield receive()
 
-            result = validate(view, event, self.services)
+            result = validate(projection, event, self.container)
             if not result.ok:
-                view = apply_errors(view, result.errors)
+                projection = apply_errors(projection, result.errors)
                 continue
 
             values = result.values

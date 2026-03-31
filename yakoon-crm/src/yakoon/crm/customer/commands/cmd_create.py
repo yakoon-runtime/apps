@@ -7,7 +7,7 @@ class CmdCustomerCreate(Command):
 
     async def run(self, request: Request) -> None:  # noqa: ARG002
 
-        wf = self.services.get(WorkflowPublic)
+        wf = self.container.get(WorkflowPublic)
         if not self.ctx:
             raise RuntimeError("Context cannot be None.")
 

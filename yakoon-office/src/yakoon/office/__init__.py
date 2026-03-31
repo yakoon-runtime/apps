@@ -1,5 +1,5 @@
 from yakoon.base.plugins.module import ModuleExport, ModuleMeta
-from yakoon.base.runtime.services import ServiceDirectory
+from yakoon.base.runtime import Container
 from yakoon.office.controller import OfficeMailingCoreController
 
 meta = ModuleMeta(
@@ -9,7 +9,7 @@ meta = ModuleMeta(
 )
 
 
-def register(services: ServiceDirectory) -> ModuleExport:
+def register(container: Container) -> ModuleExport:
 
     return ModuleExport(
         meta,

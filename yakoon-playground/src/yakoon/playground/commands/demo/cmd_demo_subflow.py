@@ -17,11 +17,11 @@ class CmdDemoSubflow(Command):
 
     async def sub(self):
 
-        presenter = await self.get_presenter()
-        view = await presenter.render("view_1")
+        projector = await self.create_projector()
+        projection = await projector.project("view_1")
 
         yield write("\nB start")
-        yield ask(view)
+        yield ask(projection)
         value = yield receive()
         yield write("\n" + f"B got {value}")
 

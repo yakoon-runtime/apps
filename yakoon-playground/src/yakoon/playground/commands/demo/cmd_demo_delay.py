@@ -1,6 +1,6 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow import delay, show
-from yakoon.base.projection import v_text
+from yakoon.base.flow import delay, present
+from yakoon.base.projection.model import v_text
 
 
 class CmdDemoDelay(Command):
@@ -9,6 +9,6 @@ class CmdDemoDelay(Command):
 
     async def run(self, request: Request):
 
-        yield show(v_text("Start"))
+        yield present(v_text("Start"))
         yield delay(5)
-        yield show(v_text("\nDone"))
+        yield present(v_text("\nDone"))

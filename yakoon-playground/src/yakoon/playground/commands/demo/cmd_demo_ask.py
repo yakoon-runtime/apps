@@ -8,10 +8,10 @@ class CmdDemoAskSimple(Command):
 
     async def run(self, request: Request):
 
-        presenter = await self.get_presenter()
-        view = await presenter.render("view_1")
+        projector = await self.create_projector()
+        projection = await projector.project("view_1")
 
-        yield ask(view)
+        yield ask(projection)
 
         event = yield receive()
 

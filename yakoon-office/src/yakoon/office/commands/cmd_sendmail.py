@@ -1,17 +1,20 @@
 from yakoon.base.capabilities.audit import AuditLogService
 from yakoon.base.commands import Command, Request
+from yakoon.base.flow import present
 
 
 class CmdSendMail(Command):
 
     key = "sendmail"
 
-    async def run(self, request: Request) -> None:  # noqa: ARG002
+    async def run(self, request: Request):
 
-        presenter = await self.get_presenter(session)
-        audits = self.services.get(AuditLogService)
+        audits = self.container.get(AuditLogService)
 
-        message = await presenter.present("ask_message")
+        projector = await self.create_projector()
+        projection_1 = await projector.project("ask_message")
 
-        audits.audit(f"Mail sent: {message}")
-        await presenter.present("show", message=message)
+        audits.audit(f"Mail sent: {projection_1}")
+
+        projection_2 = await projector.project("show", message=projection_1)
+        yield present(projection_2)

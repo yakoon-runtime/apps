@@ -20,7 +20,7 @@ class CmdCustomerStore(Command):
 
     async def run(self, request: Request) -> None:  # noqa: ARG002
 
-        audits = self.services.get(AuditLogService)
+        audits = self.container.get(AuditLogService)
 
         first = request.option("first_name")
         last = request.option("last_name")
