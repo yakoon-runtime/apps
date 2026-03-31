@@ -9,4 +9,4 @@ projection:
         text: | 
           📧 Mail sent!
           Message:
-          {{ message }}
+          {{ state.message }}

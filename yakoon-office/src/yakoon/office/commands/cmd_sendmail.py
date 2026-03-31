@@ -16,5 +16,6 @@ class CmdSendMail(Command):
 
         audits.audit(f"Mail sent: {projection_1}")
 
-        projection_2 = await projector.project("show", message=projection_1)
+        state = {"message": projection_1}
+        projection_2 = await projector.project("show", state=state)
         yield present(projection_2)
