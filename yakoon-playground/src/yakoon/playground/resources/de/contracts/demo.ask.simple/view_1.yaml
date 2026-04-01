@@ -4,7 +4,6 @@ projection:
   role: info
   title: "Commands"
   blocks:
-
     - type: fields
       input_mode: prompt
       fields:
