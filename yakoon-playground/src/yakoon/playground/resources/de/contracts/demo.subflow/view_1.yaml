@@ -6,7 +6,6 @@ projection:
   blocks:
 
     - type: fields
-      input_mode: prompt
       fields:
         - { var: result, policy: system:string, title: "Username" } 
 
