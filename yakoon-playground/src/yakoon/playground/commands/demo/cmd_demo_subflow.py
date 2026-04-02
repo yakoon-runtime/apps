@@ -1,5 +1,5 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow.dsl import ask, receive
+from yakoon.base.flow.dsl import focus, receive
 from yakoon.base.flow.patterns import write_text
 
 
@@ -24,7 +24,7 @@ class CmdDemoSubflow(Command):
         projection = await projector.project("view_1")
 
         yield write_text("\nB start")
-        yield ask(projection)
+        yield focus(projection)
 
         value = yield receive()
         yield write_text("\n" + f"B got {value}")
