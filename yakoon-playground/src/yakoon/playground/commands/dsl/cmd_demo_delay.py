@@ -3,9 +3,9 @@ from yakoon.base.flow import delay
 from yakoon.base.flow.patterns import write_text
 
 
-class CmdDemoDelay(Command):
+class CmdDemoDelaySimple(Command):
 
-    key = "demo.delay"
+    key = "demo.delay.simple"
 
     async def run(self, request: Request):
 

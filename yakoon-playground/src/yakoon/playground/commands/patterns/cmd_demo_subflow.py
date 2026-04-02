@@ -5,7 +5,7 @@ from yakoon.base.flow.patterns import write_text
 
 class CmdDemoSubflow(Command):
 
-    key = "demo.subflow"
+    key = "demo.subflow.simple"
 
     async def run(self, request: Request):
 

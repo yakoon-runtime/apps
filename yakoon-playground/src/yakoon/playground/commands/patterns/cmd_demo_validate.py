@@ -6,7 +6,7 @@ from yakoon.base.flow.patterns.internal.validate import apply_errors, validate
 
 class CmdDemoValidateSimple(Command):
 
-    key = "demo.validate"
+    key = "demo.validate.simple"
 
     async def run(self, request: Request):
 

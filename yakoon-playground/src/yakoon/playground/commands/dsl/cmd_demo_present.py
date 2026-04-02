@@ -2,9 +2,9 @@ from yakoon.base.commands import Command, Request
 from yakoon.base.flow import present
 
 
-class CmdDemoProjector(Command):
+class CmdDemoPresent(Command):
 
-    key = "demo.projector"
+    key = "demo.present.simple"
 
     async def run(self, request: Request):
 

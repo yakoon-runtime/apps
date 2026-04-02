@@ -9,7 +9,7 @@ class CmdDemoReceiveSimple(Command):
 
     async def run(self, request: Request):
 
-        yield write_text("is running...")
+        yield write_text("is running... - see 'jobs' ")
         while True:
             event = yield receive()
             if not event:

@@ -3,7 +3,7 @@ from yakoon.base.flow import focus, receive
 from yakoon.base.flow.patterns import write_text
 
 
-class CmdDemoAskSimple(Command):
+class CmdDemoFocusSimple(Command):
 
     key = "demo.focus.simple"
 
