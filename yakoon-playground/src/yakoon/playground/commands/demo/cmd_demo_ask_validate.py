@@ -1,5 +1,6 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow import ask, receive, write
+from yakoon.base.flow import ask, receive
+from yakoon.base.flow.patterns import write_text
 from yakoon.base.flow.patterns.internal.validate import apply_errors, validate
 
 
@@ -23,5 +24,5 @@ class CmdDemoAskValidateSimple(Command):
                 continue
 
             values = result.values
-            yield write(f"Ihre Eingabe: {values}")
+            yield write_text(f"Ihre Eingabe: {values}")
             break

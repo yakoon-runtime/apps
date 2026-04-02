@@ -9,7 +9,7 @@ class CmdCustomerCreate(Command):
 
         wf = self.container.get(WorkflowPublic)
         if not self.ctx:
-            raise RuntimeError("Context cannot be None.")
+            raise RuntimeError("Context cannot be None")
 
         controller_id = self.ctx.controller.id
 

@@ -1,5 +1,6 @@
 from yakoon.base.commands import Command, Request
-from yakoon.base.flow import receive, send, write
+from yakoon.base.flow import receive, send
+from yakoon.base.flow.patterns import write_text
 
 
 class CmdDemSendSimple(Command):
@@ -11,4 +12,4 @@ class CmdDemSendSimple(Command):
         yield send("form.result", {"data": "flow"})
 
         r_event = yield receive("form.result")
-        yield write(f"Ihre Eingabe: {r_event}")
+        yield write_text(f"Ihre Eingabe: {r_event}")
