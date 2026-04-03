@@ -1,0 +1,16 @@
+kind: projection
+
+projection:
+  role: info
+  title: "Commands"
+  blocks:
+
+    - type: fields
+      fields:
+        - var: result
+          title: "Speichern (Ja/Nein)"
+          policy: system:bool
+          options:
+            - { value: "yes", label: "Ja" }
+            - { value: "no", label: "Nein" }
+          error: "Bitte mit 'Ja' oder 'Nein' antworten."

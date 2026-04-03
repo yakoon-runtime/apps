@@ -12,9 +12,8 @@ class CmdDemoFormSimple(Command):
         projector = await self.create_projector()
         projection = await projector.project("view_1")
 
-        while True:
-            yield form(projection, self.container, "form.receive")
-            event = yield receive("form.receive")
+        yield form(projection, self.container, "form.receive")
+        event = yield receive("form.receive")
 
-            values = event.to_values()
-            yield write_text(f"Ihre Eingabe: {values}")
+        values = event.to_values()
+        yield write_text(f"Ihre Eingabe: {values}")
