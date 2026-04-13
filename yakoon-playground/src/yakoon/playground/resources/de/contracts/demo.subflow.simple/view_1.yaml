@@ -7,5 +7,5 @@ projection:
 
     - type: fields
       fields:
-        - { var: result, policy: system:string, title: "Username" } 
+        - { name: result, policy: system:string, title: "Username" } 
 

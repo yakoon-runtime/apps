@@ -6,5 +6,5 @@ projection:
   blocks:
     - type: fields
       fields:
-        - { var: result, policy: system:int, title: "Zahl" } 
+        - { name: result, policy: system:int, title: "Zahl" } 
 

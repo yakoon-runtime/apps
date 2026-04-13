@@ -7,7 +7,7 @@ projection:
 
     - type: fields
       fields:
-        - var: result
+        - name: result
           title: "Speichern (Ja/Nein)"
           policy: system:bool
           options:

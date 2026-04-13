@@ -8,16 +8,16 @@ steps:
   input:
     title: "Person"
     fields:
-      - { var: customer.first_name, policy: system:string, title: "Vorname" }
-      - { var: customer.last_name,  policy: system:string, title: "Nachname" }
-      - { var: customer.pw,  policy: system:masked, title: "Password" }
+      - { name: customer.first_name, policy: system:string, title: "Vorname" }
+      - { name: customer.last_name,  policy: system:string, title: "Nachname" }
+      - { name: customer.pw,  policy: system:masked, title: "Password" }
   next: ask_mail
 
 - id: ask_mail
   input:
     title: "E-Mail angeben?"
     fields:
-      - var: customer.mail_opt_in
+      - name: customer.mail_opt_in
         policy: system:bool
         title: "E-Mail angeben?"
         default: true
@@ -34,7 +34,7 @@ steps:
   input:
     title: "E-Mail"
     fields:
-      - var: customer.mail
+      - name: customer.mail
         policy: system:string   # später: system:email
         title: "E-Mail-Adresse"
         required: true
