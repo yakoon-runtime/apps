@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import importlib.resources as pkg
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from yakoon.transport_ws import WebSocketTransport
@@ -82,6 +84,39 @@ async def websocket_endpoint(ws: WebSocket):
     connection, receive_loop = await transport.connect(adapter)
 
     await receive_loop()
+
+
+# ------------------------
+# HTTP RESSOURCES
+# ------------------------
+
+
+@app.get("/api/assets/{package}/{path:path}")
+def get_asset(package: str, path: str):
+
+    # Security
+    if ".." in path:
+        raise HTTPException(400)
+
+    try:
+        base = pkg.files(package)
+        resource = base.joinpath(path)
+
+        if not resource.is_file():
+            raise HTTPException(404)
+
+        # Content-Type korrekt bestimmen
+        content_type, _ = mimetypes.guess_type(str(resource))
+        if not content_type:
+            content_type = "application/octet-stream"
+
+        return StreamingResponse(
+            resource.open("rb"),
+            media_type=content_type,
+        )
+
+    except Exception:
+        raise HTTPException(404) from Exception
 
 
 def get_transport(app: FastAPI) -> WebSocketTransport:
