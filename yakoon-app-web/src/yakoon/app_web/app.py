@@ -23,10 +23,10 @@ from .runtime import create_runtime, find_project_root
 async def lifespan(app: FastAPI):
 
     # Startup
-    runtime = await create_runtime()
-    transport = WebSocketTransport(runtime)
+    host = await create_runtime()
+    transport = WebSocketTransport(host)
 
-    app.state.runtime = runtime
+    app.state.runtime = host
     app.state.transport = transport
 
     yield
