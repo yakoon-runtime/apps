@@ -1,6 +1,6 @@
-from .adapter import PromptToolkitTerminal
+from .base import Terminal
+from .prompt import PromptToolkitTerminal
 from .simple import SimpleTerminal
-from .terminal import Terminal
 
 __all__ = [
     "PromptToolkitTerminal",

@@ -1,11 +1,11 @@
 import asyncio
 
+from yakoon.app_console.terminal.prompt import PromptToolkitTerminal
 from yakoon.base.projection import ProjectionEvent, ProjectionQuery
 from yakoon.base.runtime import InputEvent
 from yakoon.base.transports import Transport
 
 from ..output import ConsoleOutput
-from ..terminal import SimpleTerminal
 
 
 class ConsoleClient:
@@ -25,8 +25,8 @@ class ConsoleClient:
         # Setup
         # ------------------------
 
-        # surface = TerminalSurface()
-        terminal = SimpleTerminal()
+        terminal = PromptToolkitTerminal()
+        # terminal = SimpleTerminal()
         renderer = ConsoleOutput(terminal)
 
         # ------------------------

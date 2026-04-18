@@ -49,7 +49,7 @@ app = FastAPI(lifespan=lifespan)
 BASE_DIR = Path(__file__).resolve()
 
 PROJECT_ROOT = find_project_root(BASE_DIR)
-WEB_DIR = PROJECT_ROOT / "clients" / "web"
+WEB_DIR = PROJECT_ROOT / "clients" / "yakoon-client-web"
 
 app.mount(
     "/js",

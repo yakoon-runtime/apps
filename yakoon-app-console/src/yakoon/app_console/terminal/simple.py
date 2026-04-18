@@ -1,7 +1,7 @@
 import asyncio
 import sys
 
-from .terminal import Terminal
+from .base import Terminal
 
 
 class SimpleTerminal(Terminal):

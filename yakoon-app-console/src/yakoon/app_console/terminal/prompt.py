@@ -6,19 +6,16 @@ from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
 from prompt_toolkit.layout.containers import ConditionalContainer
-from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import TextArea
 
 from yakoon.base.projection.model import Field
-from yakoon.base.runtime import InputEvent
+
+from .base import Terminal
 
 
-class TerminalUI:
+class PromptToolkitTerminal(Terminal):
 
-    def __init__(self, surface, on_cancel, on_submit):
-        self.surface = surface
-        self.on_cancel = on_cancel
-        self.on_submit = on_submit
+    def __init__(self):
 
         self._prompt = "shell$ "
         self._current_field: Field | None = None
@@ -33,7 +30,7 @@ class TerminalUI:
         self.view = TextArea(
             text="",
             scrollbar=True,
-            focusable=True,
+            focusable=False,
             wrap_lines=True,
         )
 
@@ -46,12 +43,14 @@ class TerminalUI:
             prompt=lambda: self._prompt,
             multiline=False,
             wrap_lines=False,
+            focusable=True,
             history=self.history,
         )
-        self.shell.accept_handler = self._on_enter
+
+        self.shell.accept_handler = self._on_enter  # type: ignore
 
         # ------------------------
-        # Error Area (conditional)
+        # Error Area
         # ------------------------
 
         self.errors = TextArea(
@@ -87,16 +86,15 @@ class TerminalUI:
                 asyncio.create_task(self.on_cancel())
 
         # ------------------------
-        # Layout
+        # Layout (FIXED)
         # ------------------------
 
         root = HSplit(
             [
-                self.shell,
-                # nur sichtbar bei Fehlern
-                self.error_container,
-                Window(height=1, char="─"),
                 self.view,
+                Window(height=1, char="─"),
+                self.error_container,
+                self.shell,
             ]
         )
 
@@ -107,22 +105,17 @@ class TerminalUI:
             key_bindings=kb,
         )
 
-        # styling
-        self.style = Style.from_dict(
-            {
-                "": "#00d9ff bg:#000000",
-                "prompt": "#00ffff bold",
-                "cursor": "#ffffff reverse",
-                "error": "#ff5f5f bold",
-            }
-        )
-        # self.app.style = self.style
-
-        self.surface.attach(self.view.buffer, self.app)
-
     # --------------------------------------------------------
     # Lifecycle
     # --------------------------------------------------------
+
+    # wird vom Client gesetzt
+    async def on_input(self, text):
+        pass
+
+    # wird vom Client gesetzt
+    async def on_chanel(self, text):
+        pass
 
     async def run(self):
         await self.app.run_async()
@@ -130,6 +123,20 @@ class TerminalUI:
     async def stop(self):
         if self.app.is_running:
             self.app.exit()
+
+    # --------------------------------------------------------
+    # Terminal API (WICHTIG)
+    # --------------------------------------------------------
+
+    def write(self, text: str):
+        self.view.buffer.insert_text(text)
+        self.app.invalidate()
+
+    def new_line(self):
+        self.write("\n")
+
+    def notify_ready(self):
+        pass  # optional / später nutzbar
 
     # --------------------------------------------------------
     # Input Handling
@@ -142,11 +149,10 @@ class TerminalUI:
         text = buffer.text
         buffer.text = ""
 
-        if self._current_field is None:
-            self.surface.new_view()
+        if self.on_input:
+            asyncio.create_task(self.on_input(text))
 
-        if self.on_submit:
-            asyncio.create_task(self.on_submit(InputEvent.from_raw(text)))
+        return True
 
     # --------------------------------------------------------
     # Public API

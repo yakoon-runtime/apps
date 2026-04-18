@@ -94,5 +94,5 @@ class ConsoleOutput:
     async def run(self):
 
         while True:
-            self._stream.step(1 / 60)
-            await asyncio.sleep(1 / 60)
+            self._stream.step(self._stream.FRAME_INTERVAL)
+            await asyncio.sleep(0.005)
