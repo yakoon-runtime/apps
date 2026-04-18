@@ -11,7 +11,7 @@ async def run() -> None:
     transport = LocalTransport(host)
     # transport = WebSocketTransport("ws://localhost:8000/ws")
 
-    terminal = PromptToolkitTerminal()
+    terminal = SimpleTerminal()
     client = Client(transport)
     await client.run(terminal)
 

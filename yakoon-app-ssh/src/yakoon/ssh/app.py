@@ -22,12 +22,23 @@ class SSHSession(asyncssh.SSHServerSession):
     def shell_requested(self):
         return True
 
+    def pty_requested(self, term_type, term_size, term_modes):
+        return True
+
     def session_started(self):
         asyncio.create_task(self.run())
 
     # SSH liefert Input hier rein
     def data_received(self, data, datatype):
         self.terminal.data_received(data, datatype)
+
+    def eof_received(self):
+        asyncio.create_task(self.terminal.stop())
+        return True
+
+    def signal_received(self, signal: str) -> None:
+        if signal == "INT":  # Ctrl+D
+            asyncio.create_task(self.terminal.stop())
 
     async def run(self):
         transport = LocalTransport(self.host)
@@ -67,10 +78,6 @@ async def run():
         8022,
         server_host_keys=[str(KEY_PATH)],
     )
-
-    # test on :
-    # ssh -p 8022 localhost
-    # .
 
     print("SSH server running on port 8022")
 
