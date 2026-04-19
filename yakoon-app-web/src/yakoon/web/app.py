@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from yakoon.transport_ws import WebSocketTransport
+from yakoon.transport_ws import WebSocketServerTransport
 
 from .adapter import FastAPIWebSocketAdapter
 from .runtime import create_runtime, find_project_root
@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
 
     # Startup
     host = await create_runtime()
-    transport = WebSocketTransport(host)
+    transport = WebSocketServerTransport(host)
 
     app.state.runtime = host
     app.state.transport = transport
@@ -119,5 +119,5 @@ def get_asset(package: str, path: str):
         raise HTTPException(404) from Exception
 
 
-def get_transport(app: FastAPI) -> WebSocketTransport:
+def get_transport(app: FastAPI) -> WebSocketServerTransport:
     return app.state.transport
