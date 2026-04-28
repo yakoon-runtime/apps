@@ -1,12 +1,12 @@
 from yakoon.compose.demo_data import seed_demo_system_data
-from yakoon.compose.engine import compose_engine, initialize_storage
+from yakoon.compose.runtime import compose_runtime, initialize_storage
 from yakoon.platform.machine import RuntimeHost
 from yakoon.platform.runtime.bus import SessionBus
 
 
 async def create_runtime() -> RuntimeHost:
 
-    engine = compose_engine(
+    engine = compose_runtime(
         plugins=[
             "yakoon.shell",
             "yakoon.crm",
