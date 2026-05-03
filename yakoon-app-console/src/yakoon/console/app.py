@@ -10,9 +10,12 @@ async def run() -> None:
 
     # Startup
     host = await create_runtime()
+    await host.initialize()
+
     transport = LocalTransport(host)
     # transport2 = WebSocketClientTransport("ws://localhost:8000/ws")
 
     terminal = PromptToolkitTerminal()
     client = Client(transport)
+
     await client.run(terminal)
