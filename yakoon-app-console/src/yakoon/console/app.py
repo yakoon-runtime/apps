@@ -10,7 +10,7 @@ async def run() -> None:
 
     # Startup
     host = await create_runtime()
-    await host.initialize()
+    await host.setup()
 
     transport = LocalTransport(host)
     # transport2 = WebSocketClientTransport("ws://localhost:8000/ws")
