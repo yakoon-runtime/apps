@@ -9,8 +9,6 @@ async def create_runtime() -> RuntimeHost:
     engine = compose_runtime(
         plugins=[
             "yakoon.shell",
-            "yakoon.crm",
-            "yakoon.office",
             "yakoon.playground",
         ],
         capabilities={
