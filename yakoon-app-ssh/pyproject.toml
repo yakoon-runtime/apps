@@ -10,8 +10,6 @@ license = { text = "MIT" }
 authors = [{ name = "Stefan Bergmann" }]
 dependencies = [
     "yakoon-core-base", 
-    "yakoon-core-platform", 
-    "yakoon-core-compose",
     ]
 
 [tool.setuptools]
