@@ -3,14 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "yakoon-app-console"
+name = "y5napp-web"
 version = "0.1.0"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Stefan Bergmann" }]
 dependencies = [
-    "yakoon-core-base", 
-    "yakoon-core-platform", 
+    "y5ncore-base", 
     ]
 
 [tool.setuptools]

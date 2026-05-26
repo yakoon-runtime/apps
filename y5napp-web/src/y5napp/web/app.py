@@ -8,8 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-
-from yakoon.transport_ws import WebSocketServerTransport
+from y5ntrans.websocket import WebSocketServerTransport
 
 from .adapter import FastAPIWebSocketAdapter
 from .runtime import create_runtime, find_project_root

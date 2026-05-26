@@ -1,10 +1,9 @@
 import asyncio
 
 import asyncssh
-
-from yakoon.client.runtime import Client, create_runtime
-from yakoon.client.terminal import SSHTerminal
-from yakoon.platform.transport import LocalTransport
+from y5n.client.runtime import Client, create_runtime
+from y5n.client.terminal import SSHTerminal
+from y5n.runtime.transport import LocalTransport
 
 
 class SSHSession(asyncssh.SSHServerSession):

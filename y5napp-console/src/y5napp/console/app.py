@@ -1,9 +1,9 @@
-from yakoon.client.runtime import Client, create_runtime
-from yakoon.client.terminal import PromptToolkitTerminal
-from yakoon.platform.transport import LocalTransport
+from y5n.runtime.transport import LocalTransport
+from y5ncli.console.client.runtime import Client, create_runtime
+from y5ncli.console.client.terminal import PromptToolkitTerminal
 
-# from yakoon.transport_ws import WebSocketClientTransport
-# from yakoon.client.terminal.simple import SimpleTerminal
+# from y5n.transport_ws import WebSocketClientTransport
+# from y5n.client.terminal.simple import SimpleTerminal
 
 
 async def run() -> None:
