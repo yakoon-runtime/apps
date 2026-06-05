@@ -13,7 +13,7 @@ from y5n.runtime.wire.runtime import build_runtime
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.widgets import Input
+from textual.widgets import Input, Static
 
 from .output import TextualOutput
 
@@ -26,6 +26,7 @@ class TextualApp(App):
         super().__init__()
         self.scroll_area: Vertical | None = None
         self.input_widget: Input | None = None
+        self._status_line: Static | None = None
         self._output_handler: TextualOutput | None = None
         self._connection: ClientConnection | None = None
 
@@ -40,6 +41,11 @@ class TextualApp(App):
                     id="shell-input",
                 )
                 yield self.input_widget
+                self._status_line = Static(
+                    "? · ~ $",
+                    id="status-line",
+                )
+                yield self._status_line
 
     async def on_mount(self) -> None:
         self._output_handler = TextualOutput(self.scroll_area)
@@ -65,6 +71,16 @@ class TextualApp(App):
     async def _on_view(self, event: ProjectionEvent) -> None:
         if self._output_handler is not None:
             await self._output_handler.view(event)
+
+        if self._status_line is not None:
+            try:
+                user = event.state.user if event.state and event.state.user else "?"
+                path = (
+                    event.state.node_path if event.state and event.state.node_path else "~"
+                )
+                self._status_line.update(f"{user} · {path} $")
+            except Exception:
+                pass
 
     async def on_input_submitted(self, message: Input.Submitted) -> None:
         text = message.value

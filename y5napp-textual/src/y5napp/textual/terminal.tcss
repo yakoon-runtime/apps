@@ -6,7 +6,7 @@ Screen {
     height: 1fr;
     layout: vertical;
 
-    padding: 1 2;
+    padding: 1 2 0 2
 }
 
 #scroll-area {
@@ -30,7 +30,8 @@ Screen {
     border: none;
     border-left: solid $secondary;
 
-    height: 3;
+    height: auto;
+    min-height: 3;
 }
 
 #shell-input {
@@ -48,6 +49,12 @@ Screen {
 #shell-input:focus {
     border: none;
     background: transparent;
+}
+
+#status-line {
+    color: $text 60%;
+    margin: 1 0 0 0;
+    padding: 0;
 }
 
 .projection-group {
