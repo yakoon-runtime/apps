@@ -24,16 +24,23 @@ class TextualOutput:
         self._container = container
         self._widgets: dict[str, Widget] = {}
         self._current_group: Vertical | None = None
+        self._current_job_id: str | None = None
         self._pending_input: str | None = None
 
     async def view(self, event: ProjectionEvent) -> None:
         if event.ctx and event.ctx.origin:
             self._pending_input = event.ctx.origin
 
+        is_new_job = event.job_id != self._current_job_id
+        self._current_job_id = event.job_id
+
         for op in event.patch.ops:
             match op:
                 case PatchReset():
-                    self._start_group()
+                    if is_new_job:
+                        self._start_group()
+                    else:
+                        self._replace_group()
                 case PatchAppendStructure():
                     self._append(op)
                 case PatchFinishNode():
@@ -41,6 +48,20 @@ class TextualOutput:
 
         if self._current_group is not None:
             self._current_group.scroll_visible()
+
+    def _replace_group(self) -> None:
+        self._widgets.clear()
+        if self._current_group is not None:
+            self._current_group.remove()
+        group = Vertical(classes="projection-group")
+        self._container.mount(group)
+        if self._pending_input is not None:
+            from rich.text import Text
+            line = Text("▶ ", style="bold orange")
+            line.append(self._pending_input)
+            group.mount(Static(line, classes="input-line"))
+            self._pending_input = None
+        self._current_group = group
 
     def _start_group(self) -> None:
         self._widgets.clear()
