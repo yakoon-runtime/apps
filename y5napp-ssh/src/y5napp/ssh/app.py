@@ -1,9 +1,9 @@
 import asyncio
 
 import asyncssh
+from y5n.runtime.transport import LocalTransport
 from y5ncli.console.client.runtime import Client, create_runtime
 from y5ncli.console.client.terminal import SSHTerminal
-from y5n.runtime.transport import LocalTransport
 
 
 class SSHSession(asyncssh.SSHServerSession):
@@ -61,6 +61,7 @@ class SSHServer(asyncssh.SSHServer):
 async def run():
 
     host = await create_runtime()
+    await host.setup()
 
     from pathlib import Path
 
