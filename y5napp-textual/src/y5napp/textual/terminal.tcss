@@ -14,6 +14,9 @@ Screen {
 
     overflow-y: scroll;
     scrollbar-size-vertical: 1;
+
+    scrollbar-background: transparent;
+    scrollbar-color: $secondary 40%;
 }
 
 .input-card {
@@ -92,7 +95,12 @@ Screen {
 }
 
 .list {
+    height: auto;
     margin: 0 0 0 1;
+}
+
+.list-item {
+    height: auto;
 }
 
 .kv {
