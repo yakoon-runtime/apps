@@ -23,22 +23,28 @@ class TextualOutput:
     def __init__(self, container: Widget) -> None:
         self._container = container
         self._widgets: dict[str, Widget] = {}
+        self._current_group: Vertical | None = None
 
     async def view(self, event: ProjectionEvent) -> None:
         for op in event.patch.ops:
             match op:
                 case PatchReset():
-                    self._reset()
+                    self._start_group()
                 case PatchAppendStructure():
                     self._append(op)
                 case PatchFinishNode():
                     self._finish(op)
 
+        if self._current_group is not None:
+            self._current_group.scroll_visible()
+
     # --------------------------------------------------------
 
-    def _reset(self) -> None:
+    def _start_group(self) -> None:
         self._widgets.clear()
-        self._container.remove_children()
+        group = Vertical(classes="projection-group")
+        self._container.mount(group)
+        self._current_group = group
 
     def _append(self, op: PatchAppendStructure) -> None:
         for spec in op.nodes:
@@ -58,7 +64,9 @@ class TextualOutput:
                 parent_widget.mount(widget)
                 return
 
-        self._container.mount(widget)
+        group = self._current_group
+        if group is not None:
+            group.mount(widget)
 
     # --------------------------------------------------------
 

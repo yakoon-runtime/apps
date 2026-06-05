@@ -2,62 +2,106 @@ Screen {
     layout: vertical;
 }
 
+/* -------------------------------------------------- */
+/* Output */
+/* -------------------------------------------------- */
+
 #output {
     height: 1fr;
-    overflow-y: auto;
+
+    overflow-y: scroll;
     overflow-x: hidden;
-    padding: 0 1;
+
+    padding: 1 2;
+
+    scrollbar-size-vertical: 1;
 }
 
+/* -------------------------------------------------- */
+/* Input */
+/* -------------------------------------------------- */
+
 #shell-input {
-    dock: bottom;
-    margin: 0 0 0 0;
-    padding: 0 1;
+    dock: none;
+
+    /* top right bottom left */
+    margin: 0 4 2 2;
+    padding: 1 2;
+
+    background: $surface;
+
     border: none;
-    border-left: heavy $secondary;
-    border-right: heavy $secondary;
+    border-left: solid $secondary;
+
+    min-height: 3;
 }
 
 #shell-input:focus {
     border: none;
-    border-left: heavy $secondary;
-    border-right: heavy $secondary;
+    border-left: solid $secondary;
+
+    background: $surface;
 }
 
-/* ------------ blocks ------------ */
+/* -------------------------------------------------- */
+/* Projection Groups */
+/* -------------------------------------------------- */
 
-.heading {
-    margin: 1 0 0 0;
+.projection-group {
+    height: auto;
+
+    /* Abstand zwischen Cards */
+    margin: 0 4 1 0;
+
+    /* OpenCode-artige Akzentleiste */
+    border: none;
+    border-left: solid $secondary;
+
+    /* Card */
+    background: $surface;
+
+    /* Innenabstand */
+    padding: 1 2;
+
+    /* verhindert optisches Kleben */
+    min-height: 3;
 }
 
-.h1 {
-    text-style: bold;
+.projection-group > * {
+    margin: 0;
+    padding: 0;
+    background: transparent;
 }
 
-.h2 {
-    text-style: bold;
-}
-
-.h3 {
-    text-style: bold;
-}
-
+.h1,
+.h2,
+.h3,
 .h4 {
     text-style: bold;
 }
 
+/* -------------------------------------------------- */
+/* Sections */
+/* -------------------------------------------------- */
+
 .section {
-    border: solid $primary;
     margin: 0 0 1 0;
+
     padding: 0 1;
+
+    border: solid $primary;
 }
 
+/* -------------------------------------------------- */
+/* Layout Blocks */
+/* -------------------------------------------------- */
+
 .stack {
-    margin: 0 0 0 0;
+    margin: 0;
 }
 
 .flow {
-    margin: 0 0 0 0;
+    margin: 0;
 }
 
 .list {
@@ -74,6 +118,7 @@ Screen {
 
 .kv-key {
     width: 16;
+
     text-style: bold;
     color: $secondary;
 }
@@ -85,6 +130,10 @@ Screen {
 .actions {
     margin: 0 0 1 0;
 }
+
+/* -------------------------------------------------- */
+/* Misc */
+/* -------------------------------------------------- */
 
 .image {
     color: $primary;
