@@ -11,11 +11,30 @@ from y5n.runtime.settings import Settings
 from y5n.runtime.transport import LocalTransport
 from y5n.runtime.wire.runtime import build_runtime
 
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Static, TextArea
 
 from .output import TextualOutput
+
+
+class ShellInput(TextArea):
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.key == "enter":
+            event.stop()
+            app = self.app
+            if isinstance(app, TextualApp):
+                await app.action_submit()
+        elif event.key != "enter" and "enter" in event.key:
+            event.stop()
+            self.insert("\n")
+        elif "ctrl+j" in event.aliases or "newline" in event.aliases:
+            event.stop()
+            self.insert("\n")
+        else:
+            await super()._on_key(event)
 
 
 class TextualApp(App):
@@ -25,7 +44,7 @@ class TextualApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.scroll_area: Vertical | None = None
-        self.input_widget: TextArea | None = None
+        self.input_widget: ShellInput | None = None
         self._status_line: Static | None = None
         self._output_handler: TextualOutput | None = None
         self._connection: ClientConnection | None = None
@@ -36,7 +55,7 @@ class TextualApp(App):
             yield self.scroll_area
 
             with Vertical(classes="input-card"):
-                self.input_widget = TextArea(
+                self.input_widget = ShellInput(
                     "",
                     id="shell-input",
                     soft_wrap=True,
@@ -77,13 +96,13 @@ class TextualApp(App):
             try:
                 user = event.state.user if event.state and event.state.user else "?"
                 path = (
-                    event.state.node_path if event.state and event.state.node_path else "~"
+                    event.state.node_path
+                    if event.state and event.state.node_path
+                    else "~"
                 )
                 self._status_line.update(f"{user} · {path} $")
             except Exception:
                 pass
-
-    BINDINGS = [("ctrl+enter", "submit", "Submit")]
 
     async def action_submit(self) -> None:
         assert self.input_widget
