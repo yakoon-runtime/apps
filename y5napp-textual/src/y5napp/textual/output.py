@@ -24,8 +24,12 @@ class TextualOutput:
         self._container = container
         self._widgets: dict[str, Widget] = {}
         self._current_group: Vertical | None = None
+        self._pending_input: str | None = None
 
     async def view(self, event: ProjectionEvent) -> None:
+        if event.ctx and event.ctx.origin:
+            self._pending_input = event.ctx.origin
+
         for op in event.patch.ops:
             match op:
                 case PatchReset():
@@ -38,12 +42,19 @@ class TextualOutput:
         if self._current_group is not None:
             self._current_group.scroll_visible()
 
-    # --------------------------------------------------------
-
     def _start_group(self) -> None:
         self._widgets.clear()
         group = Vertical(classes="projection-group")
         self._container.mount(group)
+
+        if self._pending_input is not None:
+            from rich.text import Text
+
+            line = Text("▶ ", style="bold orange")
+            line.append(self._pending_input)
+            group.mount(Static(line))
+            self._pending_input = None
+
         self._current_group = group
 
     def _append(self, op: PatchAppendStructure) -> None:
