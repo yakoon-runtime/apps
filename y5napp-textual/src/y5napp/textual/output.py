@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from y5n.base.projection.transfer import (
-    PatchReset,
     PatchAppendStructure,
     PatchFinishNode,
+    PatchReset,
     ProjectionEvent,
 )
 from y5n.base.projection.transfer.node import Node
@@ -13,7 +13,7 @@ from textual.widget import Widget
 from textual.widgets import (
     Button,
     DataTable,
-    HorizontalRule,
+    Rule,
     Static,
 )
 
@@ -69,7 +69,7 @@ class TextualOutput:
             case "heading":
                 return self._make_heading(node)
             case "rule":
-                return HorizontalRule()
+                return Rule()
             case "spacer":
                 return Vertical(classes="spacer")
             case "list":
@@ -115,8 +115,9 @@ class TextualOutput:
         return Static(text, classes=f"heading h{level}")
 
     def _make_list_item(self, node: Node) -> Static:
-        from . import inlines
         from rich.text import Text
+
+        from . import inlines
 
         bullet = Text(" \u2022 ", style="bold")
         bullet.append(inlines.render(node.props.get("text", [])))
