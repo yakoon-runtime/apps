@@ -31,9 +31,14 @@ class TextualApp(App):
     def compose(self) -> ComposeResult:
         with Vertical(id="output"):
             self.scroll_area = Vertical(id="scroll-area")
-            self.input_widget = Input(placeholder="shell$ ", id="shell-input")
             yield self.scroll_area
-            yield self.input_widget
+
+            with Vertical(classes="input-card"):
+                self.input_widget = Input(
+                    placeholder="shell$ ",
+                    id="shell-input",
+                )
+                yield self.input_widget
 
     async def on_mount(self) -> None:
         self._output_handler = TextualOutput(self.scroll_area)
