@@ -23,19 +23,20 @@ class TextualApp(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.output_container: Vertical | None = None
-        self.input: Input | None = None
+        self.scroll_area: Vertical | None = None
+        self.input_widget: Input | None = None
         self._output_handler: TextualOutput | None = None
         self._connection: ClientConnection | None = None
 
     def compose(self) -> ComposeResult:
-        self.output_container = Vertical(id="output")
-        self.input = Input(placeholder="shell$ ", id="shell-input")
-        yield self.output_container
-        yield self.input
+        with Vertical(id="output"):
+            self.scroll_area = Vertical(id="scroll-area")
+            self.input_widget = Input(placeholder="shell$ ", id="shell-input")
+            yield self.scroll_area
+            yield self.input_widget
 
     async def on_mount(self) -> None:
-        self._output_handler = TextualOutput(self.output_container)
+        self._output_handler = TextualOutput(self.scroll_area)
 
         host = await self._create_runtime()
         await host.setup()
@@ -62,8 +63,8 @@ class TextualApp(App):
     async def on_input_submitted(self, message: Input.Submitted) -> None:
         text = message.value
 
-        assert self.input
-        self.input.clear()
+        assert self.input_widget
+        self.input_widget.clear()
 
         if not text:
             return
