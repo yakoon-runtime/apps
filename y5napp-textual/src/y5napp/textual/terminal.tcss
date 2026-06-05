@@ -2,14 +2,14 @@ Screen {
     layout: vertical;
 }
 
-RichLog {
+#output {
     height: 1fr;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 0 1;
-        scrollbar-size-vertical: 0;
-    scrollbar-size-horizontal: 0;
 }
 
-Input {
+#shell-input {
     dock: bottom;
     margin: 0 0 0 0;
     padding: 0 1;
@@ -18,8 +18,83 @@ Input {
     border-right: heavy $secondary;
 }
 
-Input:focus {
+#shell-input:focus {
     border: none;
     border-left: heavy $secondary;
     border-right: heavy $secondary;
+}
+
+/* ------------ blocks ------------ */
+
+.heading {
+    margin: 1 0 0 0;
+}
+
+.h1 {
+    text-style: bold;
+}
+
+.h2 {
+    text-style: bold;
+}
+
+.h3 {
+    text-style: bold;
+}
+
+.h4 {
+    text-style: bold;
+}
+
+.section {
+    border: solid $primary;
+    margin: 0 0 1 0;
+    padding: 0 1;
+}
+
+.stack {
+    margin: 0 0 0 0;
+}
+
+.flow {
+    margin: 0 0 0 0;
+}
+
+.list {
+    margin: 0 0 0 1;
+}
+
+.kv {
+    margin: 0 0 1 0;
+}
+
+.kv-row {
+    height: auto;
+}
+
+.kv-key {
+    width: 16;
+    text-style: bold;
+    color: $secondary;
+}
+
+.kv-value {
+    width: 1fr;
+}
+
+.actions {
+    margin: 0 0 1 0;
+}
+
+.image {
+    color: $primary;
+    text-style: italic;
+}
+
+.unknown {
+    color: $error;
+}
+
+.fields-placeholder {
+    color: $warning;
 }
