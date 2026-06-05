@@ -1,8 +1,8 @@
 import asyncio
 
 import asyncssh
-from y5n.client.runtime import Client, create_runtime
-from y5n.client.terminal import SSHTerminal
+from y5ncli.console.client.runtime import Client, create_runtime
+from y5ncli.console.client.terminal import SSHTerminal
 from y5n.runtime.transport import LocalTransport
 
 
