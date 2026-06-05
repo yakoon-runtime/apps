@@ -13,7 +13,7 @@ from y5n.runtime.wire.runtime import build_runtime
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.widgets import Input, Static
+from textual.widgets import Static, TextArea
 
 from .output import TextualOutput
 
@@ -25,7 +25,7 @@ class TextualApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.scroll_area: Vertical | None = None
-        self.input_widget: Input | None = None
+        self.input_widget: TextArea | None = None
         self._status_line: Static | None = None
         self._output_handler: TextualOutput | None = None
         self._connection: ClientConnection | None = None
@@ -36,9 +36,10 @@ class TextualApp(App):
             yield self.scroll_area
 
             with Vertical(classes="input-card"):
-                self.input_widget = Input(
-                    placeholder="shell$ ",
+                self.input_widget = TextArea(
+                    "",
                     id="shell-input",
+                    soft_wrap=True,
                 )
                 yield self.input_widget
                 self._status_line = Static(
@@ -82,10 +83,11 @@ class TextualApp(App):
             except Exception:
                 pass
 
-    async def on_input_submitted(self, message: Input.Submitted) -> None:
-        text = message.value
+    BINDINGS = [("ctrl+enter", "submit", "Submit")]
 
+    async def action_submit(self) -> None:
         assert self.input_widget
+        text = self.input_widget.text.strip()
         self.input_widget.clear()
 
         if not text:
