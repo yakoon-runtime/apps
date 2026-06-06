@@ -39,9 +39,13 @@ class TextualOutput:
                 case PatchReset():
                     if is_new_job:
                         self._start_group()
+                        is_new_job = False
                     else:
                         self._replace_group()
                 case PatchAppendStructure():
+                    if is_new_job:
+                        self._start_group()
+                        is_new_job = False
                     self._append(op)
                 case PatchFinishNode():
                     self._finish(op)
