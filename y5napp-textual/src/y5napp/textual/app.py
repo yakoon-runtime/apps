@@ -4,7 +4,7 @@ from pathlib import Path
 
 from y5n.base.clients import ClientConnection
 from y5n.base.projection import ProjectionEvent
-from y5n.base.runtime import InputEvent
+from y5n.base.runtime import Event
 from y5n.base.runtime.input import InputContext
 from y5n.runtime.machine import RuntimeHost
 from y5n.runtime.settings import Settings
@@ -121,7 +121,7 @@ class TextualApp(App):
 
         if self._connection is not None:
             await self._connection.dispatch(
-                InputEvent.from_raw(
+                Event.from_raw(
                     text,
                     context=InputContext(origin=text),
                 )
