@@ -57,7 +57,8 @@ class TextualOutput:
         self._container.mount(group)
         if self._pending_input is not None:
             from rich.text import Text
-            line = Text("▶ ", style="bold orange")
+
+            line = Text("▶ ", style="orange")
             line.append(self._pending_input)
             group.mount(Static(line, classes="input-line"))
             self._pending_input = None
@@ -71,7 +72,7 @@ class TextualOutput:
         if self._pending_input is not None:
             from rich.text import Text
 
-            line = Text("▶ ", style="bold orange")
+            line = Text("▶ ", style="orange")
             line.append(self._pending_input)
             group.mount(Static(line))
             self._pending_input = None

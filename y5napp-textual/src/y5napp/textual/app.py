@@ -62,7 +62,7 @@ class TextualApp(App):
                 )
                 yield self.input_widget
                 self._status_line = Static(
-                    "?@yakoon:/$",
+                    "yakoon:/$",
                     id="status-line",
                 )
                 yield self._status_line
@@ -94,13 +94,17 @@ class TextualApp(App):
 
         if self._status_line is not None:
             try:
-                user = event.state.user if event.state and event.state.user else "?"
                 path = (
                     event.state.node_path
                     if event.state and event.state.node_path
                     else "/"
                 )
-                self._status_line.update(f"{user}@yakoon:{path}$")
+                prefix = (
+                    f"{event.state.user}@yakoon:"
+                    if event.state and event.state.user
+                    else "yakoon:"
+                )
+                self._status_line.update(f"{prefix}{path}$")
             except Exception:
                 pass
 
