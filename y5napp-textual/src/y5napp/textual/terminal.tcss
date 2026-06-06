@@ -36,7 +36,7 @@ Screen {
 
 #shell-input {
     border: none;
-    background: transparent;
+    background: $surface;
 
     width: 100%;
     max-width: 100%;
@@ -52,6 +52,10 @@ Screen {
 
 #shell-input:focus {
     border: none;
+    background: $surface;
+}
+
+#shell-input .text-area--cursor-line {
     background: transparent;
 }
 

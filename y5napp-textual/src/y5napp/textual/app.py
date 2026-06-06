@@ -24,6 +24,9 @@ class ShellInput(TextArea):
     async def _on_key(self, event: events.Key) -> None:
         if event.key == "enter":
             event.stop()
+            event.prevent_default()
+            if not self.text.strip():
+                return
             app = self.app
             if isinstance(app, TextualApp):
                 await app.action_submit()
