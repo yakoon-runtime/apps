@@ -31,6 +31,9 @@ class TextualOutput:
         if event.ctx and event.ctx.origin:
             self._pending_input = event.ctx.origin
 
+        if event.view_params and event.view_params.get("clear"):
+            self._clear()
+
         is_new_job = event.job_id != self._current_job_id
         self._current_job_id = event.job_id
 
@@ -88,6 +91,12 @@ class TextualOutput:
             widget = self._create_widget(spec)
             self._widgets[spec.id] = widget
             self._mount(widget, spec.parent)
+
+    def _clear(self) -> None:
+        self._widgets.clear()
+        self._current_group = None
+        self._current_job_id = None
+        self._container.query(".projection-group").remove()
 
     def _finish(self, op: PatchFinishNode) -> None:
         pass
