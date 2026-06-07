@@ -119,11 +119,12 @@ Screen {
 }
 
 .kv {
+    height: auto;
     margin: 0 0 1 0;
 }
 
 .kv-row {
-    height: auto;
+    height: 1;
 }
 
 .kv-key {
