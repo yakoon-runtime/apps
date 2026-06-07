@@ -13,7 +13,7 @@ from y5n.runtime.wire.runtime import build_runtime
 
 from textual import events
 from textual.app import App, ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Static, TextArea
 
 from .output import TextualOutput
@@ -48,7 +48,9 @@ class TextualApp(App):
         super().__init__()
         self.scroll_area: Vertical | None = None
         self.input_widget: ShellInput | None = None
-        self._status_line: Static | None = None
+        self._status_brand: Static | None = None
+        self._status_prefix: Static | None = None
+        self._status_path: Static | None = None
         self._output_handler: TextualOutput | None = None
         self._connection: ClientConnection | None = None
 
@@ -64,11 +66,14 @@ class TextualApp(App):
                     soft_wrap=True,
                 )
                 yield self.input_widget
-                self._status_line = Static(
-                    "yakoon · space:/$",
-                    id="status-line",
-                )
-                yield self._status_line
+                with Horizontal(id="status-line"):
+                    self._status_brand = Static("yakoon", classes="brand")
+                    yield self._status_brand
+                    yield Static(" · ", classes="sep")
+                    self._status_prefix = Static("space:", classes="prefix")
+                    yield self._status_prefix
+                    self._status_path = Static("/$", classes="path")
+                    yield self._status_path
 
         yield Static("CTRL+Q  Quit |", id="status-bar")
 
@@ -97,19 +102,19 @@ class TextualApp(App):
         if self._output_handler is not None:
             await self._output_handler.view(event)
 
-        if self._status_line is not None:
+        if self._status_prefix is not None:
             try:
                 path = (
                     event.state.node_path
                     if event.state and event.state.node_path
                     else "/"
                 )
-                prefix = (
+                self._status_prefix.update(
                     f"{event.state.user}@space:"
                     if event.state and event.state.user
                     else "space:"
                 )
-                self._status_line.update(f"yakoon · {prefix}{path}$")
+                self._status_path.update(f"{path}$")
             except Exception:
                 pass
 

@@ -60,9 +60,30 @@ Screen {
 }
 
 #status-line {
-    color: $primary;
+    height: 1;
     margin: 1 0 0 0;
     padding: 0;
+}
+
+#status-line .brand {
+    width: auto;
+    color: $primary;
+    text-style: bold;
+}
+
+#status-line .sep {
+    width: auto;
+    color: $text 60%;
+}
+
+#status-line .prefix {
+    width: auto;
+    color: $text 60%;
+}
+
+#status-line .path {
+    width: 1fr;
+    color: $text;
 }
 
 .projection-group {
