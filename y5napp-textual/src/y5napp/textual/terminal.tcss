@@ -28,7 +28,7 @@ Screen {
     background: $surface;
 
     border: none;
-    border-left: solid $secondary;
+    border-left: outer $secondary;
 
     height: auto;
     min-height: 3;
@@ -71,7 +71,7 @@ Screen {
     margin: 0 2 1 0;
 
     border: none;
-    border-left: solid $secondary;
+    border-left: outer $secondary;
 
     background: $surface;
 
@@ -152,4 +152,13 @@ Screen {
 
 .fields-placeholder {
     color: $warning;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: $surface;
+    color: $text 60%;
+    text-align: center;
+    padding: 0 2;
 }

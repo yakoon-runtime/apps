@@ -70,6 +70,8 @@ class TextualApp(App):
                 )
                 yield self._status_line
 
+        yield Static("CTRL+Q  Quit", id="status-bar")
+
     async def on_mount(self) -> None:
         self._output_handler = TextualOutput(self.scroll_area)
 
