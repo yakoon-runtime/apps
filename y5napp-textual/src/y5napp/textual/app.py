@@ -51,6 +51,7 @@ class TextualApp(App):
         self._status_brand: Static | None = None
         self._status_prefix: Static | None = None
         self._status_path: Static | None = None
+        self._status_bar_text: Static | None = None
         self._output_handler: TextualOutput | None = None
         self._connection: ClientConnection | None = None
 
@@ -75,7 +76,8 @@ class TextualApp(App):
                     self._status_path = Static("/$", classes="path")
                     yield self._status_path
 
-        yield Static("CTRL+Q  Quit |", id="status-bar")
+        self._status_bar_text = Static("CTRL+Q  Quit |", id="status-bar")
+        yield self._status_bar_text
 
     async def on_mount(self) -> None:
         self._output_handler = TextualOutput(self.scroll_area)
@@ -85,6 +87,9 @@ class TextualApp(App):
 
         transport = LocalTransport(host)
         self._connection = await transport.connect(self._on_view)
+
+        if self._connection and self._connection.runtime_info and self._status_bar_text is not None:
+            self._update_status_bar(self._connection.runtime_info.version, self.size.width)
 
     async def _create_runtime(self) -> RuntimeHost:
         settings = Settings()
@@ -117,6 +122,17 @@ class TextualApp(App):
                 self._status_path.update(f"{path}$")
             except Exception:
                 pass
+
+    def _update_status_bar(self, ver: str, width: int) -> None:
+        left = "CTRL+Q  Quit  |"
+        right = f"v{ver}"
+        pad = max(0, width - len(left) - len(right) - 3)
+        if self._status_bar_text is not None:
+            self._status_bar_text.update(f"{left}{' ' * pad}{right}")
+
+    def on_resize(self, event: events.Resize) -> None:
+        if self._connection and self._connection.runtime_info and self._status_bar_text is not None:
+            self._update_status_bar(self._connection.runtime_info.version, event.size.width)
 
     async def action_submit(self) -> None:
         assert self.input_widget

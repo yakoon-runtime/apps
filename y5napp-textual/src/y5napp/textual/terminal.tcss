@@ -183,6 +183,5 @@ Screen {
     height: 1;
     background: transparent;
     color: $text 60%;
-    text-align: left;
     padding: 0 1;
 }
