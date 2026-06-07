@@ -16,7 +16,9 @@ Screen {
     scrollbar-size-vertical: 1;
 
     scrollbar-background: transparent;
-    scrollbar-color: $secondary 40%;
+    scrollbar-color: $surface;
+    scrollbar-color-hover: $surface 80%;
+    scrollbar-color-active: $surface;
 }
 
 .input-card {
