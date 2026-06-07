@@ -79,7 +79,7 @@ class TextualOutput:
         if self._pending_input is not None:
             from rich.text import Text
 
-            line = Text("▶ ", style="orange")
+            line = Text("> ", style="gray")
             line.append(self._pending_input)
             group.mount(Static(line))
             self._pending_input = None
