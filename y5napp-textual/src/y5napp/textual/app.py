@@ -65,12 +65,12 @@ class TextualApp(App):
                 )
                 yield self.input_widget
                 self._status_line = Static(
-                    "yakoon:/$",
+                    "yakoon · space:/$",
                     id="status-line",
                 )
                 yield self._status_line
 
-        yield Static("CTRL+Q  Quit", id="status-bar")
+        yield Static("CTRL+Q  Quit |", id="status-bar")
 
     async def on_mount(self) -> None:
         self._output_handler = TextualOutput(self.scroll_area)
@@ -105,11 +105,11 @@ class TextualApp(App):
                     else "/"
                 )
                 prefix = (
-                    f"{event.state.user}@yakoon:"
+                    f"{event.state.user}@space:"
                     if event.state and event.state.user
-                    else "yakoon:"
+                    else "space:"
                 )
-                self._status_line.update(f"{prefix}{path}$")
+                self._status_line.update(f"yakoon · {prefix}{path}$")
             except Exception:
                 pass
 
