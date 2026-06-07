@@ -43,9 +43,10 @@ def _render_inline(result: Text, node: Inline) -> None:
             result.append(_stylize(node.children, "yellow"))
         case InlineMark(variant=v):
             result.append(_stylize(node.children, _mark_style(v)))
-        case InlineCmd(command=cmd):
-            prefix = Text(f"({cmd}) ", style="bold cyan")
-            result.append(prefix)
+        case InlineCmd(command=cmd):  # noqa: F841
+            # TODO: Später vielleicht wieder reinnehmen.
+            # prefix = Text(f"({cmd}) ", style="bold cyan")
+            # result.append(prefix)
             result.append(_children(node.children))
         case InlineSelect(value=val):
             result.append(str(val), style="magenta")
