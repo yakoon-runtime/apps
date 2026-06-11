@@ -2,14 +2,33 @@ Screen {
     layout: vertical;
 }
 
-#output {
+#tab-bar {
+    height: 1;
+    margin: 1 2 0 2;
+    overflow-x: auto;
+}
+
+#tab-bar Button {
+    width: auto;
+    margin: 0 1 0 0;
+    padding: 0 1;
+    background: transparent;
+    color: $text 60%;
+    border: none;
+}
+
+#tab-bar Button:hover {
+    color: $text;
+}
+
+#output-container {
     height: 1fr;
     layout: vertical;
 
     padding: 1 2 0 2
 }
 
-#scroll-area {
+.tab-output {
     height: 1fr;
 
     overflow-y: scroll;
