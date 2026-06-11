@@ -108,7 +108,7 @@ class TextualApp(App):
 
         transport = LocalTransport(host)
         tab = await self._create_tab("local", transport)
-        self.action_activate_tab(len(self._tabs) - 1)
+        self._set_active_tab(len(self._tabs) - 1)
 
         if tab.connection.runtime_info and self._status_bar_text is not None:
             self._update_status_bar(
@@ -144,7 +144,7 @@ class TextualApp(App):
     async def _connect_remote(self, url: str) -> None:
         transport = WebSocketClientTransport(url)
         tab = await self._create_tab(url, transport)
-        self.action_activate_tab(len(self._tabs) - 1)
+        self._set_active_tab(len(self._tabs) - 1)
 
     def _close_active_tab(self) -> None:
         if len(self._tabs) <= 1:
@@ -155,7 +155,7 @@ class TextualApp(App):
 
         target = min(self._active_tab, len(self._tabs) - 1)
         self._rebuild_tab_bar()
-        self.action_activate_tab(target)
+        self._set_active_tab(target)
 
     def _rebuild_tab_bar(self) -> None:
         if self._tab_bar is None:
@@ -165,10 +165,14 @@ class TextualApp(App):
             label = tab.name
             if i == self._active_tab:
                 label = f"[b]{label}[/b]"
-            btn = Button(label, action=f"activate_tab({i})")
-            self._tab_bar.mount(btn)
+            self._tab_bar.mount(Button(label, id=f"tab-{i}"))
 
-    def action_activate_tab(self, index: int) -> None:
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        id_ = event.button.id
+        if id_ and id_.startswith("tab-"):
+            self._set_active_tab(int(id_.split("-")[1]))
+
+    def _set_active_tab(self, index: int) -> None:
         self._active_tab = index
 
         for i, tab in enumerate(self._tabs):
