@@ -162,15 +162,16 @@ class TextualApp(App):
             return
         self._tab_bar.query("Button").remove()
         for i, tab in enumerate(self._tabs):
-            label = tab.name
-            if i == self._active_tab:
-                label = f"[b]{label}[/b]"
-            self._tab_bar.mount(Button(label, id=f"tab-{i}"))
+            label = f"[b]{tab.name}[/b]" if i == self._active_tab else tab.name
+            self._tab_bar.mount(Button(label))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        id_ = event.button.id
-        if id_ and id_.startswith("tab-"):
-            self._set_active_tab(int(id_.split("-")[1]))
+        if self._tab_bar is None:
+            return
+        for i, btn in enumerate(self._tab_bar.query("Button")):
+            if btn is event.button:
+                self._set_active_tab(i)
+                break
 
     def _set_active_tab(self, index: int) -> None:
         self._active_tab = index
