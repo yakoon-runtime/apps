@@ -175,6 +175,14 @@ class TextualApp(App):
 
     def _make_view_callback(self, tab: RuntimeTab):
         async def on_view(event: ProjectionEvent) -> None:
+            if event.view_params:
+                connect_url = event.view_params.get("connect")
+                if connect_url:
+                    name = event.view_params.get("connect_name", connect_url)
+                    await self._connect_runtime(name, connect_url)
+                    self._set_active_tab(len(self._tabs) - 1)
+                    return
+
             await tab.output.view(event)
 
             if self._tabs and self._tabs[self._active_tab] is tab:
