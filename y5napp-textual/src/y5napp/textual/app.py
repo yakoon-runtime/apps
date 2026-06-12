@@ -2,16 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
+import yaml
 from y5n.base.clients import ClientConnection
 from y5n.base.projection import ProjectionEvent
 from y5n.base.runtime import Event
 from y5n.base.runtime.input import InputContext
-from y5n.runtime.machine import RuntimeHost
-from y5n.runtime.settings import Settings
-from y5n.runtime.transport import LocalTransport
-from y5n.runtime.wire.runtime import build_runtime
 from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual import events
@@ -23,13 +19,39 @@ from .output import TextualOutput
 
 
 @dataclass
+class RuntimeConfig:
+    name: str
+    url: str
+    autoconnect: bool = True
+
+
+@dataclass
 class RuntimeTab:
     name: str
-    connection: Optional[ClientConnection]
+    connection: ClientConnection | None
     output: TextualOutput
     container: Vertical
     status_prefix: str = "space:"
     status_path: str = "/$"
+
+
+def _load_config() -> list[RuntimeConfig]:
+    paths = TextualApp._config_paths()
+    for p in paths:
+        if p.exists():
+            with open(p) as f:
+                data = yaml.safe_load(f)
+            if not data or "runtimes" not in data:
+                return []
+            return [
+                RuntimeConfig(
+                    name=r.get("name", r["url"]),
+                    url=r["url"],
+                    autoconnect=r.get("autoconnect", True),
+                )
+                for r in data["runtimes"]
+            ]
+    return []
 
 
 class ShellInput(TextArea):
@@ -96,27 +118,46 @@ class TextualApp(App):
         yield self._status_bar_text
 
     async def on_mount(self) -> None:
-        await self._add_local_tab()
+        configs = _load_config()
+        for i, cfg in enumerate(configs):
+            try:
+                await self._connect_runtime(cfg.name, cfg.url)
+            except Exception:
+                if cfg.autoconnect:
+                    self._show_error_tab(cfg.name, f"Connection failed: {cfg.url}")
+
+    # --------------------------------------------------------
+    # Config
+    # --------------------------------------------------------
+
+    @staticmethod
+    def _config_paths() -> list[Path]:
+        return [
+            Path.cwd() / "texture.yaml",
+            Path("~/.config/y5n/texture.yaml").expanduser(),
+        ]
 
     # --------------------------------------------------------
     # Tabs
     # --------------------------------------------------------
 
-    async def _add_local_tab(self) -> None:
-        host = await self._create_runtime()
-        await host.setup()
+    def _show_error_tab(self, name: str, message: str) -> None:
+        container = Vertical(classes="tab-output")
+        self._output_container.mount(container)
+        output = TextualOutput(container)
+        tab = RuntimeTab(name=name, connection=None, output=output, container=container)
+        self._tabs.append(tab)
+        self._rebuild_tab_bar()
+        from rich.text import Text
 
-        transport = LocalTransport(host)
-        tab = await self._create_tab("local", transport)
-        self._set_active_tab(len(self._tabs) - 1)
+        container.mount(Static(Text(f"[!] {message}", style="red")))
 
-        if tab.connection.runtime_info and self._status_bar_text is not None:
-            self._update_status_bar(
-                tab.connection.runtime_info.version, self.size.width
-            )
+    async def _connect_runtime(self, name: str, url: str) -> None:
+        transport = WebSocketClientTransport(url)
+        await self._create_tab(name, transport)
 
     async def _create_tab(
-        self, name: str, transport: LocalTransport | WebSocketClientTransport
+        self, name: str, transport: WebSocketClientTransport
     ) -> RuntimeTab:
         container = Vertical(classes="tab-output")
         self._output_container.mount(container)
@@ -142,9 +183,11 @@ class TextualApp(App):
         return on_view
 
     async def _connect_remote(self, url: str) -> None:
-        transport = WebSocketClientTransport(url)
-        tab = await self._create_tab(url, transport)
-        self._set_active_tab(len(self._tabs) - 1)
+        try:
+            await self._connect_runtime(url, url)
+            self._set_active_tab(len(self._tabs) - 1)
+        except Exception:
+            self._show_error_tab(url, f"Connection failed: {url}")
 
     def _close_active_tab(self) -> None:
         if len(self._tabs) <= 1:
@@ -186,23 +229,6 @@ class TextualApp(App):
         self._status_path.update(active.status_path)
 
     # --------------------------------------------------------
-    # Runtime
-    # --------------------------------------------------------
-
-    async def _create_runtime(self) -> RuntimeHost:
-        settings = Settings()
-        return build_runtime(
-            settings=settings,
-            plugins=[
-                "y5nspace.shell",
-                "y5nspace.ident",
-                "y5nspace.runtime",
-                "y5nspace.os",
-            ],
-            capabilities={},
-        )
-
-    # --------------------------------------------------------
     # Input
     # --------------------------------------------------------
 
@@ -215,12 +241,15 @@ class TextualApp(App):
             return
 
         if text.startswith("/connect "):
-            url = text[len("/connect "):].strip()
+            url = text[len("/connect ") :].strip()
             await self._connect_remote(url)
             return
 
         if text == "/disconnect":
             self._close_active_tab()
+            return
+
+        if not self._tabs:
             return
 
         active = self._tabs[self._active_tab]
@@ -257,16 +286,13 @@ class TextualApp(App):
             except Exception:
                 pass
 
-    def _update_status_bar(self, ver: str, width: int) -> None:
-        left = "CTRL+Q  Quit  |"
-        right = f"v{ver}"
-        pad = max(0, width - len(left) - len(right) - 3)
-        if self._status_bar_text is not None:
-            self._status_bar_text.update(f"{left}{' ' * pad}{right}")
-
     def on_resize(self, event: events.Resize) -> None:
-        if self._tabs and self._status_bar_text is not None:
-            tab = self._tabs[self._active_tab]
-            info = tab.connection.runtime_info if tab.connection else None
-            if info:
-                self._update_status_bar(info.version, event.size.width)
+        if self._status_bar_text is not None:
+            if self._tabs:
+                tab = self._tabs[self._active_tab]
+                info = tab.connection.runtime_info if tab.connection else None
+                self._status_bar_text.update(
+                    f"CTRL+Q  Quit  |  {info.version if info else ''}"
+                )
+            else:
+                self._status_bar_text.update("CTRL+Q  Quit  |  no runtimes connected")
