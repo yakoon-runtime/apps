@@ -1,21 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
 
 from y5n.base.clients import ClientConnection
 from y5n.base.projection import ProjectionEvent
 from y5n.base.runtime import Event
 from y5n.base.runtime.input import InputContext
+from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual.containers import Horizontal, Vertical
+from textual.widget import Widget
 from textual.widgets import Static, TabPane
 
 from .input import ShellInput
 from .output import TextualOutput
-
-if TYPE_CHECKING:
-    from y5ntrans.websocket.client import WebSocketClientTransport
 
 
 class RuntimeTab:
@@ -30,6 +28,7 @@ class RuntimeTab:
         self.name = name
         self.pane_id = pane_id
         self.connection: ClientConnection | None = None
+        self._url: str | None = None
         self._on_connect = on_connect
         self._on_disconnect = on_disconnect
         self._built = False
@@ -51,6 +50,7 @@ class RuntimeTab:
         self._status_sep = Static(" · ", classes="sep")
         self._status_prefix = Static(f"{name}:", classes="prefix")
         self._status_path = Static("/$", classes="path")
+        self._error_widgets: list[Widget] = []
 
     # ── Build (call after pane is attached) ──
 
@@ -87,6 +87,10 @@ class RuntimeTab:
             await self._on_disconnect(self)
             return
 
+        if text == "/reconnect":
+            await self._reconnect()
+            return
+
         if self.connection is not None:
             try:
                 await self.connection.dispatch(
@@ -94,11 +98,12 @@ class RuntimeTab:
                 )
             except Exception:
                 self.connection = None
-                self.show_error("Connection lost")
+                self._show_disconnected()
 
     # ── Connection ──
 
     async def connect(self, transport: WebSocketClientTransport) -> None:
+        self._url = transport._url
         connection = await transport.connect(self._make_view_callback())
         self.connection = connection
 
@@ -113,10 +118,18 @@ class RuntimeTab:
                     await self._on_connect(name, connect_url)
                     return
 
+                if event.view_params.get("clear"):
+                    self._clear_errors()
+
             await self.output.view(event)
             self.update_status(event)
 
         return on_view
+
+    def _clear_errors(self) -> None:
+        for w in self._error_widgets:
+            w.remove()
+        self._error_widgets.clear()
 
     def update_status(self, event: ProjectionEvent) -> None:
         try:
@@ -138,7 +151,28 @@ class RuntimeTab:
     def show_error(self, message: str) -> None:
         from rich.text import Text
 
-        self._output_container.mount(Static(Text(f"[!] {message}", style="red")))
+        w = Static(Text(f"[!] {message}", style="red"))
+        self._output_container.mount(w)
+        self._error_widgets.append(w)
+
+    def _show_disconnected(self, message: str = "Connection lost") -> None:
+        w = Static(f"[red][!] {message}[/red]\n  /reconnect to retry")
+        self._output_container.mount(w)
+        self._error_widgets.append(w)
+
+    async def _reconnect(self) -> None:
+        if self._url is None:
+            return
+        self._clear_errors()
+
+        transport = WebSocketClientTransport(self._url)
+        try:
+            await self.connect(transport)
+            w = Static("[green]Reconnected[/green]")
+            self._output_container.mount(w)
+            self._error_widgets.append(w)
+        except Exception:
+            self._show_disconnected()
 
     # ── Focus ──
 

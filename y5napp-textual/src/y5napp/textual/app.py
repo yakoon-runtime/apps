@@ -75,7 +75,7 @@ class TextualApp(App):
             transport = WebSocketClientTransport(url)
             await tab.connect(transport)
         except Exception:
-            tab.show_error(f"Connection failed: {url}")
+            tab._show_disconnected("Connection failed")
 
     async def _close_tab(self, tab: RuntimeTab) -> None:
         if len(self._tabs) <= 1:
