@@ -47,9 +47,9 @@ class RuntimeTab:
             soft_wrap=True,
         )
 
-        self._status_brand = Static("yakoon", classes="brand")
+        self._status_brand = Static("Yakoon", classes="brand")
         self._status_sep = Static(" · ", classes="sep")
-        self._status_prefix = Static("space:", classes="prefix")
+        self._status_prefix = Static(f"{name}:", classes="prefix")
         self._status_path = Static("/$", classes="path")
 
     # ── Build (call after pane is attached) ──
@@ -117,14 +117,12 @@ class RuntimeTab:
     def update_status(self, event: ProjectionEvent) -> None:
         try:
             path = (
-                event.state.node_path
-                if event.state and event.state.node_path
-                else "/"
+                event.state.node_path if event.state and event.state.node_path else "/"
             )
             prefix = (
-                f"{event.state.user}@space:"
+                f"{event.state.user}@{self.name}:"
                 if event.state and event.state.user
-                else "space:"
+                else f"{self.name}:"
             )
             self._status_prefix.update(prefix)
             self._status_path.update(f"{path}$")
