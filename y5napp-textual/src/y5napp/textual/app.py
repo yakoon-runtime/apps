@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
 from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual import events
@@ -23,14 +24,49 @@ class TextualApp(App):
 
     CSS_PATH = Path(__file__).parent / "terminal.tcss"
 
-    def __init__(self, configs: list[RuntimeConfig]) -> None:
+    def __init__(
+        self,
+        configs: list[RuntimeConfig],
+        config_path: Path | None = None,
+        theme: str | None = None,
+    ) -> None:
         super().__init__()
         self._configs = configs
+        self._config_path = config_path
         self._tabs: list[RuntimeTab] = []
         self._active_tab: int = 0
         self._tab_counter: int = 0
         self._tabs_container: TabbedContent | None = None
         self._status_bar_text: Static | None = None
+        if theme:
+            self.theme = theme
+
+    # ── Compose ──
+
+    def compose(self) -> ComposeResult:
+        self._tabs_container = TabbedContent()
+        yield self._tabs_container
+
+        self._status_bar_text = Static("CTRL+Q  Quit |", id="status-bar")
+        yield self._status_bar_text
+
+    async def on_mount(self) -> None:
+        for cfg in self._configs:
+            tab = await self._create_tab(cfg.name)
+            if cfg.autoconnect:
+                await self._try_connect(tab, cfg.url)
+
+    def watch_theme(self, old_theme: str, new_theme: str) -> None:
+        if self._config_path is None or old_theme == new_theme:
+            return
+        try:
+            with open(self._config_path) as f:
+                data = yaml.safe_load(f) or {}
+            data["theme"] = new_theme
+            with open(self._config_path, "w") as f:
+                yaml.dump(data, f)
+        except Exception:
+            pass
 
     # ── Compose ──
 

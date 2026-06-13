@@ -18,26 +18,28 @@ def _config_paths() -> list[Path]:
     ]
 
 
-def _load_config() -> list[RuntimeConfig]:
+def _load_config() -> tuple[list[RuntimeConfig], Path | None, str | None]:
     for p in _config_paths():
         if p.exists():
             with open(p) as f:
                 data = yaml.safe_load(f)
-            if not data or "runtimes" not in data:
-                return []
-            return [
+            if not data:
+                return [], p, None
+            configs = [
                 RuntimeConfig(
                     name=r.get("name", r["url"]),
                     url=r["url"],
                     autoconnect=r.get("autoconnect", True),
                 )
-                for r in data["runtimes"]
+                for r in data.get("runtimes", [])
             ]
-    return []
+            theme = data.get("theme")
+            return configs, p, theme
+    return [], None, None
 
 
 def build_texture() -> TextualApp:
     from .app import TextualApp
 
-    configs = _load_config()
-    return TextualApp(configs=configs)
+    configs, config_path, theme = _load_config()
+    return TextualApp(configs=configs, config_path=config_path, theme=theme)
