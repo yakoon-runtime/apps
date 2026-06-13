@@ -2,34 +2,8 @@ Screen {
     layout: vertical;
 }
 
-#tab-bar {
-    height: 1;
-    margin: 1 2 0 2;
-    overflow-x: auto;
-}
-
-#tab-bar Button {
-    width: auto;
-    margin: 0 1 0 0;
-    padding: 0 1;
-    background: transparent;
-    color: $text 60%;
-    border: none;
-}
-
-#tab-bar Button:hover {
-    color: $text;
-}
-
-#output-container {
+TabbedContent {
     height: 1fr;
-    layout: vertical;
-    padding: 1 2 0 2;
-}
-
-.tab-container {
-    height: 1fr;
-    layout: vertical;
 }
 
 .tab-output {

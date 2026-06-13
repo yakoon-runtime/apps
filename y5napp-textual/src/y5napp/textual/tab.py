@@ -9,7 +9,7 @@ from y5n.base.runtime import Event
 from y5n.base.runtime.input import InputContext
 
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Static
+from textual.widgets import Static, TabPane
 
 from .input import ShellInput
 from .output import TextualOutput
@@ -23,17 +23,19 @@ class RuntimeTab:
     def __init__(
         self,
         name: str,
+        pane_id: str,
         on_connect: Callable[[str, str], Awaitable[None]],
-        on_disconnect: Callable[[RuntimeTab], None],
+        on_disconnect: Callable[[RuntimeTab], Awaitable[None]],
     ):
         self.name = name
+        self.pane_id = pane_id
         self.connection: ClientConnection | None = None
         self._on_connect = on_connect
         self._on_disconnect = on_disconnect
         self._built = False
 
-        # ── Container (attached by app before build) ──
-        self.container = Vertical(classes="tab-container")
+        # ── Pane (attached by app before build) ──
+        self.pane = TabPane(title=name, id=pane_id)
 
         # ── Widgets (created, not yet mounted) ──
         self._output_container = Vertical(classes="tab-output")
@@ -50,17 +52,17 @@ class RuntimeTab:
         self._status_prefix = Static("space:", classes="prefix")
         self._status_path = Static("/$", classes="path")
 
-    # ── Build (call after container is attached) ──
+    # ── Build (call after pane is attached) ──
 
     def build(self) -> None:
         if self._built:
             return
         self._built = True
 
-        self.container.mount(self._output_container)
+        self.pane.mount(self._output_container)
 
         input_card = Vertical(classes="input-card")
-        self.container.mount(input_card)
+        self.pane.mount(input_card)
 
         input_card.mount(self._input)
 
@@ -82,7 +84,7 @@ class RuntimeTab:
             return
 
         if text == "/disconnect":
-            self._on_disconnect(self)
+            await self._on_disconnect(self)
             return
 
         if self.connection is not None:

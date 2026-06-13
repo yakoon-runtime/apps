@@ -7,8 +7,7 @@ from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual import events
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Static
+from textual.widgets import Static, TabbedContent
 
 from .tab import RuntimeTab
 
@@ -29,18 +28,15 @@ class TextualApp(App):
         self._configs = configs
         self._tabs: list[RuntimeTab] = []
         self._active_tab: int = 0
-        self._tab_bar: Horizontal | None = None
-        self._output_container: Vertical | None = None
+        self._tab_counter: int = 0
+        self._tabs_container: TabbedContent | None = None
         self._status_bar_text: Static | None = None
 
     # ── Compose ──
 
     def compose(self) -> ComposeResult:
-        self._tab_bar = Horizontal(id="tab-bar")
-        yield self._tab_bar
-
-        self._output_container = Vertical(id="output-container")
-        yield self._output_container
+        self._tabs_container = TabbedContent()
+        yield self._tabs_container
 
         self._status_bar_text = Static("CTRL+Q  Quit |", id="status-bar")
         yield self._status_bar_text
@@ -51,7 +47,7 @@ class TextualApp(App):
                 await self._connect_runtime(cfg.name, cfg.url)
             except Exception:
                 if cfg.autoconnect:
-                    self._show_error_tab(cfg.name, f"Connection failed: {cfg.url}")
+                    await self._show_error_tab(cfg.name, f"Connection failed: {cfg.url}")
 
     # ── Tab Management ──
 
@@ -62,37 +58,48 @@ class TextualApp(App):
     async def _create_tab(
         self, name: str, transport: WebSocketClientTransport
     ) -> RuntimeTab:
+        pane_id = f"tab-{self._tab_counter}"
+        self._tab_counter += 1
+
         tab = RuntimeTab(
             name=name,
+            pane_id=pane_id,
             on_connect=self._on_connect,
             on_disconnect=self._close_tab,
         )
-        assert self._output_container is not None
-        self._output_container.mount(tab.container)
-        tab.build()
+        assert self._tabs_container is not None
+        await self._tabs_container.add_pane(tab.pane)
+        self._tabs_container.active = pane_id
 
+        tab.build()
         await tab.connect(transport)
 
         self._tabs.append(tab)
-        self._rebuild_tab_bar()
+        self._active_tab = len(self._tabs) - 1
 
         return tab
 
-    def _show_error_tab(self, name: str, message: str) -> None:
+    async def _show_error_tab(self, name: str, message: str) -> None:
+        pane_id = f"tab-{self._tab_counter}"
+        self._tab_counter += 1
+
         tab = RuntimeTab(
             name=name,
+            pane_id=pane_id,
             on_connect=self._on_connect,
             on_disconnect=self._close_tab,
         )
-        assert self._output_container is not None
-        self._output_container.mount(tab.container)
+        assert self._tabs_container is not None
+        await self._tabs_container.add_pane(tab.pane)
+        self._tabs_container.active = pane_id
+
         tab.build()
         tab.show_error(message)
 
         self._tabs.append(tab)
-        self._rebuild_tab_bar()
+        self._active_tab = len(self._tabs) - 1
 
-    def _close_tab(self, tab: RuntimeTab) -> None:
+    async def _close_tab(self, tab: RuntimeTab) -> None:
         if len(self._tabs) <= 1:
             return
 
@@ -102,46 +109,29 @@ class TextualApp(App):
             return
 
         self._tabs.pop(idx)
-        tab.container.remove()
+        assert self._tabs_container is not None
+        await self._tabs_container.remove_pane(tab.pane_id)
 
-        target = min(idx, len(self._tabs) - 1)
-        self._rebuild_tab_bar()
-        self._set_active_tab(target)
+        self._active_tab = min(idx, len(self._tabs) - 1)
 
-    # ── Tab Bar ──
+    # ── Tab Activated ──
 
-    def _rebuild_tab_bar(self) -> None:
-        if self._tab_bar is None:
+    def on_tabbed_content_tab_activated(
+        self, event: TabbedContent.TabActivated
+    ) -> None:
+        pane_id = event.pane.id if event.pane else None
+        if pane_id is None:
             return
-        self._tab_bar.query("Button").remove()
         for i, tab in enumerate(self._tabs):
-            label = f"[b]{tab.name}[/b]" if i == self._active_tab else tab.name
-            self._tab_bar.mount(Button(label))
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if self._tab_bar is None:
-            return
-        for i, btn in enumerate(self._tab_bar.query("Button")):
-            if btn is event.button:
-                self._set_active_tab(i)
+            if tab.pane_id == pane_id:
+                self._active_tab = i
+                tab.focus_input()
                 break
-
-    def _set_active_tab(self, index: int) -> None:
-        self._active_tab = index
-
-        for i, tab in enumerate(self._tabs):
-            tab.container.display = i == index
-
-        self._rebuild_tab_bar()
-
-        tab = self._tabs[index]
-        tab.focus_input()
 
     # ── Connect Callback ──
 
     async def _on_connect(self, name: str, url: str) -> None:
         await self._connect_runtime(name, url)
-        self._set_active_tab(len(self._tabs) - 1)
 
     # ── Resize ──
 
