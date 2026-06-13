@@ -14,7 +14,7 @@ TabbedContent {
     scrollbar-color: $surface;
     scrollbar-color-hover: $surface 80%;
     scrollbar-color-active: $surface;
-    padding: 0 2;
+    padding: 1 1 0 2;
 }
 
 
