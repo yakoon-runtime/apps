@@ -23,7 +23,7 @@ TabbedContent {
     padding: 1 2;
     background: $surface;
     border: none;
-    border-left: outer $secondary;
+    border-left: outer $primary;
     height: auto;
     min-height: 3;
 }
@@ -81,7 +81,7 @@ TabbedContent {
     height: auto;
     margin: 0 2 1 0;
     border: none;
-    border-left: outer $secondary;
+    border-left: outer $primary;
     background: $surface;
     padding: 1 2;
     min-height: 3;
