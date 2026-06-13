@@ -14,10 +14,12 @@ TabbedContent {
     scrollbar-color: $surface;
     scrollbar-color-hover: $surface 80%;
     scrollbar-color-active: $surface;
+    padding: 0 2;
 }
 
+
 .input-card {
-    margin: 1 2 2 0;
+    margin: 1 2 2 2;
     padding: 1 2;
     background: $surface;
     border: none;
