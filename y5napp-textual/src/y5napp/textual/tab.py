@@ -88,9 +88,13 @@ class RuntimeTab:
             return
 
         if self.connection is not None:
-            await self.connection.dispatch(
-                Event.from_raw(text, context=InputContext(origin=text))
-            )
+            try:
+                await self.connection.dispatch(
+                    Event.from_raw(text, context=InputContext(origin=text))
+                )
+            except Exception:
+                self.connection = None
+                self.show_error("Connection lost")
 
     # ── Connection ──
 

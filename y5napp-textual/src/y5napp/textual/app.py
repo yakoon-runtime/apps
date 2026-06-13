@@ -43,21 +43,13 @@ class TextualApp(App):
 
     async def on_mount(self) -> None:
         for cfg in self._configs:
-            try:
-                await self._connect_runtime(cfg.name, cfg.url)
-            except Exception:
-                if cfg.autoconnect:
-                    await self._show_error_tab(cfg.name, f"Connection failed: {cfg.url}")
+            tab = await self._create_tab(cfg.name)
+            if cfg.autoconnect:
+                await self._try_connect(tab, cfg.url)
 
     # ── Tab Management ──
 
-    async def _connect_runtime(self, name: str, url: str) -> None:
-        transport = WebSocketClientTransport(url)
-        await self._create_tab(name, transport)
-
-    async def _create_tab(
-        self, name: str, transport: WebSocketClientTransport
-    ) -> RuntimeTab:
+    async def _create_tab(self, name: str) -> RuntimeTab:
         pane_id = f"tab-{self._tab_counter}"
         self._tab_counter += 1
 
@@ -72,32 +64,18 @@ class TextualApp(App):
         self._tabs_container.active = pane_id
 
         tab.build()
-        await tab.connect(transport)
 
         self._tabs.append(tab)
         self._active_tab = len(self._tabs) - 1
 
         return tab
 
-    async def _show_error_tab(self, name: str, message: str) -> None:
-        pane_id = f"tab-{self._tab_counter}"
-        self._tab_counter += 1
-
-        tab = RuntimeTab(
-            name=name,
-            pane_id=pane_id,
-            on_connect=self._on_connect,
-            on_disconnect=self._close_tab,
-        )
-        assert self._tabs_container is not None
-        await self._tabs_container.add_pane(tab.pane)
-        self._tabs_container.active = pane_id
-
-        tab.build()
-        tab.show_error(message)
-
-        self._tabs.append(tab)
-        self._active_tab = len(self._tabs) - 1
+    async def _try_connect(self, tab: RuntimeTab, url: str) -> None:
+        try:
+            transport = WebSocketClientTransport(url)
+            await tab.connect(transport)
+        except Exception:
+            tab.show_error(f"Connection failed: {url}")
 
     async def _close_tab(self, tab: RuntimeTab) -> None:
         if len(self._tabs) <= 1:
@@ -131,7 +109,8 @@ class TextualApp(App):
     # ── Connect Callback ──
 
     async def _on_connect(self, name: str, url: str) -> None:
-        await self._connect_runtime(name, url)
+        tab = await self._create_tab(name)
+        await self._try_connect(tab, url)
 
     # ── Resize ──
 
