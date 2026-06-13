@@ -7,7 +7,7 @@ from y5n.runtime.wire.runtime import build_runtime, initialize_storage
 async def create_runtime() -> RuntimeHost:
 
     engine = build_runtime(
-        plugins=[
+        spaces=[
             "y5n.shell",
             "y5n.playground",
         ],
