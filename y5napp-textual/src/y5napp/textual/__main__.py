@@ -1,8 +1,8 @@
-from y5napp.textual.app import TextualApp
+from .wire import build_texture
 
 
 def main() -> None:
-    app = TextualApp()
+    app = build_texture()
     app.run()
 
 

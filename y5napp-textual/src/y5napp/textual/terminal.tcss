@@ -24,16 +24,18 @@ Screen {
 #output-container {
     height: 1fr;
     layout: vertical;
+    padding: 1 2 0 2;
+}
 
-    padding: 1 2 0 2
+.tab-container {
+    height: 1fr;
+    layout: vertical;
 }
 
 .tab-output {
     height: 1fr;
-
     overflow-y: scroll;
     scrollbar-size-vertical: 1;
-
     scrollbar-background: transparent;
     scrollbar-color: $surface;
     scrollbar-color-hover: $surface 80%;
@@ -41,84 +43,71 @@ Screen {
 }
 
 .input-card {
-
     margin: 1 2 2 0;
-
     padding: 1 2;
-
     background: $surface;
-
     border: none;
     border-left: outer $secondary;
-
     height: auto;
     min-height: 3;
 }
 
-#shell-input {
+.tab-shell-input {
     border: none;
     background: $surface;
-
     width: 100%;
     max-width: 100%;
     min-width: 0;
-
     height: auto;
     min-height: 1;
     max-height: 12;
-
     margin: 0;
     padding: 0;
 }
 
-#shell-input:focus {
+.tab-shell-input:focus {
     border: none;
     background: $surface;
 }
 
-#shell-input .text-area--cursor-line {
+.tab-shell-input .text-area--cursor-line {
     background: transparent;
 }
 
-#status-line {
+.tab-status-line {
     height: 1;
     margin: 1 0 0 0;
     padding: 0;
 }
 
-#status-line .brand {
+.tab-status-line .brand {
     width: auto;
     color: $primary;
     text-style: bold;
 }
 
-#status-line .sep {
+.tab-status-line .sep {
     width: auto;
     color: $text 60%;
 }
 
-#status-line .prefix {
+.tab-status-line .prefix {
     width: auto;
     color: $text 60%;
 }
 
-#status-line .path {
+.tab-status-line .path {
     width: 1fr;
     color: $text;
 }
 
 .projection-group {
     height: auto;
-
     margin: 0 2 1 0;
-
     border: none;
     border-left: outer $secondary;
-
     background: $surface;
-
     padding: 1 2;
-
     min-height: 3;
 }
 
@@ -137,9 +126,7 @@ Screen {
 
 .section {
     margin: 0 0 1 0;
-
     padding: 0 1;
-
     border: solid $primary;
 }
 
@@ -171,7 +158,6 @@ Screen {
 
 .kv-key {
     width: 16;
-
     text-style: bold;
     color: $secondary;
 }
