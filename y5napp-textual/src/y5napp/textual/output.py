@@ -12,6 +12,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import (
     Button,
+    Collapsible,
     DataTable,
     Rule,
     Static,
@@ -107,12 +108,24 @@ class TextualOutput:
         if parent_id:
             parent_widget = self._widgets.get(parent_id)
             if parent_widget is not None:
+                if isinstance(parent_widget, Collapsible):
+                    parent_widget.call_later(
+                        self._mount_collapsible_child, parent_widget, widget
+                    )
+                    return
                 parent_widget.mount(widget)
                 return
 
         group = self._current_group
         if group is not None:
             group.mount(widget)
+
+    def _mount_collapsible_child(self, parent: Collapsible, child: Widget) -> None:
+        try:
+            contents = parent.query_one("Contents")
+            contents.mount(child)
+        except Exception:
+            parent.mount(child)
 
     # --------------------------------------------------------
 
@@ -134,6 +147,8 @@ class TextualOutput:
                 return Vertical(classes="section")
             case "stack":
                 return Vertical(classes="stack")
+            case "collapsible":
+                return self._make_collapsible(node)
             case "flow":
                 return Horizontal(classes="flow")
             case "kv":
@@ -202,7 +217,7 @@ class TextualOutput:
     def _make_action(self, node: Node) -> Button:
         label = node.props.get("label", "")
         action_id = node.props.get("id")
-        btn = Button(label, id=node.id)
+        btn = Button(label)
         return btn
 
     def _make_fields(self, node: Node) -> Static:
@@ -211,3 +226,15 @@ class TextualOutput:
     def _make_image(self, node: Node) -> Static:
         alt = node.props.get("alt") or node.props.get("ref", "")
         return Static(f"[img] {alt}", classes="image")
+
+    def _make_collapsible(self, node: Node) -> Collapsible:
+        from . import inlines
+
+        title = inlines.render(node.props.get("title", []))
+        expanded = node.props.get("expanded", False)
+        return Collapsible(
+            title=title,
+            collapsed=not expanded,
+            collapsed_symbol="[+]",
+            expanded_symbol="[-]",
+        )

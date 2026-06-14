@@ -160,6 +160,29 @@ TabbedContent {
     color: $warning;
 }
 
+Collapsible {
+    margin: 0 0 1 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+CollapsibleTitle {
+    padding: 0;
+    border: none;
+    background: transparent;
+    /*text-style: bold;*/
+    color: $primary;
+}
+
+CollapsibleTitle:hover {
+    color: $primary;
+}
+
+Collapsible Contents {
+    padding: 0 0 0 2;
+}
+
 #status-bar {
     dock: bottom;
     height: 1;
