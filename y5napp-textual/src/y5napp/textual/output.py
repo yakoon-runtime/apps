@@ -205,10 +205,10 @@ class TextualOutput:
 
     def _make_table(self, node: Node) -> DataTable:
         dt = DataTable()
-        headers = node.props.get("headers", [])
-        if headers:
-            for h in headers:
-                dt.add_column(h)
+        columns = node.props.get("columns", [])
+        for col in columns:
+            title = col.get("title") if isinstance(col, dict) else col.title
+            dt.add_column(title)
         rows = node.props.get("rows", [])
         for row in rows:
             dt.add_row(*row)
