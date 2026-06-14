@@ -79,11 +79,12 @@ TabbedContent {
 
 .projection-group {
     height: auto;
-    margin: 0 2 1 0;
+    /*margin: 0 2 1 0; */
+    margin: 0 2 0 0;
     border: none;
-    border-left: outer $primary;
-    background: $surface;
-    padding: 1 2;
+    /*border-left: outer $primary;*/
+    /*background: $surface; */
+    padding: 0 1 1 3;
     min-height: 3;
 }
 
