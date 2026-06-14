@@ -8,7 +8,7 @@ version = "0.2.0"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Stefan Bergmann" }]
-dependencies = ["y5ncore-base", "y5ncore-runtime"]
+dependencies = ["y5ncore-base", "y5ntrans-ws"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

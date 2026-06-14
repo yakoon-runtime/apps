@@ -1,6 +1,6 @@
 from y5n.runtime.transport import LocalTransport
-from y5ncli.console.client.runtime import Client, create_runtime
-from y5ncli.console.client.terminal import SimpleTerminal
+from y5napp.console.client.runtime import Client, create_runtime
+from y5napp.console.client.terminal import SimpleTerminal
 
 
 async def run() -> None:
