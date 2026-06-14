@@ -1,6 +1,5 @@
 Screen {
     layout: vertical;
-    font-family: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", "DejaVu Sans Mono", monospace;
 }
 
 TabbedContent {
