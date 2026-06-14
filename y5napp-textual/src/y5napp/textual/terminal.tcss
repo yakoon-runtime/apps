@@ -183,6 +183,16 @@ Collapsible Contents {
     padding: 0 0 0 2;
 }
 
+DataTable {
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+DataTable > .datatable--header {
+    text-style: bold;
+    color: $secondary;
+}
+
 #status-bar {
     dock: bottom;
     height: 1;
