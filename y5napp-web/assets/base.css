@@ -1,0 +1,210 @@
+body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Layout */
+#app {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* Sidebar */
+#sidebar {
+    width: 240px;
+    transition: width 0.2s ease;
+    background-color: #eeeeee;
+    overflow: hidden;
+    padding: 0;
+}
+
+#app.sidebar-collapsed #sidebar {
+    width: 0;
+    border-right: none;
+}
+
+/* Topbar */
+#topbar {
+    height: 40px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+
+    padding: 0 10px;
+
+    border-bottom: 1px solid #eee;
+    background: white;
+}
+
+#toggle-sidebar {
+    border: none;
+    background: transparent;
+    font-size: 18px;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+#toggle-sidebar:hover {
+    opacity: 1;
+}
+
+
+/* Main */
+#main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Stream */
+#stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* Turn */
+.turn {
+    margin-bottom: 10px;
+    padding: 5px;
+    /*background: white; */
+    /*border: 1px solid #eee;
+    border-radius: 6px; */
+}
+
+.turn-region {}
+
+/* Text */
+.turn p {
+    margin: 6px 0;
+}
+
+/* Action List */
+.turn ul {
+    margin-top: 10px;
+    padding-left: 18px;
+}
+
+.turn li {
+    cursor: pointer;
+    margin-bottom: 4px;
+}
+
+.turn li:hover {
+    text-decoration: underline;
+}
+
+/* CommandBar */
+
+#commandbar {
+    height: 56px;
+
+    display: flex;
+    align-items: center;
+
+    padding: 12px 16px;
+
+    margin: 12px 16px 16px 16px;
+
+    border-top: none;
+    background: transparent;
+}
+
+.commandbar-combo {
+    display: flex;
+    align-items: center;
+    flex: 1;
+
+    border-radius: 999px;
+    overflow: hidden;
+    padding-right: 6px;
+
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    backdrop-filter: blur(6px);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.6),
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 4px 12px rgba(0, 0, 0, 0.06);
+    transition: all 0.15s ease;
+}
+
+.commandbar-combo:hover {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        0 2px 6px rgba(0, 0, 0, 0.06),
+        0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.commandbar-prompt {
+    padding: 12px 16px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+
+    border-top-left-radius: 999px;
+    border-bottom-left-radius: 999px;
+
+    background: #e5e7eb;
+    color: #1f2937;
+
+    border-right: 1px solid #d1d5db;
+}
+
+#commandbar-input {
+    flex: 1;
+
+    border: none;
+    outline: none;
+
+    padding: 12px 16px;
+    font-size: 15px;
+
+    color: #374151;
+    background: transparent;
+}
+
+#commandbar-input::placeholder {
+    color: #9ca3af;
+}
+
+.commandbar-button {
+    width: 33px;
+    height: 33px;
+    margin-right: 2px;
+
+    border: none;
+    border-radius: 50%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+    flex-shrink: 0;
+
+    opacity: 0.9;
+    background: #e5e7eb;
+    color: #374151;
+
+    transition: all 0.15s ease;
+}
+
+.commandbar-button:hover {
+    background: #d1d5db;
+    transform: scale(1.05);
+}
+
+.commandbar-button:active {
+    transform: scale(0.95);
+}
+
+.commandbar-combo:focus-within {
+    border-color: #d1d5db;
+
+    box-shadow:
+        0 0 0 2px rgba(0, 0, 0, 0.04),
+        0 2px 6px rgba(0, 0, 0, 0.06);
+}

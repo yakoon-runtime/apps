@@ -1,0 +1,366 @@
+/* SPACING */
+
+.renderer>*+* {
+    margin-top: 12px;
+}
+
+.input-line {
+    padding: 4px 0;
+    color: #888;
+    font-family: "SF Mono", "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 13px;
+}
+
+/* Heading bekommt mehr Luft nach oben */
+.heading-2,
+.heading-3 {
+    margin-top: 20px;
+}
+
+/* h1 nur unten Abstand */
+.heading-1 {
+    margin-bottom: 8px;
+}
+
+/* Paragraph kompakt */
+.paragraph {
+    margin: 0;
+}
+
+/* Lists etwas luftiger */
+.list {
+    margin-top: 16px;
+}
+
+/* SECTION */
+
+.section {
+    display: block;
+}
+
+.section {
+    padding: 12px 0;
+}
+
+/*
+=========================
+= TEXT
+=========================
+*/
+
+
+.text {
+    white-space: pre-wrap;
+}
+
+/*
+=========================
+= LIST
+=========================
+*/
+
+.list {}
+
+.list-item {}
+
+/*
+=========================
+= RULE
+=========================
+*/
+
+.rule {
+    border: none;
+    height: 1px;
+    margin: 16px 0;
+    border-radius: 1px;
+}
+
+/* Subtle – fast unsichtbar */
+.rule-subtle {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+/* Normal – klar sichtbar */
+.rule-normal {
+    background: rgba(0, 0, 0, 0.10);
+}
+
+/* Strong – deutlich stärker */
+.rule-strong {
+    height: 2px;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+/* STACK */
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* FLOW */
+.flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.flow>* {
+    flex: 1 1 280px;
+}
+
+/*
+=========================
+= KEY VALUE
+=========================
+*/
+
+.kv {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.kv-item {
+    display: flex;
+    gap: 8px;
+}
+
+.kv-key {
+    font-weight: 600;
+    color: #555;
+    min-width: 30%;
+}
+
+.kv-value {
+    flex: 1;
+}
+
+/*
+=========================
+= ACTIONS
+=========================
+*/
+
+.actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.actions button {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.actions button:hover {
+    background: #eaeaea;
+}
+
+
+/*
+=========================
+= FIELDS
+=========================
+*/
+
+.fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fields-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+
+/* Single Field */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.field-label {
+    font-size: 13px;
+    color: #555;
+}
+
+/* Input */
+.field-input {
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+}
+
+.field-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+/* Error */
+.field-error {
+    font-size: 12px;
+    color: #d32f2f;
+}
+
+.field-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.field-wrap input {
+    width: 100%;
+    padding-right: 28px;
+    box-sizing: border-box;
+}
+
+.field-region {
+    margin-top: 6px;
+    padding-left: 6px;
+    border-left: 2px solid #ddd;
+    background: #fafafa;
+}
+
+.field-lookup {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+
+    height: 24px;
+    min-width: 24px;
+    padding: 0 6px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 12px;
+
+    background: #f1f3f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+
+    cursor: pointer;
+    opacity: 0.9;
+
+}
+
+.field-lookup:hover {
+    background: #e9ecef;
+    border-color: #ccc;
+}
+
+
+/* HEADING */
+
+/* Base für alle Headings */
+.heading {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    line-height: 1.3;
+}
+
+/* h1 */
+.heading-1 {
+    font-size: 20px;
+    margin-bottom: 12px;
+}
+
+/* h2 */
+.heading-2 {
+    font-size: 16px;
+    margin-top: 20px;
+    margin-bottom: 8px;
+}
+
+/* h3 */
+.heading-3 {
+    font-size: 14px;
+    color: #6b7280;
+    margin-top: 16px;
+    margin-bottom: 6px;
+}
+
+
+/* IMAGE */
+
+.image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 12px 0;
+    border-radius: 10px;
+    background: #f5f5f7;
+}
+
+/* SPACER */
+
+.spacer {
+    height: auto;
+}
+
+/* COLLAPSIBLE */
+
+.collapsible {}
+
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+    /*font-weight: 600;*/
+    color: #007aff;
+}
+
+.collapsible-header:hover {
+    opacity: 0.8;
+}
+
+.collapsible-icon {
+    margin-right: 4px;
+}
+
+.collapsible.collapsed> :nth-child(n+2) {
+    display: none;
+}
+
+.collapsible-title {
+    /*font-weight: 600; */
+}
+
+/* TABLE */
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+}
+
+.table th {
+    text-align: left;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-bottom: 2px solid #ddd;
+    color: #555;
+}
+
+.table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}

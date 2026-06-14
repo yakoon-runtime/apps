@@ -1,0 +1,71 @@
+.inline-cmd {
+    cursor: pointer;
+    color: #4da3ff;
+}
+
+.inline-action {}
+
+.inline-code {}
+
+.inline-cmd:hover {
+    text-decoration: underline;
+}
+
+.inline-select {
+    cursor: pointer;
+    background: #eee;
+}
+
+/* MARK */
+
+.inline-mark {
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* Info – iOS blue */
+.mark-info {
+    background: rgba(0, 122, 255, 0.12);
+    color: #0051a8;
+}
+
+/* Important – warm yellow */
+.mark-important {
+    background: rgba(255, 204, 0, 0.18);
+    color: #7a5a00;
+}
+
+/* Success – iOS green */
+.mark-success {
+    background: rgba(52, 199, 89, 0.16);
+    color: #1c6b2a;
+}
+
+/* Error – iOS red */
+.mark-error {
+    background: rgba(255, 59, 48, 0.16);
+    color: #8a1c1c;
+}
+
+/* LINK */
+
+.inline-link {
+    color: #007aff;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.inline-link:hover {
+    border-bottom-color: rgba(0, 122, 255, 0.6);
+}
+
+.inline-arg {
+    font-style: italic;
+    color: #888;
+}
+
+.inline-space {
+    white-space: pre;
+}
