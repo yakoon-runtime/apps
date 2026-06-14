@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from y5n.base.config import RuntimeConfig, YakoonConfig
 from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual import events
@@ -13,33 +13,25 @@ from textual.widgets import Static, TabbedContent
 from .tab import RuntimeTab
 
 
-@dataclass
-class RuntimeConfig:
-    name: str
-    url: str
-    autoconnect: bool = True
-
-
 class TextualApp(App):
 
     CSS_PATH = Path(__file__).parent / "terminal.tcss"
 
     def __init__(
         self,
-        configs: list[RuntimeConfig],
+        config: YakoonConfig,
         config_path: Path | None = None,
-        theme: str | None = None,
     ) -> None:
         super().__init__()
-        self._configs = configs
+        self._config = config
         self._config_path = config_path
         self._tabs: list[RuntimeTab] = []
         self._active_tab: int = 0
         self._tab_counter: int = 0
         self._tabs_container: TabbedContent | None = None
         self._status_bar_text: Static | None = None
-        if theme:
-            self.theme = theme
+        if config.theme:
+            self.theme = config.theme
 
     # ── Compose ──
 
@@ -51,7 +43,7 @@ class TextualApp(App):
         yield self._status_bar_text
 
     async def on_mount(self) -> None:
-        for cfg in self._configs:
+        for cfg in self._config.runtimes:
             tab = await self._create_tab(cfg.name)
             if cfg.autoconnect:
                 await self._try_connect(tab, cfg.url)
@@ -67,21 +59,6 @@ class TextualApp(App):
                 yaml.dump(data, f)
         except Exception:
             pass
-
-    # ── Compose ──
-
-    def compose(self) -> ComposeResult:
-        self._tabs_container = TabbedContent()
-        yield self._tabs_container
-
-        self._status_bar_text = Static("CTRL+Q  Quit |", id="status-bar")
-        yield self._status_bar_text
-
-    async def on_mount(self) -> None:
-        for cfg in self._configs:
-            tab = await self._create_tab(cfg.name)
-            if cfg.autoconnect:
-                await self._try_connect(tab, cfg.url)
 
     # ── Tab Management ──
 

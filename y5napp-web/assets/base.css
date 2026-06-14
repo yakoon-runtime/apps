@@ -1,8 +1,17 @@
+:root {
+    --bg: #ffffff;
+    --surface: #f9fafb;
+    --text: #1f2937;
+    --accent: #3b82f6;
+}
+
 body {
     margin: 0;
     height: 100vh;
     display: flex;
     flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
 }
 
 /* Layout */
@@ -35,8 +44,8 @@ body {
 
     padding: 0 10px;
 
-    border-bottom: 1px solid #eee;
-    background: white;
+    border-bottom: 1px solid var(--surface);
+    background: var(--bg);
 }
 
 #toggle-sidebar {
