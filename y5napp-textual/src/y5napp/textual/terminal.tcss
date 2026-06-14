@@ -180,7 +180,7 @@ CollapsibleTitle:hover {
 }
 
 Collapsible Contents {
-    padding: 0 0 0 2;
+    padding: 0 0 0 1;
 }
 
 DataTable {
