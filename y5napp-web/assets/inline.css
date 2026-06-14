@@ -1,6 +1,7 @@
 .inline-cmd {
     cursor: pointer;
-    color: #4da3ff;
+    color: var(--text);
+    font-weight: 600;
 }
 
 .inline-action {}
@@ -13,7 +14,7 @@
 
 .inline-select {
     cursor: pointer;
-    background: #eee;
+    background: var(--surface);
 }
 
 /* MARK */
@@ -25,45 +26,42 @@
     line-height: 1.4;
 }
 
-/* Info – iOS blue */
 .mark-info {
-    background: rgba(0, 122, 255, 0.12);
-    color: #0051a8;
+    background: color-mix(in srgb, var(--secondary) 15%, transparent);
+    color: var(--secondary);
 }
 
-/* Important – warm yellow */
 .mark-important {
     background: rgba(255, 204, 0, 0.18);
     color: #7a5a00;
 }
 
-/* Success – iOS green */
 .mark-success {
-    background: rgba(52, 199, 89, 0.16);
+    background: color-mix(in srgb, #34c759 16%, transparent);
     color: #1c6b2a;
 }
 
-/* Error – iOS red */
 .mark-error {
-    background: rgba(255, 59, 48, 0.16);
+    background: color-mix(in srgb, #ff3b30 16%, transparent);
     color: #8a1c1c;
 }
 
 /* LINK */
 
 .inline-link {
-    color: #007aff;
+    color: var(--accent);
     text-decoration: none;
-    border-bottom: 1px solid rgba(0, 122, 255, 0.3);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .inline-link:hover {
-    border-bottom-color: rgba(0, 122, 255, 0.6);
+    border-bottom-color: var(--accent);
 }
 
 .inline-arg {
     font-style: italic;
-    color: #888;
+    color: var(--text);
+    opacity: 0.6;
 }
 
 .inline-space {

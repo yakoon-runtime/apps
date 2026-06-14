@@ -6,7 +6,8 @@
 
 .input-line {
     padding: 4px 0;
-    color: #888;
+    color: var(--text);
+    opacity: 0.6;
     font-family: "SF Mono", "Cascadia Code", "Fira Code", "Consolas", monospace;
     font-size: 13px;
 }
@@ -78,18 +79,21 @@
 
 /* Subtle – fast unsichtbar */
 .rule-subtle {
-    background: rgba(0, 0, 0, 0.04);
+    background: var(--text);
+    opacity: 0.08;
 }
 
 /* Normal – klar sichtbar */
 .rule-normal {
-    background: rgba(0, 0, 0, 0.10);
+    background: var(--text);
+    opacity: 0.15;
 }
 
 /* Strong – deutlich stärker */
 .rule-strong {
     height: 2px;
-    background: rgba(0, 0, 0, 0.18);
+    background: var(--text);
+    opacity: 0.25;
 }
 
 /* STACK */
@@ -129,7 +133,8 @@
 
 .kv-key {
     font-weight: 600;
-    color: #555;
+    color: var(--text);
+    opacity: 0.7;
     min-width: 30%;
 }
 
@@ -151,15 +156,15 @@
 
 .actions button {
     padding: 8px 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--surface);
     border-radius: 6px;
-    background: #f5f5f5;
+    background: var(--surface);
     cursor: pointer;
     font-size: 13px;
 }
 
 .actions button:hover {
-    background: #eaeaea;
+    opacity: 0.85;
 }
 
 
@@ -204,8 +209,8 @@
 }
 
 .field-input:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--secondary) 20%, transparent);
 }
 
 /* Error */
@@ -228,8 +233,8 @@
 .field-region {
     margin-top: 6px;
     padding-left: 6px;
-    border-left: 2px solid #ddd;
-    background: #fafafa;
+    border-left: 2px solid var(--surface);
+    background: var(--surface);
 }
 
 .field-lookup {
@@ -289,7 +294,8 @@
 /* h3 */
 .heading-3 {
     font-size: 14px;
-    color: #6b7280;
+    color: var(--text);
+    opacity: 0.7;
     margin-top: 16px;
     margin-bottom: 6px;
 }
@@ -303,7 +309,7 @@
     height: auto;
     margin: 12px 0;
     border-radius: 10px;
-    background: #f5f5f7;
+    background: var(--surface);
 }
 
 /* SPACER */
@@ -320,8 +326,7 @@
     cursor: pointer;
     user-select: none;
     padding: 4px 0;
-    /*font-weight: 600;*/
-    color: #007aff;
+    color: var(--primary);
 }
 
 .collapsible-header:hover {
@@ -352,13 +357,13 @@
     text-align: left;
     font-weight: 600;
     padding: 6px 10px;
-    border-bottom: 2px solid #ddd;
-    color: #555;
+    border-bottom: 2px solid var(--surface);
+    color: var(--text);
 }
 
 .table td {
     padding: 6px 10px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--surface);
 }
 
 .table tr:last-child td {
