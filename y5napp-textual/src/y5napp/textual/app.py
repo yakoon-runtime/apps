@@ -9,8 +9,35 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import Static, TabbedContent
 
+import textual.theme as textual_theme
+from textual.theme import Theme as TextualTheme
+
+from y5n.base.theme import ThemeManager, default_themes
+
 from .conf import TextureConfig
 from .tab import RuntimeTab
+
+_THEME_MANAGER = ThemeManager(default_themes())
+
+
+def _to_textual(name: str) -> str | None:
+    theme = _THEME_MANAGER.get(name)
+    if not theme:
+        return None
+    textual_theme.BUILTIN_THEMES[name] = TextualTheme(
+        name=name,
+        primary=theme.primary,
+        secondary=theme.secondary,
+        accent=theme.accent,
+        warning=theme.warning,
+        error=theme.error,
+        success=theme.success,
+        foreground=theme.text,
+        background=theme.bg,
+        surface=theme.surface,
+        variables={"font": theme.font},
+    )
+    return name
 
 
 class TextualApp(App):
@@ -31,7 +58,9 @@ class TextualApp(App):
         self._tabs_container: TabbedContent | None = None
         self._status_bar_text: Static | None = None
         if config.theme:
-            self.theme = config.theme
+            resolved = _to_textual(config.theme)
+            if resolved is not None:
+                self.theme = resolved
 
     # ── Compose ──
 
