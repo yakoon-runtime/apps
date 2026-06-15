@@ -20,17 +20,17 @@ TabbedContent {
 
 .input-card {
     margin: 1 2 2 2;
-    padding: 1 2;
-    background: $surface;
+    padding: 0 1;
+    /*background: $surface;*/
     border: none;
     border-left: outer $primary;
     height: auto;
-    min-height: 3;
+    min-height: 2;
 }
 
 .tab-shell-input {
     border: none;
-    background: $surface;
+    background: $background;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -43,11 +43,11 @@ TabbedContent {
 
 .tab-shell-input:focus {
     border: none;
-    background: $surface;
+    /*background: $surface;*/
 }
 
 .tab-shell-input .text-area--cursor-line {
-    background: transparent;
+   /* background: transparent; */
 }
 
 .tab-status-line {
