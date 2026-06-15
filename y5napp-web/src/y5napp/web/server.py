@@ -16,11 +16,13 @@ def _inject_config(html: str) -> str:
     cfg, _ = load_config()
     runtimes = []
     for rt in cfg.runtimes or []:
-        runtimes.append({
-            "name": rt.name,
-            "url": rt.url,
-            "autoconnect": rt.autoconnect,
-        })
+        runtimes.append(
+            {
+                "name": rt.name,
+                "url": rt.url,
+                "autoconnect": rt.autoconnect,
+            }
+        )
     script = f"<script>window.__YAKOON_RUNTIMES = {json.dumps(runtimes)}</script>"
     return html.replace("</head>", f"{script}\n</head>")
 
@@ -69,7 +71,7 @@ def serve(host: str = "127.0.0.1", port: int = 8000) -> HTTPServer:
     print("Yakoon Web", flush=True)
     print(flush=True)
     print(f"URL     : http://{host}:{port}", flush=True)
-    print(f"Runtime : ws://localhost:9100", flush=True)
+    print("Runtime : ws://localhost:9100", flush=True)
     print(flush=True)
     print("Ready.", flush=True)
     return server

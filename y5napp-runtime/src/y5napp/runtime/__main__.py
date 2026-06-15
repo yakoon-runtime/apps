@@ -58,10 +58,7 @@ def main(args: list[str] | None = None) -> None:
         print("Yakoon Runtime", flush=True)
         print(flush=True)
         print(f"Listen : ws://{HOST}:{port}", flush=True)
-        print(flush=True)
-        print("Spaces:", flush=True)
-        for s in spaces:
-            print(f"  {s}", flush=True)
+        print(f"Spaces : {', '.join(spaces)}", flush=True)
         print(flush=True)
         print("Ready.", flush=True)
         async with serve(handler, HOST, port):
