@@ -2,41 +2,21 @@
 
 Usage:
 
-    python -m y5napp.runtime                    # port 9100
-    python -m y5napp.runtime 9101               # custom port
+    python -m y5napp.runtime                    # port from config
+    python -m y5napp.runtime 9101               # override port
 """
 
 import asyncio
 import sys
-from importlib.resources import files
-from urllib.parse import urlparse
 
-import yaml
 from websockets.asyncio.server import serve
-from y5n.base.config import RuntimeFileConfig, load_runtime_config
 from y5n.runtime.settings import RuntimeSettings, Settings
 from y5n.runtime.wire.runtime import build_runtime
 from y5ntrans.websocket.server import WebSocketServerTransport
 
+from .conf import load_config
+
 _host = None
-
-
-def _load_config() -> RuntimeFileConfig:
-    cfg, path = load_runtime_config()
-    if path:
-        return cfg
-
-    bundled = files("y5napp.runtime").joinpath("yakoon-runtime.yml")
-    if bundled.exists():
-        with open(bundled) as f:
-            data = yaml.safe_load(f) or {}
-        return RuntimeFileConfig(
-            listen=data.get("listen", "ws://127.0.0.1:9100"),
-            spaces=data.get("spaces", []),
-            known=data.get("known", {}),
-        )
-
-    return RuntimeFileConfig()
 
 
 async def handler(websocket):
@@ -48,10 +28,9 @@ async def handler(websocket):
 def main(args: list[str] | None = None) -> None:
     args = args or sys.argv[1:]
 
-    cfg = _load_config()
-    parsed = urlparse(cfg.listen)
-    host = parsed.hostname or "127.0.0.1"
-    port = int(args[0]) if args else (parsed.port or 9100)
+    cfg = load_config()
+    host = cfg.listen.host
+    port = int(args[0]) if args else cfg.listen.port
 
     settings = Settings(
         runtime=RuntimeSettings(

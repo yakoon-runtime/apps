@@ -1,4 +1,6 @@
-listen: ws://127.0.0.1:9100
+listen:
+  host: 127.0.0.1
+  port: 9100
 
 spaces:
   - y5nspace.runtime

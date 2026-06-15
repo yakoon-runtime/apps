@@ -13,9 +13,9 @@ from .server import serve
 
 def main() -> None:
     cfg = load_config()
-    host = cfg.server.host if cfg.server else "127.0.0.1"
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else (cfg.server.port if cfg.server else 8000)
-    runtime_url = cfg.runtime.url if cfg.runtime else "ws://localhost:9100"
+    host = cfg.server.host
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else cfg.server.port
+    runtime_url = cfg.runtime.url
 
     server = serve(host=host, port=port, runtime_url=runtime_url, config=cfg)
     print(flush=True)

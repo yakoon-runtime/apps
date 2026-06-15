@@ -6,25 +6,21 @@ from pathlib import Path
 
 import yaml
 
-CONFIG_FILENAME = "yakoon-web.yml"
+CONFIG_FILENAME = "yakoon-runtime.yml"
 
 
 @dataclass
-class ServerConfig:
+class ListenConfig:
     host: str = "127.0.0.1"
-    port: int = 8000
+    port: int = 9100
 
 
 @dataclass
 class RuntimeConfig:
-    url: str = "ws://localhost:9100"
-
-
-@dataclass
-class WebConfig:
-    theme: str | None = None
-    server: ServerConfig = field(default_factory=ServerConfig)
-    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
+    name: str = ""
+    listen: ListenConfig = field(default_factory=ListenConfig)
+    spaces: list[str] = field(default_factory=list)
+    known: dict[str, str] = field(default_factory=dict)
 
 
 def _search_paths() -> list[Path]:
@@ -39,25 +35,25 @@ def _search_paths() -> list[Path]:
     return paths
 
 
-def _from_dict(data: dict) -> WebConfig:
-    server_raw = data.get("server")
-    runtime_raw = data.get("runtime")
-    return WebConfig(
-        theme=data.get("theme"),
-        server=ServerConfig(**server_raw) if isinstance(server_raw, dict) else ServerConfig(),
-        runtime=RuntimeConfig(**runtime_raw) if isinstance(runtime_raw, dict) else RuntimeConfig(),
+def _from_dict(data: dict) -> RuntimeConfig:
+    listen_raw = data.get("listen")
+    return RuntimeConfig(
+        name=data.get("name", ""),
+        listen=ListenConfig(**listen_raw) if isinstance(listen_raw, dict) else ListenConfig(),
+        spaces=data.get("spaces", []),
+        known=data.get("known", {}),
     )
 
 
-def load_config() -> WebConfig:
+def load_config() -> RuntimeConfig:
     for p in _search_paths():
         if p.exists():
             with open(p) as f:
                 return _from_dict(yaml.safe_load(f) or {})
 
-    bundled = files("y5napp.web").joinpath("yakoon-web.yml")
+    bundled = files("y5napp.runtime").joinpath("yakoon-runtime.yml")
     if bundled.exists():
         with open(bundled) as f:
             return _from_dict(yaml.safe_load(f) or {})
 
-    return WebConfig()
+    return RuntimeConfig()
