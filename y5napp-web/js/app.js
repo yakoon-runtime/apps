@@ -137,13 +137,18 @@ function registerSideBarToggle(dom) {
 }
 
 function updatePrompt(state) {
-    const el = document.querySelector(".prefix");
-    if (!el) return;
+    const prefixEl = document.querySelector(".prefix");
+    const pathEl = document.querySelector(".path");
+    if (!prefixEl || !pathEl) return;
 
     const name = state.controller
         ? state.controller.charAt(0).toUpperCase() + state.controller.slice(1)
         : "";
-    el.textContent = name ? `${name}:` : "";
+    const user = state.user || "";
+    prefixEl.textContent = user ? `${user}@${name}:` : name ? `${name}:` : "";
+
+    const nodePath = state.node_path || "/";
+    pathEl.textContent = `${nodePath}$`;
 }
 
 initApp();
