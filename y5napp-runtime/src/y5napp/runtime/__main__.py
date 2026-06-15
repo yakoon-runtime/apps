@@ -69,7 +69,10 @@ def main(args: list[str] | None = None) -> None:
             print("Stopping runtime...", flush=True)
             print("Done.", flush=True)
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
