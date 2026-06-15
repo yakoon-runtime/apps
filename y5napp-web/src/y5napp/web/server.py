@@ -66,6 +66,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 def serve(host: str = "127.0.0.1", port: int = 8000) -> HTTPServer:
     server = HTTPServer((host, port), Handler)
-    print(f"Web client serving {STATIC} on http://{host}:{port}")
-    print("Connect to runtime at ws://localhost:9100 (default)")
+    print("Yakoon Web", flush=True)
+    print(flush=True)
+    print(f"URL     : http://{host}:{port}", flush=True)
+    print(f"Runtime : ws://localhost:9100", flush=True)
+    print(flush=True)
+    print("Ready.", flush=True)
     return server

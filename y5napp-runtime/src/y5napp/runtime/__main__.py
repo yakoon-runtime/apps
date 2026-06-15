@@ -55,8 +55,15 @@ def main(args: list[str] | None = None) -> None:
         runtime = build_runtime(capabilities={}, settings=settings)
         _host = runtime
         await _host.setup()
-        print(f"Runtime ready on ws://{HOST}:{port}")
-        print(f"  spaces: {spaces}")
+        print("Yakoon Runtime", flush=True)
+        print(flush=True)
+        print(f"Listen : ws://{HOST}:{port}", flush=True)
+        print(flush=True)
+        print("Spaces:", flush=True)
+        for s in spaces:
+            print(f"  {s}", flush=True)
+        print(flush=True)
+        print("Ready.", flush=True)
         async with serve(handler, HOST, port):
             await asyncio.get_running_loop().create_future()
 
