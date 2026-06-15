@@ -12,7 +12,6 @@ function initApp() {
         app: document.getElementById("app"),
         stream: document.getElementById("stream"),
         input: document.getElementById("commandbar-input"),
-        button: document.getElementById("commandbar-button"),
         sidebar: document.getElementById("toggle-sidebar"),
     };
 
@@ -129,8 +128,6 @@ function wireCommandBar(dom, dispatch, createRootRegion) {
     dom.input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") send();
     });
-
-    dom.button.addEventListener("click", send);
 }
 
 function registerSideBarToggle(dom) {
@@ -140,23 +137,13 @@ function registerSideBarToggle(dom) {
 }
 
 function updatePrompt(state) {
-
-    function formatController(name) {
-        if (!name) return "";
-
-        return name.charAt(0).toUpperCase() + name.slice(1);
-    }
-
-    const el = document.querySelector(".commandbar-prompt");
-
+    const el = document.querySelector(".prefix");
     if (!el) return;
 
-    const user = state.user;
-    const controller = formatController(state.controller);
-
-    el.textContent = user
-        ? `${user}@${controller} `
-        : `${controller} `;
+    const name = state.controller
+        ? state.controller.charAt(0).toUpperCase() + state.controller.slice(1)
+        : "";
+    el.textContent = name ? `${name}:` : "";
 }
 
 initApp();

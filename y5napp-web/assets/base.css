@@ -113,101 +113,58 @@ body {
     text-decoration: underline;
 }
 
-/* CommandBar */
+/* ── Input Bar ── */
 
-#commandbar {
-    height: 56px;
-
-    display: flex;
-    align-items: center;
-
-    padding: 12px 16px;
-
-    margin: 12px 16px 16px 16px;
-
-    border-top: none;
-    background: transparent;
-}
-
-.commandbar-combo {
-    display: flex;
-    align-items: center;
-    flex: 1;
-
-    border-radius: 999px;
-    overflow: hidden;
-    padding-right: 6px;
-
-    border: 1px solid var(--surface);
+.input-card {
+    margin: 12px 16px 16px;
+    padding: 8px 12px;
+    border: none;
+    border-left: 3px solid var(--primary);
     background: var(--surface);
-    backdrop-filter: blur(6px);
-    transition: all 0.15s ease;
-}
-
-.commandbar-prompt {
-    padding: 12px 16px;
-    font-weight: 500;
-    letter-spacing: 0.2px;
-
-    border-top-left-radius: 999px;
-    border-bottom-left-radius: 999px;
-
-    background: var(--surface);
-    color: var(--text);
-
-    border-right: 1px solid var(--surface);
-    opacity: 0.9;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 #commandbar-input {
-    flex: 1;
-
     border: none;
     outline: none;
-
-    padding: 12px 16px;
-    font-size: 15px;
-
-    color: var(--text);
     background: transparent;
+    color: var(--text);
+    width: 100%;
+    padding: 2px 0;
+    font-size: 15px;
+    font-family: var(--font);
 }
 
 #commandbar-input::placeholder {
     color: var(--text);
+    opacity: 0.35;
+}
+
+.status-line {
+    display: flex;
+    gap: 4px;
+    font-size: 12px;
+    font-family: var(--font);
+}
+
+.brand {
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.sep {
+    color: var(--text);
     opacity: 0.4;
 }
 
-.commandbar-button {
-    width: 33px;
-    height: 33px;
-    margin-right: 2px;
-
-    border: none;
-    border-radius: 50%;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    cursor: pointer;
-    flex-shrink: 0;
-
-    opacity: 0.9;
-    background: var(--surface);
+.prefix {
     color: var(--text);
-
-    transition: all 0.15s ease;
+    opacity: 0.7;
 }
 
-.commandbar-button:hover {
-    transform: scale(1.05);
-}
-
-.commandbar-button:active {
-    transform: scale(0.95);
-}
-
-.commandbar-combo:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+.path {
+    color: var(--text);
+    opacity: 0.5;
 }
