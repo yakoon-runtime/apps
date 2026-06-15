@@ -16,7 +16,10 @@ def main() -> None:
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        print(flush=True)
+        print("Stopping web client...", flush=True)
         server.server_close()
+        print("Done.", flush=True)
 
 
 if __name__ == "__main__":

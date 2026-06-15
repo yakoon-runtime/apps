@@ -61,8 +61,13 @@ def main(args: list[str] | None = None) -> None:
         print(f"Spaces : {', '.join(spaces)}", flush=True)
         print(flush=True)
         print("Ready.", flush=True)
-        async with serve(handler, HOST, port):
-            await asyncio.get_running_loop().create_future()
+        try:
+            async with serve(handler, HOST, port):
+                await asyncio.get_running_loop().create_future()
+        finally:
+            print(flush=True)
+            print("Stopping runtime...", flush=True)
+            print("Done.", flush=True)
 
     asyncio.run(_run())
 
