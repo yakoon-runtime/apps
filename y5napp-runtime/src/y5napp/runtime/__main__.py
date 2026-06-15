@@ -58,7 +58,7 @@ def main(args: list[str] | None = None) -> None:
         print("Yakoon Runtime", flush=True)
         print(flush=True)
         print(f"Listen : ws://{HOST}:{port}", flush=True)
-        print(f"Spaces : {', '.join(spaces)}", flush=True)
+        print(f"Spaces : {', '.join(s.rsplit('.', 1)[-1] for s in spaces)}", flush=True)
         print(flush=True)
         print("Ready.", flush=True)
         try:
