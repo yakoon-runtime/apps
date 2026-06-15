@@ -62,7 +62,7 @@ class Tab {
             channel: "command",
             payload: {
                 raw: text,
-                context: { command: text, origin: text },
+                context: { command: text, origin: "web" },
             },
         }));
     }
@@ -85,10 +85,10 @@ class Tab {
         let regionEl = this.stream.querySelector(`[data-region-id="${regionKey}"]`);
         if (!regionEl) {
             const turn = createElement("div", "turn");
-            const origin = event.context && event.context.origin;
-            if (origin) {
+            const echo = event.context && event.context.echo;
+            if (echo) {
                 const line = createElement("div", "input-line");
-                line.textContent = `$ ${origin}`;
+                line.textContent = `$ ${echo}`;
                 turn.appendChild(line);
             }
             regionEl = createElement("div", "turn-region");
@@ -105,7 +105,7 @@ class Tab {
                         channel: "command",
                         payload: {
                             raw: cmd,
-                            context: { command: cmd, origin: cmd },
+                            context: { command: cmd, origin: "web" },
                         },
                     }));
                 },

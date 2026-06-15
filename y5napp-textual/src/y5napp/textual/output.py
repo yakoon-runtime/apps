@@ -29,8 +29,8 @@ class TextualOutput:
         self._pending_input: str | None = None
 
     async def view(self, event: ProjectionEvent) -> None:
-        if event.ctx and event.ctx.origin:
-            self._pending_input = event.ctx.origin
+        if event.ctx and event.ctx.echo:
+            self._pending_input = event.ctx.echo
 
         if event.view_params and event.view_params.get("clear"):
             self._clear()

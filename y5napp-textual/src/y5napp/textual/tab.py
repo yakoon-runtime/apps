@@ -94,7 +94,10 @@ class RuntimeTab:
         if self.connection is not None:
             try:
                 await self.connection.dispatch(
-                    Event.from_raw(text, context=InputContext(origin=text))
+                    Event.from_raw(
+                        text,
+                        context=InputContext(origin="texture", echo=text),
+                    )
                 )
             except Exception:
                 self.connection = None
