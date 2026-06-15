@@ -1,8 +1,10 @@
-from .wire import build_texture
+from .conf import load_config
+from .app import TextualApp
 
 
 def main() -> None:
-    app = build_texture()
+    cfg, cfg_path = load_config()
+    app = TextualApp(config=cfg, config_path=cfg_path)
     app.run()
 
 

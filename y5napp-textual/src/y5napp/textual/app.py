@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from y5n.base.config import RuntimeConfig, YakoonConfig
 from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual import events
 from textual.app import App, ComposeResult
 from textual.widgets import Static, TabbedContent
 
+from .conf import TextureConfig
 from .tab import RuntimeTab
 
 
@@ -19,7 +19,7 @@ class TextualApp(App):
 
     def __init__(
         self,
-        config: YakoonConfig,
+        config: TextureConfig,
         config_path: Path | None = None,
     ) -> None:
         super().__init__()
@@ -43,10 +43,10 @@ class TextualApp(App):
         yield self._status_bar_text
 
     async def on_mount(self) -> None:
-        for cfg in self._config.runtimes:
-            tab = await self._create_tab(cfg.name)
-            if cfg.autoconnect:
-                await self._try_connect(tab, cfg.url)
+        for entry in self._config.runtimes:
+            tab = await self._create_tab(entry.name)
+            if entry.autoconnect:
+                await self._try_connect(tab, entry.url)
 
     def watch_theme(self, old_theme: str, new_theme: str) -> None:
         if self._config_path is None or old_theme == new_theme:
