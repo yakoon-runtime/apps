@@ -1,0 +1,12 @@
+listen: ws://127.0.0.1:9100
+
+spaces:
+  - y5nspace.runtime
+  - y5nspace.shell
+  - y5nspace.ident
+  - y5nspace.os
+
+known:
+  office: ws://localhost:9100
+  server: ws://localhost:9101
+  production: ws://localhost:9102
