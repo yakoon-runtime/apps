@@ -3,16 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
+from y5n.base.theme import ThemeManager, default_themes
 from y5ntrans.websocket.client import WebSocketClientTransport
 
+import textual.theme as textual_theme
 from textual import events
 from textual.app import App, ComposeResult
-from textual.widgets import Static, TabbedContent
-
-import textual.theme as textual_theme
 from textual.theme import Theme as TextualTheme
-
-from y5n.base.theme import ThemeManager, default_themes
+from textual.widgets import Static, TabbedContent
 
 from .conf import TextureConfig
 from .tab import RuntimeTab

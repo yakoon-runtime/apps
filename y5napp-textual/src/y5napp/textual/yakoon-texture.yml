@@ -2,4 +2,4 @@ runtimes:
 - autoconnect: true
   name: local
   url: ws://localhost:9100
-theme: one-dark
+theme: ONE-DARK
