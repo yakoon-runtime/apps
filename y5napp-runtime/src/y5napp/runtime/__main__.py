@@ -16,6 +16,7 @@ from y5n.runtime.wire.runtime import build_runtime
 from y5ntrans.websocket.server import WebSocketServerTransport
 
 HOST = "127.0.0.1"
+_host = None
 
 
 def default_spaces():
@@ -28,7 +29,7 @@ def default_spaces():
 
 
 async def handler(websocket):
-    transport = WebSocketServerTransport(host)
+    transport = WebSocketServerTransport(_host)
     _, recv = await transport.connect(websocket)
     await recv()
 
@@ -38,7 +39,6 @@ def main(args: list[str] | None = None) -> None:
     port = int(args[0]) if args else 9100
     spaces = args[1].split(",") if len(args) > 1 else default_spaces()
 
-    global host
     settings = Settings(
         runtime=RuntimeSettings(
             known={
@@ -50,11 +50,11 @@ def main(args: list[str] | None = None) -> None:
     )
     settings.runtime.spaces = spaces
 
-    runtime = build_runtime(capabilities={}, settings=settings)
-    host = runtime
-
     async def _run():
-        await host.setup()
+        global _host
+        runtime = build_runtime(capabilities={}, settings=settings)
+        _host = runtime
+        await _host.setup()
         print(f"Runtime ready on ws://{HOST}:{port}")
         print(f"  spaces: {spaces}")
         async with serve(handler, HOST, port):
