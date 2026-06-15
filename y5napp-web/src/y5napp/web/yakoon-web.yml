@@ -1,0 +1,8 @@
+theme: tokyo-night
+
+server:
+  host: 127.0.0.1
+  port: 8000
+
+runtime:
+  url: ws://localhost:9100
