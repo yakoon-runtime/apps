@@ -1,30 +1,108 @@
-import { createWS } from "./stream.js";
 import { Renderer } from "./renderer/renderer.js";
 import { createElement } from "./dom.js";
 
 // -----------
-// APPLICATION
+// TAB
 // -----------
 
-function initApp() {
+class Tab {
 
-    const dom = {
-        app: document.getElementById("app"),
-        stream: document.getElementById("stream"),
-        input: document.getElementById("commandbar-input"),
-        sidebar: document.getElementById("toggle-sidebar"),
-    };
+    constructor(id, name, url, onConnect) {
+        this.id = id;
+        this.name = name;
+        this.url = url;
+        this.ws = null;
+        this._onConnect = onConnect;
 
-    function handleProjection(event) {
+        this.pane = createElement("div", "tab-pane");
+        this.stream = createElement("div", "tab-stream");
 
-        if (event.view_params && event.view_params.clear) {
-            dom.stream.innerHTML = "";
+        const inputCard = createElement("div", "input-card");
+        this.input = createElement("input", "tab-input");
+        this.input.placeholder = "Type a command...";
+
+        const statusLine = createElement("div", "status-line");
+        this.brand = createElement("span", "brand");
+        this.brand.textContent = "Yakoon";
+        this.sep = createElement("span", "sep");
+        this.sep.textContent = "·";
+        this.prefix = createElement("span", "prefix");
+        this.prefix.textContent = `${name}:`;
+        this.path = createElement("span", "path");
+        this.path.textContent = "/$";
+
+        statusLine.append(this.brand, this.sep, this.prefix, this.path);
+        inputCard.append(this.input, statusLine);
+        this.pane.append(this.stream, inputCard);
+
+        this.input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") this._submit();
+        });
+    }
+
+    _submit() {
+        const text = this.input.value.trim();
+        if (!text) return;
+        this.input.value = "";
+
+        if (text.startsWith("/connect ")) {
+            const url = text.slice(9).trim();
+            if (this._onConnect) this._onConnect(url, url);
             return;
         }
 
-        const regionId = event.context.origin;
+        if (text === "/disconnect") {
+            this.disconnect();
+            return;
+        }
 
-        const regionEl = document.querySelector(`[data-region-id="${regionId}"]`);
+        const turn = createElement("div", "turn");
+        const line = createElement("div", "input-line");
+        line.textContent = `$ ${text}`;
+        turn.appendChild(line);
+
+        const region = createElement("div", "turn-region");
+        const regionId = "r-" + crypto.randomUUID();
+        region.dataset.regionId = regionId;
+        turn.appendChild(region);
+
+        this.stream.appendChild(turn);
+        this.stream.lastElementChild?.scrollIntoView({ behavior: "smooth" });
+
+        const dispatch = {
+            command: (cmd, payload, el) => {
+                if (!this.ws) return;
+                this.ws.send(JSON.stringify({
+                    type: "input",
+                    channel: "command",
+                    payload: {
+                        raw: cmd,
+                        context: { command: cmd, origin: el.dataset.regionId },
+                    },
+                }));
+            },
+        };
+
+        region._dispatch = dispatch;
+        dispatch.command(text, {}, region);
+    }
+
+    handleProjection(event) {
+        if (event.view_params) {
+            const connectUrl = event.view_params.connect;
+            if (connectUrl) {
+                const name = event.view_params.connect_name || connectUrl;
+                if (this._onConnect) this._onConnect(name, connectUrl);
+                return;
+            }
+            if (event.view_params.clear) {
+                this.stream.innerHTML = "";
+                return;
+            }
+        }
+
+        const regionId = event.context && event.context.origin;
+        const regionEl = this.stream.querySelector(`[data-region-id="${regionId}"]`);
         if (!regionEl) {
             console.warn("Stale response dropped:", regionId);
             return;
@@ -32,123 +110,124 @@ function initApp() {
 
         let renderer = regionEl._renderer;
         if (!renderer) {
-            renderer = new Renderer(regionEl, dispatch);
+            renderer = new Renderer(regionEl, regionEl._dispatch);
             regionEl._renderer = renderer;
             regionEl.dataset.renderer = "true";
         }
 
         if (event.state) {
-            updatePrompt(event.state);
+            this._updatePrompt(event.state);
         }
 
         renderer.apply(event);
     }
 
-    const ws = createWS(handleProjection);
-    const dispatch = createDispatcher(ws, createRootRegion);
-
-    wireCommandBar(dom, dispatch, createRootRegion);
-    registerSideBarToggle(dom);
-
-    function createRootRegion(command) {
-        const container = createElement("div", "turn");
-
-        if (command) {
-            const line = createElement("div", "input-line");
-            line.textContent = `$ ${command}`;
-            container.appendChild(line);
-        }
-
-        const region = createElement("div", "turn-region");
-        region.dataset.regionId = "r-" + crypto.randomUUID();
-
-        container.appendChild(region);
-        dom.stream.appendChild(container);
-
-        return region;
+    _updatePrompt(state) {
+        const name = state.controller
+            ? state.controller.charAt(0).toUpperCase() + state.controller.slice(1)
+            : "";
+        const user = state.user || "";
+        this.prefix.textContent = user
+            ? `${user}@${name}:`
+            : name
+              ? `${name}:`
+              : "";
+        this.path.textContent = `${state.node_path || "/"}$`;
     }
 
-}
-
-// -----------
-// INTERNALS
-// -----------
-
-function scrollToBottom() {
-    const el = document.getElementById("stream");
-    if (!el) return;
-
-    //el.scrollTop = el.scrollHeight;
-    el.lastElementChild?.scrollIntoView({ behavior: "smooth" });
-}
-
-function createDispatcher(ws, createRootRegion) {
-
-    function send(command, payload = {}, regionEl) {
-        const regionId = regionEl.dataset.regionId;
-
-        ws.send(JSON.stringify({
-            type: "input",
-            channel: "command",
-            payload: {
-                raw: command,
-                context: {
-                    command,
-                    origin: regionId,
+    connect() {
+        if (this.ws) return;
+        this.ws = new WebSocket(this.url);
+        this.ws.onopen = () => {
+            this.ws.send(JSON.stringify({ type: "connect" }));
+        };
+        this.ws.onmessage = (msg) => {
+            try {
+                const data = JSON.parse(msg.data);
+                if (data.type === "projection") {
+                    this.handleProjection(data.payload);
                 }
+            } catch (e) {
+                console.warn("WS parse error:", e);
             }
-        }));
+        };
+        this.ws.onclose = () => {
+            this.ws = null;
+        };
     }
 
-    function newTurn(command) {
-        const regionEl = createRootRegion(command);
-        send(command, {}, regionEl);
+    disconnect() {
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
     }
 
-    return {
-        command: send,
-        newTurn
+    activate() {
+        this.pane.classList.add("active");
+        this.input.focus();
+    }
+
+    deactivate() {
+        this.pane.classList.remove("active");
+    }
+}
+
+// -----------
+// APPLICATION
+// -----------
+
+function initApp() {
+    const dom = {
+        app: document.getElementById("app"),
+        sidebarToggle: document.getElementById("toggle-sidebar"),
+        tabbar: document.getElementById("tabbar"),
+        tabsContainer: document.getElementById("tabs-container"),
     };
-}
 
-function wireCommandBar(dom, dispatch, createRootRegion) {
+    let activeTab = null;
+    const tabs = {};
 
-    function send() {
-        const value = dom.input.value;
-        if (!value) return;
-
-        const regionEl = createRootRegion(value);
-
-        dispatch.command(value, {}, regionEl);
-
-        dom.input.value = "";
-        scrollToBottom();
+    function switchTab(id) {
+        if (activeTab) {
+            tabs[activeTab].deactivate();
+            document.querySelector(`.tab-btn[data-tab="${activeTab}"]`)?.classList.remove("active");
+        }
+        activeTab = id;
+        tabs[id].activate();
+        document.querySelector(`.tab-btn[data-tab="${id}"]`)?.classList.add("active");
     }
 
-    dom.input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") send();
-    });
-}
+    function createTab(name, url, autoconnect) {
+        const id = "tab-" + crypto.randomUUID().slice(0, 8);
+        const tab = new Tab(id, name, url, (n, u) => createTab(n, u, true));
+        tabs[id] = tab;
 
-function registerSideBarToggle(dom) {
-    dom.sidebar.onclick = () => {
+        const btn = createElement("button", "tab-btn");
+        btn.textContent = name;
+        btn.dataset.tab = id;
+        btn.onclick = () => switchTab(id);
+        dom.tabbar.appendChild(btn);
+
+        dom.tabsContainer.appendChild(tab.pane);
+
+        switchTab(id);
+        if (autoconnect) tab.connect();
+
+        return id;
+    }
+
+    const runtimes = window.__YAKOON_RUNTIMES || [
+        { name: "local", url: "ws://localhost:9100", autoconnect: true },
+    ];
+
+    for (const rt of runtimes) {
+        createTab(rt.name, rt.url, rt.autoconnect);
+    }
+
+    dom.sidebarToggle.onclick = () => {
         dom.app.classList.toggle("sidebar-collapsed");
     };
-}
-
-function updatePrompt(state) {
-    const prefixEl = document.querySelector(".prefix");
-    const pathEl = document.querySelector(".path");
-    if (!prefixEl || !pathEl) return;
-
-    const name = state.controller
-        ? state.controller.charAt(0).toUpperCase() + state.controller.slice(1)
-        : "";
-    const user = state.user || "";
-    prefixEl.textContent = user ? `${user}@${name}:` : name ? `${name}:` : "";
-
-    const nodePath = state.node_path || "/";
-    pathEl.textContent = `${nodePath}$`;
 }
 
 initApp();

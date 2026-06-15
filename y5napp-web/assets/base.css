@@ -69,6 +69,46 @@ body {
     opacity: 1;
 }
 
+/* Tab Bar */
+#tabbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 8px;
+    flex: 1;
+    overflow-x: auto;
+}
+
+.tab-btn {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    opacity: 0.5;
+    font-family: var(--font);
+    font-size: var(--font-size);
+    padding: 4px 10px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: opacity 0.15s, border-color 0.15s;
+}
+
+.tab-btn:hover {
+    opacity: 0.8;
+}
+
+.tab-btn.active {
+    opacity: 1;
+    border-bottom-color: var(--primary);
+}
+
+.tab-btn.connected {
+    opacity: 0.9;
+}
+
+.tab-btn.connected.active {
+    opacity: 1;
+}
 
 /* Main */
 #main {
@@ -77,8 +117,25 @@ body {
     flex-direction: column;
 }
 
-/* Stream */
-#stream {
+/* Tabs Container */
+#tabs-container {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.tab-pane {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.tab-pane.active {
+    display: flex;
+}
+
+.tab-stream {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
@@ -128,7 +185,7 @@ body {
     gap: 16px;
 }
 
-#commandbar-input {
+.tab-input {
     border: none;
     outline: none;
     background: transparent;
@@ -139,7 +196,7 @@ body {
     font-family: var(--font);
 }
 
-#commandbar-input::placeholder {
+.tab-input::placeholder {
     color: var(--text);
     opacity: 0.35;
 }
