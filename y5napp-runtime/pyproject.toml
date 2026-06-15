@@ -3,15 +3,15 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "y5napp-textual"
-version = "0.3.0"
+name = "y5napp-runtime"
+version = "0.1.0"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Stefan Bergmann" }]
-dependencies = ["y5ncore-base", "y5ncore-runtime", "y5ntrans-ws", "textual>=0.52.0", "websockets", "pyyaml"]
+dependencies = ["y5ncore-base", "y5ncore-runtime", "y5ntrans-ws", "websockets"]
 
 [project.scripts]
-yakoon-texture = "y5napp.textual.__main__:main"
+yakoon-runtime = "y5napp.runtime.__main__:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
