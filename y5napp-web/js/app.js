@@ -56,35 +56,15 @@ class Tab {
             return;
         }
 
-        const turn = createElement("div", "turn");
-        const line = createElement("div", "input-line");
-        line.textContent = `$ ${text}`;
-        turn.appendChild(line);
-
-        const region = createElement("div", "turn-region");
-        const regionId = "r-" + crypto.randomUUID();
-        region.dataset.regionId = regionId;
-        turn.appendChild(region);
-
-        this.stream.appendChild(turn);
-        this.stream.lastElementChild?.scrollIntoView({ behavior: "smooth" });
-
-        const dispatch = {
-            command: (cmd, payload, el) => {
-                if (!this.ws) return;
-                this.ws.send(JSON.stringify({
-                    type: "input",
-                    channel: "command",
-                    payload: {
-                        raw: cmd,
-                        context: { command: cmd, origin: el.dataset.regionId },
-                    },
-                }));
+        if (!this.ws) return;
+        this.ws.send(JSON.stringify({
+            type: "input",
+            channel: "command",
+            payload: {
+                raw: text,
+                context: { command: text, origin: text },
             },
-        };
-
-        region._dispatch = dispatch;
-        dispatch.command(text, {}, region);
+        }));
     }
 
     handleProjection(event) {
@@ -101,11 +81,35 @@ class Tab {
             }
         }
 
-        const regionId = event.context && event.context.origin;
-        const regionEl = this.stream.querySelector(`[data-region-id="${regionId}"]`);
+        const regionKey = event.job || (event.context && event.context.origin) || crypto.randomUUID();
+        let regionEl = this.stream.querySelector(`[data-region-id="${regionKey}"]`);
         if (!regionEl) {
-            console.warn("Stale response dropped:", regionId);
-            return;
+            const turn = createElement("div", "turn");
+            const origin = event.context && event.context.origin;
+            if (origin) {
+                const line = createElement("div", "input-line");
+                line.textContent = `$ ${origin}`;
+                turn.appendChild(line);
+            }
+            regionEl = createElement("div", "turn-region");
+            regionEl.dataset.regionId = regionKey;
+            turn.appendChild(regionEl);
+            this.stream.appendChild(turn);
+            this.stream.lastElementChild?.scrollIntoView({ behavior: "smooth" });
+
+            regionEl._dispatch = {
+                command: (cmd, payload, el) => {
+                    if (!this.ws) return;
+                    this.ws.send(JSON.stringify({
+                        type: "input",
+                        channel: "command",
+                        payload: {
+                            raw: cmd,
+                            context: { command: cmd, origin: cmd },
+                        },
+                    }));
+                },
+            };
         }
 
         let renderer = regionEl._renderer;
