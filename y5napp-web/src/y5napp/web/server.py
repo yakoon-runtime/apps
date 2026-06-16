@@ -33,7 +33,7 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, config: WebConfig, runtime_url: str, **kwargs):
         self._config = config
         self._runtime_url = runtime_url
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, directory=str(STATIC), **kwargs)
 
     def _serve_html(self, path: str) -> None:
         with open(path, "rb") as f:
