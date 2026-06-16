@@ -14,7 +14,7 @@ STATIC = files("y5napp.web").joinpath("static")
 
 
 def _inject_config(html: str, cfg: WebConfig, runtime_url: str) -> str:
-    script = f"<script>window.__YAKOON_RUNTIMES = [{{url: {json.dumps(runtime_url)}, autoconnect: true}}]</script>"
+    script = f"<script>window.__YAKOON_RUNTIMES = [{{name: 'local', url: {json.dumps(runtime_url)}, autoconnect: true}}]</script>"
     return html.replace("</head>", f"{script}\n</head>")
 
 
