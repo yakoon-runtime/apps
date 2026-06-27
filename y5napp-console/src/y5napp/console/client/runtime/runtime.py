@@ -14,6 +14,7 @@ async def create_runtime() -> RuntimeHost:
             "y5nspace.ident",
             "y5nspace.os",
             "y5nspace.runtime",
+            "y5nspace.crm",
         ],
         capabilities={},
     )
