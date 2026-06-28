@@ -43,11 +43,8 @@ def _render_inline(result: Text, node: Inline) -> None:
             result.append(_stylize(node.children, "yellow"))
         case InlineMark(variant=v):
             result.append(_stylize(node.children, _mark_style(v)))
-        case InlineCmd(command=cmd):  # noqa: F841
-            # TODO: Später vielleicht wieder reinnehmen.
-            # prefix = Text(f"({cmd}) ", style="bold cyan")
-            # result.append(prefix)
-            result.append(_children(node.children))
+        case InlineCmd(command=cmd, variant=v):
+            result.append(_stylize(node.children, _cmd_style(v)))
         case InlineSelect(value=val):
             result.append(str(val), style="magenta")
         case InlineBreak(count=n):
@@ -84,3 +81,11 @@ def _mark_style(variant: str | None) -> str:
             return "yellow on #330"
         case _:
             return "reverse"
+
+
+def _cmd_style(variant: str | None) -> str:
+    match variant:
+        case "global":
+            return "dim italic"
+        case _:
+            return "bold"
