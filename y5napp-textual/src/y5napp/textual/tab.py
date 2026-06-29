@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from y5n.base.clients import ClientConnection
 from y5n.base.projection import ProjectionEvent
 from y5n.base.runtime import Event
-from y5n.base.runtime.input import InputContext
+from y5n.base.runtime.input import InputContext, Origin
 from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual.containers import Horizontal, Vertical
@@ -96,7 +96,11 @@ class RuntimeTab:
                 await self.connection.dispatch(
                     Event.from_raw(
                         text,
-                        context=InputContext(origin="texture", echo=text),
+                        context=InputContext(
+                            origin=Origin.HUMAN,
+                            channel="textual",
+                            echo=text,
+                        ),
                     )
                 )
             except Exception:
