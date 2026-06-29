@@ -250,8 +250,33 @@ class TextualOutput:
         btn = Button(label)
         return btn
 
-    def _make_fields(self, node: Node) -> Static:
-        return CopyableStatic("<fields>", classes="fields-placeholder")
+    def _make_fields(self, node: Node) -> Widget:
+        from rich.text import Text
+
+        title = node.props.get("title") or node.props.get("name", "")
+        fields = node.props.get("fields", [])
+
+        lines = []
+        if title:
+            lines.append(Text(f"\u2501 {title} \u2501", style="bold"))
+
+        found_active = False
+        for f in fields:
+            label = f.get("title") or f.get("name", "?")
+            value = f.get("value")
+            required = f.get("required", False)
+            req = " *" if required else ""
+
+            if not found_active and value is None:
+                line = Text(f"\u25b6 {label}:{req} ", style="bold")
+                found_active = True
+            elif value is not None:
+                line = Text(f"  {label}: {value}{req}")
+            else:
+                line = Text(f"  {label}:{req}", style="dim")
+            lines.append(line)
+
+        return CopyableStatic(Text("\n").join(lines), classes="fields")
 
     def _make_image(self, node: Node) -> Static:
         alt = node.props.get("alt") or node.props.get("ref", "")
