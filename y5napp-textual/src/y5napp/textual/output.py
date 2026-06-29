@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from rich.text import Text as RichText
 from y5n.base.projection.transfer import (
     PatchAppendStructure,
     PatchFinishNode,
@@ -17,6 +18,22 @@ from textual.widgets import (
     Rule,
     Static,
 )
+
+
+class CopyableStatic(Static):
+
+    can_focus = True
+
+    BINDINGS = [
+        ("ctrl+c", "copy", "Copy"),
+    ]
+
+    def action_copy(self) -> None:
+        text = self.content
+        if isinstance(text, RichText):
+            self.app.copy_to_clipboard(text.plain)
+        elif isinstance(text, str):
+            self.app.copy_to_clipboard(text)
 
 
 class TextualOutput:
@@ -68,7 +85,7 @@ class TextualOutput:
 
             line = Text("> ", style="gray")
             line.append(self._pending_input)
-            group.mount(Static(line, classes="input-line"))
+            group.mount(CopyableStatic(line, classes="input-line"))
             self._pending_input = None
         self._current_group = group
 
@@ -82,7 +99,7 @@ class TextualOutput:
 
             line = Text("> ", style="gray")
             line.append(self._pending_input)
-            group.mount(Static(line))
+            group.mount(CopyableStatic(line))
             self._pending_input = None
 
         self._current_group = group
@@ -166,7 +183,7 @@ class TextualOutput:
             case "image":
                 return self._make_image(node)
             case _:
-                return Static(f"<{node.type}>", classes="unknown")
+                return CopyableStatic(f"<{node.type}>", classes="unknown")
 
     # --------------------------------------------------------
 
@@ -174,14 +191,14 @@ class TextualOutput:
         from . import inlines
 
         text = inlines.render(node.props.get("text", []))
-        return Static(text)
+        return CopyableStatic(text)
 
     def _make_heading(self, node: Node) -> Static:
         from . import inlines
 
         level = node.props.get("level", 1)
         text = inlines.render(node.props.get("text", []))
-        return Static(text, classes=f"heading h{level}")
+        return CopyableStatic(text, classes=f"heading h{level}")
 
     def _make_list_item(self, node: Node) -> Static:
         from rich.text import Text
@@ -190,7 +207,7 @@ class TextualOutput:
 
         bullet = Text(" \u2022 ", style="bold")
         bullet.append(inlines.render(node.props.get("text", [])))
-        return Static(bullet, classes="list-item")
+        return CopyableStatic(bullet, classes="list-item")
 
     def _make_kv_item(self, node: Node) -> Horizontal:
         from . import inlines
@@ -198,8 +215,8 @@ class TextualOutput:
         key = node.props.get("key", "")
         value = inlines.render(node.props.get("value", []))
         return Horizontal(
-            Static(key, classes="kv-key"),
-            Static(value, classes="kv-value"),
+            CopyableStatic(key, classes="kv-key"),
+            CopyableStatic(value, classes="kv-value"),
             classes="kv-row",
         )
 
@@ -221,11 +238,11 @@ class TextualOutput:
         return btn
 
     def _make_fields(self, node: Node) -> Static:
-        return Static("<fields>", classes="fields-placeholder")
+        return CopyableStatic("<fields>", classes="fields-placeholder")
 
     def _make_image(self, node: Node) -> Static:
         alt = node.props.get("alt") or node.props.get("ref", "")
-        return Static(f"[img] {alt}", classes="image")
+        return CopyableStatic(f"[img] {alt}", classes="image")
 
     def _make_collapsible(self, node: Node) -> Collapsible:
         from . import inlines

@@ -193,6 +193,10 @@ DataTable > .datatable--header {
     color: $secondary;
 }
 
+CopyableStatic:focus {
+    background: $surface 60%;
+}
+
 #status-bar {
     dock: bottom;
     height: 1;

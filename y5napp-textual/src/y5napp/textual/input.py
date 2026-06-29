@@ -8,9 +8,18 @@ from textual.widgets import TextArea
 
 class ShellInput(TextArea):
 
+    BINDINGS = [
+        ("ctrl+v", "paste", "Paste"),
+    ]
+
     def __init__(self, on_submit: Callable[[str], Awaitable[None]], **kwargs):
         super().__init__(**kwargs)
         self._on_submit = on_submit
+
+    def action_paste(self) -> None:
+        text = self.app.clipboard
+        if text:
+            self.insert(text)
 
     async def _on_key(self, event: events.Key) -> None:
         if event.key == "enter":
