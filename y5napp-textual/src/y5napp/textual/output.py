@@ -29,10 +29,23 @@ class CopyableStatic(Static):
     ]
 
     def action_copy(self) -> None:
-        text = self.content
-        if isinstance(text, RichText):
-            self.app.copy_to_clipboard(text.plain)
-        elif isinstance(text, str):
+        parent = self.parent
+        while parent is not None:
+            if hasattr(parent, "classes") and "projection-group" in parent.classes:
+                break
+            parent = parent.parent
+        if parent is None:
+            return
+        parts: list[str] = []
+        for widget in parent.walk_children():
+            if isinstance(widget, CopyableStatic):
+                t = widget.content
+                if isinstance(t, RichText):
+                    parts.append(t.plain)
+                elif isinstance(t, str):
+                    parts.append(t)
+        text = "\n".join(parts)
+        if text:
             self.app.copy_to_clipboard(text)
 
 
