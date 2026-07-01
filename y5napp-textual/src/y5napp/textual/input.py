@@ -26,9 +26,8 @@ class ShellInput(TextArea):
             event.stop()
             event.prevent_default()
             text = self.text.strip()
-            if text:
-                self.clear()
-                await self._on_submit(text)
+            self.clear()
+            await self._on_submit(text)
         elif event.key != "enter" and "enter" in event.key:
             event.stop()
             self.insert("\n")
