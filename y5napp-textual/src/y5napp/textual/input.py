@@ -22,7 +22,12 @@ class ShellInput(TextArea):
             self.insert(text)
 
     async def _on_key(self, event: events.Key) -> None:
-        if event.key == "enter":
+        if event.key == "escape":
+            event.stop()
+            event.prevent_default()
+            self.clear()
+            await self._on_submit("bg")
+        elif event.key == "enter":
             event.stop()
             event.prevent_default()
             text = self.text.strip()
