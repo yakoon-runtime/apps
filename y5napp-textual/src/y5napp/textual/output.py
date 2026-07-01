@@ -264,16 +264,24 @@ class TextualOutput:
         for f in fields:
             label = f.get("title") or f.get("name", "?")
             value = f.get("value")
+            state = f.get("state")
             required = f.get("required", False)
             req = " *" if required else ""
 
-            if not found_active and value is None:
-                line = Text(f"\u25b6 {label}:{req} ", style="bold")
+            if state == "active":
+                line = Text(f"\u25b6 {label}{req}: {value}", style="bold") if value else Text(f"\u25b6 {label}{req}: ", style="bold")
+                found_active = True
+            elif state == "done":
+                line = Text(f"  {label}{req}: {value}")
+            elif state == "idle":
+                line = Text(f"  {label}{req}:", style="dim")
+            elif not found_active and value is None:
+                line = Text(f"\u25b6 {label}{req}: ", style="bold")
                 found_active = True
             elif value is not None:
-                line = Text(f"  {label}: {value}{req}")
+                line = Text(f"  {label}{req}: {value}")
             else:
-                line = Text(f"  {label}:{req}", style="dim")
+                line = Text(f"  {label}{req}:", style="dim")
             lines.append(line)
 
         return CopyableStatic(Text("\n").join(lines), classes="fields")
