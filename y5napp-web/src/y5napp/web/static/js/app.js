@@ -36,24 +36,33 @@ class Tab {
         this.pane.append(this.stream, inputCard);
 
         this.input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") this._submit();
+            if (e.key === "Enter") {
+                e.preventDefault();
+                this._submit();
+            }
+            if (e.key === "Escape") {
+                e.preventDefault();
+                this._submit("bg");
+            }
         });
     }
 
-    _submit() {
-        const text = this.input.value.trim();
-        if (!text) return;
+    _submit(text) {
+        if (text === undefined) {
+            text = this.input.value.trim();
+        }
         this.input.value = "";
 
-        if (text.startsWith("/connect ")) {
-            const url = text.slice(9).trim();
-            if (this._onConnect) this._onConnect(url, url);
-            return;
-        }
-
-        if (text === "/disconnect") {
-            this.disconnect();
-            return;
+        if (text) {
+            if (text.startsWith("/connect ")) {
+                const url = text.slice(9).trim();
+                if (this._onConnect) this._onConnect(url, url);
+                return;
+            }
+            if (text === "/disconnect") {
+                this.disconnect();
+                return;
+            }
         }
 
         if (!this.ws) return;
@@ -62,7 +71,7 @@ class Tab {
             channel: "command",
             payload: {
                 raw: text,
-                context: { command: text, origin: "web" },
+                context: { command: text, origin: "human" },
             },
         }));
     }
@@ -105,7 +114,7 @@ class Tab {
                         channel: "command",
                         payload: {
                             raw: cmd,
-                            context: { command: cmd, origin: "web" },
+                            context: { command: cmd, origin: "human" },
                         },
                     }));
                 },

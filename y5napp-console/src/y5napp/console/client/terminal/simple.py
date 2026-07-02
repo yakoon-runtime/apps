@@ -24,8 +24,7 @@ class SimpleTerminal(Terminal):
                 return
 
             line = line.strip()
-            if line:
-                await self.on_input(line)
+            await self.on_input(line)
 
     async def stop(self):
         self._running = False
