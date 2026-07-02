@@ -159,8 +159,21 @@ TabbedContent {
 }
 
 .fields {
+    height: auto;
     margin: 0;
     padding: 0 1;
+}
+
+.field-error {
+    color: $error;
+}
+
+.error-message {
+    color: $error;
+}
+
+.success-message {
+    color: $success;
 }
 
 Collapsible {

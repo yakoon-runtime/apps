@@ -257,6 +257,7 @@ class TextualOutput:
         fields = node.props.get("fields", [])
 
         lines = []
+        error_line = None
         if title:
             lines.append(Text(f"\u2501 {title} \u2501", style="bold"))
 
@@ -266,6 +267,7 @@ class TextualOutput:
             value = f.get("value")
             state = f.get("state")
             required = f.get("required", False)
+            error = f.get("error")
             req = " *" if required else ""
 
             if state == "active":
@@ -283,8 +285,13 @@ class TextualOutput:
             else:
                 line = Text(f"  {label}{req}:", style="dim")
             lines.append(line)
+            if error and state == "active":
+                error_line = f"  \u26a0 {error}"
 
-        return CopyableStatic(Text("\n").join(lines), classes="fields")
+        children: list[Widget] = [CopyableStatic(Text("\n").join(lines))]
+        if error_line:
+            children.append(Static(error_line, classes="field-error"))
+        return Vertical(*children, classes="fields")
 
     def _make_image(self, node: Node) -> Static:
         alt = node.props.get("alt") or node.props.get("ref", "")

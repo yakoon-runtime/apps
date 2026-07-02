@@ -156,14 +156,12 @@ class RuntimeTab:
     # ── Error ──
 
     def show_error(self, message: str) -> None:
-        from rich.text import Text
-
-        w = Static(Text(f"[!] {message}", style="red"))
+        w = Static(message, classes="error-message")
         self._output_container.mount(w)
         self._error_widgets.append(w)
 
     def _show_disconnected(self, message: str = "Connection lost") -> None:
-        w = Static(f"[red][!] {message}[/red]\n  /reconnect to retry")
+        w = Static(f"{message}\n  /reconnect to retry", classes="error-message")
         self._output_container.mount(w)
         self._error_widgets.append(w)
 
@@ -175,7 +173,7 @@ class RuntimeTab:
         transport = WebSocketClientTransport(self._url)
         try:
             await self.connect(transport)
-            w = Static("[green]Reconnected[/green]")
+            w = Static("Reconnected", classes="success-message")
             self._output_container.mount(w)
             self._error_widgets.append(w)
         except Exception:
