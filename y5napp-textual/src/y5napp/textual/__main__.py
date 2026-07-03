@@ -1,5 +1,5 @@
-from .conf import load_config
 from .app import TextualApp
+from .conf import load_config
 
 
 def main() -> None:
