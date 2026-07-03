@@ -1,3 +1,5 @@
+/* ------- Layout ------- */
+
 Screen {
     layout: vertical;
 }
@@ -5,6 +7,8 @@ Screen {
 TabbedContent {
     height: 1fr;
 }
+
+/* ------- Output ------- */
 
 .tab-output {
     height: 1fr;
@@ -17,11 +21,11 @@ TabbedContent {
     padding: 1 1 0 2;
 }
 
+/* ------- Input ------- */
 
 .input-card {
     margin: 1 2 2 2;
     padding: 0 1;
-    /*background: $surface;*/
     border: none;
     border-left: outer $primary;
     height: auto;
@@ -43,12 +47,9 @@ TabbedContent {
 
 .tab-shell-input:focus {
     border: none;
-    /*background: $surface;*/
 }
 
-.tab-shell-input .text-area--cursor-line {
-   /* background: transparent; */
-}
+/* ------- Status Line ------- */
 
 .tab-status-line {
     height: 1;
@@ -77,13 +78,12 @@ TabbedContent {
     color: $text;
 }
 
+/* ------- Projection ------- */
+
 .projection-group {
     height: auto;
-    /*margin: 0 2 1 0; */
     margin: 0 2 0 0;
     border: none;
-    /*border-left: outer $primary;*/
-    /*background: $surface; */
     padding: 0 1 1 1;
     min-height: 1;
 }
@@ -158,6 +158,8 @@ TabbedContent {
     color: $error;
 }
 
+/* ------- Form Fields ------- */
+
 .fields {
     height: auto;
     margin: 0;
@@ -168,6 +170,8 @@ TabbedContent {
     color: $error;
 }
 
+/* ------- Messages ------- */
+
 .error-message {
     color: $error;
 }
@@ -175,6 +179,8 @@ TabbedContent {
 .success-message {
     color: $success;
 }
+
+/* ------- Widgets ------- */
 
 Collapsible {
     margin: 0 0 1 0;
@@ -187,7 +193,6 @@ CollapsibleTitle {
     padding: 0;
     border: none;
     background: transparent;
-    /*text-style: bold;*/
     color: $primary;
 }
 
@@ -212,6 +217,8 @@ DataTable > .datatable--header {
 CopyableStatic:focus {
     background: $surface 60%;
 }
+
+/* ------- Status Bar ------- */
 
 #status-bar {
     dock: bottom;
