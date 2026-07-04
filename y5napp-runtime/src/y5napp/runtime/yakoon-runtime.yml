@@ -8,6 +8,7 @@ spaces:
   - y5nspace.ident
   - y5nspace.os
   - y5nspace.crm
+  - y5nspace.luma
 
 known:
   office: ws://localhost:9100
