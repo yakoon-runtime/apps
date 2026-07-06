@@ -158,6 +158,11 @@ TabbedContent {
     color: $error;
 }
 
+.code-block {
+    color: red;
+    text-style: italic;
+}
+
 /* ------- Form Fields ------- */
 
 .fields {

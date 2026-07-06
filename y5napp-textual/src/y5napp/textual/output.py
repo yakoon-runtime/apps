@@ -193,6 +193,8 @@ class TextualOutput:
                 return self._make_action(node)
             case "fields":
                 return self._make_fields(node)
+            case "code":
+                return self._make_code(node)
             case "image":
                 return self._make_image(node)
             case _:
@@ -271,7 +273,11 @@ class TextualOutput:
             req = " *" if required else ""
 
             if state == "active":
-                line = Text(f"\u25b6 {label}{req}: {value}", style="bold") if value else Text(f"\u25b6 {label}{req}: ", style="bold")
+                line = (
+                    Text(f"\u25b6 {label}{req}: {value}", style="bold")
+                    if value
+                    else Text(f"\u25b6 {label}{req}: ", style="bold")
+                )
                 found_active = True
             elif state == "done":
                 line = Text(f"  {label}{req}: {value}")
@@ -292,6 +298,12 @@ class TextualOutput:
         if error_line:
             children.append(Static(error_line, classes="field-error"))
         return Vertical(*children, classes="fields")
+
+    def _make_code(self, node: Node) -> Static:
+        from rich.text import Text
+
+        code = node.props.get("code", "")
+        return CopyableStatic(Text(code, style="italic"), classes="code-block")
 
     def _make_image(self, node: Node) -> Static:
         alt = node.props.get("alt") or node.props.get("ref", "")
