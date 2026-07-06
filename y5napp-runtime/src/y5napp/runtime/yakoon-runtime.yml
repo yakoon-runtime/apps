@@ -3,7 +3,6 @@ listen:
   port: 9100
 
 spaces:
-  - y5nspace.runtime
   - y5nspace.shell
   - y5nspace.ident
   - y5nspace.os
