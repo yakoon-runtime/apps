@@ -8,7 +8,7 @@ from y5n.base.runtime import Event
 from y5n.base.runtime.input import InputContext, Origin
 from y5ntrans.websocket.client import WebSocketClientTransport
 
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Static, TabPane
 
@@ -37,7 +37,7 @@ class RuntimeTab:
         self.pane = TabPane(title=name, id=pane_id)
 
         # ── Widgets (created, not yet mounted) ──
-        self._output_container = Vertical(classes="tab-output")
+        self._output_container = VerticalScroll(classes="tab-output")
         self.output = TextualOutput(self._output_container)
 
         self._input = ShellInput(

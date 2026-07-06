@@ -99,6 +99,7 @@ TabbedContent {
 .h3,
 .h4 {
     text-style: bold;
+    margin-top: 1;
 }
 
 .section {
@@ -159,8 +160,7 @@ TabbedContent {
 }
 
 .code-block {
-    color: red;
-    text-style: italic;
+    color: $secondary;
 }
 
 /* ------- Form Fields ------- */

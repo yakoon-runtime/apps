@@ -193,8 +193,8 @@ class TextualOutput:
                 return self._make_action(node)
             case "fields":
                 return self._make_fields(node)
-            case "code":
-                return self._make_code(node)
+            case "pre":
+                return self._make_pre(node)
             case "image":
                 return self._make_image(node)
             case _:
@@ -299,11 +299,9 @@ class TextualOutput:
             children.append(Static(error_line, classes="field-error"))
         return Vertical(*children, classes="fields")
 
-    def _make_code(self, node: Node) -> Static:
-        from rich.text import Text
-
+    def _make_pre(self, node: Node) -> Static:
         code = node.props.get("code", "")
-        return CopyableStatic(Text(code, style="italic"), classes="code-block")
+        return CopyableStatic(code, classes="code-block")
 
     def _make_image(self, node: Node) -> Static:
         alt = node.props.get("alt") or node.props.get("ref", "")
