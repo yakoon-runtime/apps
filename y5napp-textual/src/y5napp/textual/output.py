@@ -261,7 +261,7 @@ class TextualOutput:
         lines = []
         error_line = None
         if title:
-            lines.append(Text(f"\u2501 {title} \u2501", style="bold"))
+            lines.append(Text(f"{title}", style="bold"))
 
         found_active = False
         for f in fields:
