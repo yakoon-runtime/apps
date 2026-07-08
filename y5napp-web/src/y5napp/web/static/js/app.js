@@ -42,12 +42,16 @@ class Tab {
             }
             if (e.key === "Escape") {
                 e.preventDefault();
-                this._submit("bg");
+                this._submit("/jobs/bg", true);
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === "x") {
+                e.preventDefault();
+                this._submit("/jobs/stop --current", true);
             }
         });
     }
 
-    _submit(text) {
+    _submit(text, direct) {
         if (text === undefined) {
             text = this.input.value.trim();
         }
@@ -66,13 +70,17 @@ class Tab {
         }
 
         if (!this.ws) return;
+        const payload = {
+            raw: text,
+            context: { origin: "human", echo: text },
+        };
+        if (direct) {
+            payload.__routing__ = "BYPASS_FLOW";
+        }
         this.ws.send(JSON.stringify({
             type: "input",
             channel: "command",
-            payload: {
-                raw: text,
-                context: { command: text, origin: "human" },
-            },
+            payload: payload,
         }));
     }
 
