@@ -264,12 +264,18 @@ class TextualOutput:
         from rich.text import Text
 
         title = node.props.get("title") or node.props.get("name", "")
+        intro = node.props.get("intro")
         fields = node.props.get("fields", [])
 
         lines = []
         error_line = None
         if title:
             lines.append(Text(f"{title}", style="bold"))
+        if intro:
+            lines.append(Text(f"{intro}", style="dim italic"))
+
+        # add extra line
+        lines.append(Text(""))
 
         found_active = False
         for f in fields:
