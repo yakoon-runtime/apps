@@ -18,7 +18,7 @@ class ShellInput(TextArea):
 
     def __init__(
         self,
-        on_submit: Callable[[str], Awaitable[None]],
+        on_submit: Callable[[str, bool], Awaitable[None]],
         on_action: Callable[[FormAction], Awaitable[None]] | None = None,
         **kwargs: Any,
     ):
@@ -41,13 +41,13 @@ class ShellInput(TextArea):
             event.stop()
             event.prevent_default()
             self.clear()
-            await self._on_submit("/jobs/bg")
+            await self._on_submit("/jobs/bg", True)
         elif event.key == "enter":
             event.stop()
             event.prevent_default()
             text = self.text.strip()
             self.clear()
-            await self._on_submit(text)
+            await self._on_submit(text, False)
         elif event.key == "ctrl+up" and self._on_action:
             event.stop()
             event.prevent_default()
@@ -60,6 +60,6 @@ class ShellInput(TextArea):
             event.stop()
             event.prevent_default()
             self.clear()
-            await self._on_submit("/jobs/stop --current")
+            await self._on_submit("/jobs/stop --current", True)
         else:
             await super()._on_key(event)

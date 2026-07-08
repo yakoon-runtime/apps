@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from y5n.base.clients import ClientConnection
 from y5n.base.flow.patterns.public import FormAction
 from y5n.base.projection import ProjectionEvent
-from y5n.base.runtime import Event
+from y5n.base.runtime import Event, Routing
 from y5n.base.runtime.input import InputContext, Origin
 from y5ntrans.websocket.client import WebSocketClientTransport
 
@@ -79,7 +79,7 @@ class RuntimeTab:
 
     # ── Submit ──
 
-    async def _handle_submit(self, text: str) -> None:
+    async def _handle_submit(self, text: str, direct: bool = False) -> None:
         if text.startswith("/connect "):
             url = text[len("/connect ") :].strip()
             await self._on_connect(url, url)
@@ -95,6 +95,7 @@ class RuntimeTab:
 
         if self.connection is not None:
             try:
+                routing = Routing.BYPASS_FLOW if direct else Routing.DEFAULT
                 await self.connection.dispatch(
                     Event.from_raw(
                         text,
@@ -103,6 +104,7 @@ class RuntimeTab:
                             channel="textual",
                             echo=text,
                         ),
+                        routing=routing,
                     )
                 )
             except Exception:
