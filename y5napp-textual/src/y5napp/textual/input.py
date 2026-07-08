@@ -16,6 +16,7 @@ class ShellInput(TextArea):
         ("ctrl+enter", "submit_form", "Submit Form"),
         ("ctrl+shift+enter", "submit_form", "Submit Form"),
         ("alt+enter", "submit_form", "Submit Form"),
+        ("ctrl+s", "submit_form", "Submit Form"),
     ]
 
     def __init__(
