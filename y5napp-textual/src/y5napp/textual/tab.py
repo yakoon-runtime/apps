@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from y5n.base.clients import ClientConnection
+from y5n.base.flow.patterns.public import FormAction
 from y5n.base.projection import ProjectionEvent
 from y5n.base.runtime import Event
 from y5n.base.runtime.input import InputContext, Origin
@@ -42,6 +43,7 @@ class RuntimeTab:
 
         self._input = ShellInput(
             on_submit=self._handle_submit,
+            on_action=self._handle_action,
             classes="tab-shell-input",
             soft_wrap=True,
         )
@@ -179,6 +181,24 @@ class RuntimeTab:
             self._error_widgets.append(w)
         except Exception:
             self._show_disconnected()
+
+    # ── Form actions ──
+
+    async def _handle_action(self, action: FormAction) -> None:
+        if self.connection is not None:
+            try:
+                await self.connection.dispatch(
+                    Event(
+                        payload=action,
+                        context=InputContext(
+                            origin=Origin.HUMAN,
+                            channel="textual",
+                        ),
+                    )
+                )
+            except Exception:
+                self.connection = None
+                self._show_disconnected()
 
     # ── Form field support ──
 

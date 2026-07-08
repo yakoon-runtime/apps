@@ -280,7 +280,7 @@ class TextualOutput:
             req = " *" if required else ""
 
             if state == "active":
-                self._active_field_value = value
+                self._active_field_value = value or ""
                 line = (
                     Text(f"\u25b6 {label}{req}: {value}", style="bold")
                     if value
@@ -292,7 +292,7 @@ class TextualOutput:
             elif state == "idle":
                 line = Text(f"  {label}{req}:", style="dim")
             elif not found_active and value is None:
-                self._active_field_value = value
+                self._active_field_value = ""
                 line = Text(f"\u25b6 {label}{req}: ", style="bold")
                 found_active = True
             elif value is not None:

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import Any
+
+from y5n.base.flow.patterns.public import FormAction
 
 from textual import events
 from textual.widgets import TextArea
@@ -12,9 +15,15 @@ class ShellInput(TextArea):
         ("ctrl+v", "paste", "Paste"),
     ]
 
-    def __init__(self, on_submit: Callable[[str], Awaitable[None]], **kwargs):
+    def __init__(
+        self,
+        on_submit: Callable[[str], Awaitable[None]],
+        on_action: Callable[[FormAction], Awaitable[None]] | None = None,
+        **kwargs: Any,
+    ):
         super().__init__(**kwargs)
         self._on_submit = on_submit
+        self._on_action = on_action
 
     def action_paste(self) -> None:
         text = self.app.clipboard
@@ -39,5 +48,13 @@ class ShellInput(TextArea):
         elif "ctrl+j" in event.aliases or "newline" in event.aliases:
             event.stop()
             self.insert("\n")
+        elif event.key == "ctrl+up" and self._on_action:
+            event.stop()
+            event.prevent_default()
+            await self._on_action(FormAction("previous"))
+        elif event.key == "ctrl+down" and self._on_action:
+            event.stop()
+            event.prevent_default()
+            await self._on_action(FormAction("next"))
         else:
             await super()._on_key(event)
