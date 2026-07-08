@@ -13,10 +13,7 @@ class ShellInput(TextArea):
 
     BINDINGS = [
         ("ctrl+v", "paste", "Paste"),
-        ("ctrl+enter", "submit_form", "Submit Form"),
-        ("ctrl+shift+enter", "submit_form", "Submit Form"),
-        ("alt+enter", "submit_form", "Submit Form"),
-        ("ctrl+s", "submit_form", "Submit Form"),
+        ("ctrl+n", "submit_form", "Next Required"),
     ]
 
     def __init__(
@@ -34,16 +31,6 @@ class ShellInput(TextArea):
             self.clear()
             await self._on_action(FormAction("submit"))
 
-    @staticmethod
-    def _is_submit_key(event: events.Key) -> bool:
-        return (
-            event.key == "ctrl+enter"
-            or "ctrl+enter" in event.aliases
-            or "ctrl+return" in (event.key, *event.aliases)
-            or event.key == "alt+enter"
-            or event.key == "ctrl+shift+enter"
-        )
-
     def action_paste(self) -> None:
         text = self.app.clipboard
         if text:
@@ -54,24 +41,13 @@ class ShellInput(TextArea):
             event.stop()
             event.prevent_default()
             self.clear()
-            await self._on_submit("bg")
+            await self._on_submit("/jobs/bg")
         elif event.key == "enter":
             event.stop()
             event.prevent_default()
             text = self.text.strip()
             self.clear()
             await self._on_submit(text)
-        elif event.key != "enter" and "enter" in event.key:
-            if self._is_submit_key(event):
-                event.stop()
-                event.prevent_default()
-                await self.action_submit_form()
-            else:
-                event.stop()
-                self.insert("\n")
-        elif "ctrl+j" in event.aliases or "newline" in event.aliases:
-            event.stop()
-            self.insert("\n")
         elif event.key == "ctrl+up" and self._on_action:
             event.stop()
             event.prevent_default()
@@ -80,5 +56,10 @@ class ShellInput(TextArea):
             event.stop()
             event.prevent_default()
             await self._on_action(FormAction("next"))
+        elif event.key == "ctrl+x":
+            event.stop()
+            event.prevent_default()
+            self.clear()
+            await self._on_submit("/jobs/stop --current")
         else:
             await super()._on_key(event)
