@@ -186,6 +186,7 @@ class RuntimeTab:
 
     async def _handle_action(self, action: FormAction) -> None:
         if self.connection is not None:
+            self._input.clear()
             try:
                 await self.connection.dispatch(
                     Event(

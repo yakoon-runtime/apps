@@ -97,17 +97,18 @@ class TextualOutput:
     def _replace_group(self) -> None:
         self._widgets.clear()
         if self._current_group is not None:
-            self._current_group.remove()
-        group = Vertical(classes="projection-group")
-        self._container.mount(group)
+            self._current_group.remove_children()
+        else:
+            group = Vertical(classes="projection-group")
+            self._container.mount(group)
+            self._current_group = group
         if self._pending_input is not None:
             from rich.text import Text
 
             line = Text("> ", style="gray")
             line.append(self._pending_input)
-            group.mount(CopyableStatic(line, classes="input-line"))
+            self._current_group.mount(CopyableStatic(line, classes="input-line"))
             self._pending_input = None
-        self._current_group = group
 
     def _start_group(self) -> None:
         self._widgets.clear()
