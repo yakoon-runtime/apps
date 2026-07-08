@@ -57,8 +57,15 @@ class TextualOutput:
         self._current_group: Vertical | None = None
         self._current_job_id: str | None = None
         self._pending_input: str | None = None
+        self._active_field_value: str | None = None
+
+    @property
+    def active_field_value(self) -> str | None:
+        return self._active_field_value
 
     async def view(self, event: ProjectionEvent) -> None:
+        self._active_field_value = None
+
         if event.ctx and event.ctx.echo:
             self._pending_input = event.ctx.echo
 
@@ -273,6 +280,7 @@ class TextualOutput:
             req = " *" if required else ""
 
             if state == "active":
+                self._active_field_value = value
                 line = (
                     Text(f"\u25b6 {label}{req}: {value}", style="bold")
                     if value
@@ -284,6 +292,7 @@ class TextualOutput:
             elif state == "idle":
                 line = Text(f"  {label}{req}:", style="dim")
             elif not found_active and value is None:
+                self._active_field_value = value
                 line = Text(f"\u25b6 {label}{req}: ", style="bold")
                 found_active = True
             elif value is not None:

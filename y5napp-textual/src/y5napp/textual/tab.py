@@ -130,6 +130,7 @@ class RuntimeTab:
 
             await self.output.view(event)
             self.update_status(event)
+            self._sync_input_with_form()
 
         return on_view
 
@@ -178,6 +179,13 @@ class RuntimeTab:
             self._error_widgets.append(w)
         except Exception:
             self._show_disconnected()
+
+    # ── Form field support ──
+
+    def _sync_input_with_form(self) -> None:
+        value = self.output.active_field_value
+        if value is not None:
+            self._input.text = value
 
     # ── Focus ──
 
