@@ -197,8 +197,9 @@ class RuntimeTab:
                         ),
                     )
                 )
-            except Exception:
+            except Exception as exc:
                 self.connection = None
+                self.show_error(f"Action failed: {exc}")
                 self._show_disconnected()
 
     # ── Form field support ──
