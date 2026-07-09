@@ -87,9 +87,9 @@ def _cmd_style(
     variant: str | None, navigable: bool | None, resolvable: bool | None
 ) -> str:
     if variant == "global":
-        return "dim italic"
+        return "dim underline italic"
     if navigable and resolvable:
-        return "bold"
+        return "underline"  # bold
     if navigable and not resolvable:
         return "italic"
-    return "bold"
+    return "underline"  # bold
