@@ -9,6 +9,16 @@ function createInlineEl(type, tag = "span") {
 registerInline("cmd", (inline, dispatch, regionEl) => {
     const el = createInlineEl("cmd");
 
+    if (inline.variant === "global") {
+        el.classList.add("cmd-global");
+    } else if (inline.variant === "usage") {
+        el.classList.add("cmd-usage");
+    } else if (inline.navigable && inline.resolvable === false) {
+        el.classList.add("cmd-container");
+    } else {
+        el.classList.add("cmd-executable");
+    }
+
     for (const child of inline.children || []) {
         el.appendChild(renderInline(child, dispatch, regionEl));
     }

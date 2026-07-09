@@ -4,6 +4,24 @@
     font-weight: 600;
 }
 
+.inline-cmd.cmd-executable {
+    text-decoration: underline;
+}
+
+.inline-cmd.cmd-container {
+    font-style: italic;
+}
+
+.inline-cmd.cmd-global {
+    opacity: 0.6;
+    font-style: italic;
+    text-decoration: underline;
+}
+
+.inline-cmd.cmd-usage {
+    /* neutral bold, no decoration */
+}
+
 .inline-action {}
 
 .inline-code {}

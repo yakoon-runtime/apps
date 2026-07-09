@@ -88,6 +88,8 @@ def _cmd_style(
 ) -> str:
     if variant == "global":
         return "dim underline italic"
+    if variant == "usage":
+        return "bold"
     if navigable and resolvable:
         return "underline"  # bold
     if navigable and not resolvable:
