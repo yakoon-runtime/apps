@@ -43,8 +43,8 @@ def _render_inline(result: Text, node: Inline) -> None:
             result.append(_stylize(node.children, "yellow"))
         case InlineMark(variant=v):
             result.append(_stylize(node.children, _mark_style(v)))
-        case InlineCmd(command=cmd, variant=v):
-            result.append(_stylize(node.children, _cmd_style(v)))
+        case InlineCmd(resolvable=r, navigable=n, variant=v):
+            result.append(_stylize(node.children, _cmd_style(v, n, r)))
         case InlineSelect(value=val):
             result.append(str(val), style="magenta")
         case InlineBreak(count=n):
@@ -83,11 +83,13 @@ def _mark_style(variant: str | None) -> str:
             return "reverse"
 
 
-def _cmd_style(variant: str | None) -> str:
-    match variant:
-        case "global":
-            return "dim italic"
-        case "container":
-            return "bold italic"
-        case _:
-            return "bold"
+def _cmd_style(
+    variant: str | None, navigable: bool | None, resolvable: bool | None
+) -> str:
+    if variant == "global":
+        return "dim italic"
+    if navigable and resolvable:
+        return "bold"
+    if navigable and not resolvable:
+        return "italic"
+    return "bold"
