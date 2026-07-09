@@ -4,7 +4,6 @@ listen:
 
 spaces:
   - y5nspace.shell
-  - y5nspace.ident
   - y5nspace.os
   - y5nspace.crm
   - y5nspace.luma
