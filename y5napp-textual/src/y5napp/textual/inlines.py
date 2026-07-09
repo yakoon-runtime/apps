@@ -87,5 +87,7 @@ def _cmd_style(variant: str | None) -> str:
     match variant:
         case "global":
             return "dim italic"
+        case "container":
+            return "bold italic"
         case _:
             return "bold"
