@@ -5,6 +5,8 @@ listen:
 spaces:
   - y5nspace.shell
 
+root_path: bundles/root
+
 known:
   office: ws://localhost:9100
   server: ws://localhost:9101

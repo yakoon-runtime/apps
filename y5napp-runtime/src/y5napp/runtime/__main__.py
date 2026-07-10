@@ -8,6 +8,7 @@ Usage:
 
 import asyncio
 import sys
+from pathlib import Path
 
 from websockets.asyncio.server import serve
 from y5n.runtime.settings import RuntimeSettings, Settings
@@ -35,6 +36,7 @@ def main(args: list[str] | None = None) -> None:
     settings = Settings(
         runtime=RuntimeSettings(
             known=cfg.known,
+            root_path=cfg.root_path,
         )
     )
     settings.runtime.spaces = cfg.spaces
@@ -48,7 +50,10 @@ def main(args: list[str] | None = None) -> None:
         print(flush=True)
         print(f"Listen : ws://{host}:{port}", flush=True)
         if cfg.spaces:
-            print(f"Spaces : {', '.join(s.rsplit('.', 1)[-1] for s in cfg.spaces)}", flush=True)
+            print(
+                f"Spaces : {', '.join(s.rsplit('.', 1)[-1] for s in cfg.spaces)}",
+                flush=True,
+            )
         print(flush=True)
         print("Ready.", flush=True)
         try:
