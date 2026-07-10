@@ -4,9 +4,6 @@ listen:
 
 spaces:
   - y5nspace.shell
-  - y5nspace.os
-  - y5nspace.crm
-  - y5nspace.luma
 
 known:
   office: ws://localhost:9100
