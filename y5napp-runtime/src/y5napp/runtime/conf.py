@@ -19,7 +19,6 @@ class ListenConfig:
 class RuntimeConfig:
     name: str = ""
     listen: ListenConfig = field(default_factory=ListenConfig)
-    spaces: list[str] = field(default_factory=list)
     known: dict[str, str] = field(default_factory=dict)
     root_path: str = ""
 
@@ -41,7 +40,6 @@ def _from_dict(data: dict) -> RuntimeConfig:
     return RuntimeConfig(
         name=data.get("name", ""),
         listen=ListenConfig(**listen_raw) if isinstance(listen_raw, dict) else ListenConfig(),
-        spaces=data.get("spaces", []),
         known=data.get("known", {}),
         root_path=data.get("root_path", ""),
     )
