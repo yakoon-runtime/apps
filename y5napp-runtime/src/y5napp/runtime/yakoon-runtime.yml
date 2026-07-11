@@ -2,7 +2,9 @@ listen:
   host: 127.0.0.1
   port: 9100
 
-root_path: bundles/root
+mounts:
+  /:
+    path: bundles/root
 
 known:
   office: ws://localhost:9100

@@ -36,7 +36,7 @@ def main(args: list[str] | None = None) -> None:
     settings = Settings(
         runtime=RuntimeSettings(
             known=cfg.known,
-            root_path=cfg.root_path,
+            mounts=cfg.mounts,
         )
     )
 
