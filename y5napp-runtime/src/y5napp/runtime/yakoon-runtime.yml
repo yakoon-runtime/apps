@@ -2,13 +2,7 @@ listen:
   host: 127.0.0.1
   port: 9100
 
-mounts:
-  /:
-    path: bundles/root
-  /luma:
-    path: bundles/luma
-  /crm:
-    path: bundles/crm
+root_path: bundles/root
 
 known:
   office: ws://localhost:9100

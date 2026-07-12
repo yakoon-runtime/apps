@@ -5,7 +5,6 @@ from importlib.resources import files
 from pathlib import Path
 
 import yaml
-from y5n.runtime.nodes.tree import Mount
 
 CONFIG_FILENAME = "yakoon-runtime.yml"
 
@@ -21,7 +20,7 @@ class RuntimeConfig:
     name: str = ""
     listen: ListenConfig = field(default_factory=ListenConfig)
     known: dict[str, str] = field(default_factory=dict)
-    mounts: list[Mount] = field(default_factory=list)
+    root_path: str = ""
 
 
 def _search_paths() -> list[Path]:
@@ -36,16 +35,6 @@ def _search_paths() -> list[Path]:
     return paths
 
 
-def _parse_mounts(raw: dict) -> list[Mount]:
-    mounts: list[Mount] = []
-    for ns, value in raw.items():
-        if isinstance(value, str):
-            mounts.append(Mount(namespace=ns, path=Path(value)))
-        elif isinstance(value, dict) and "path" in value:
-            mounts.append(Mount(namespace=ns, path=Path(value["path"])))
-    return mounts
-
-
 def _from_dict(data: dict) -> RuntimeConfig:
     listen_raw = data.get("listen")
     return RuntimeConfig(
@@ -56,7 +45,7 @@ def _from_dict(data: dict) -> RuntimeConfig:
             else ListenConfig()
         ),
         known=data.get("known", {}),
-        mounts=_parse_mounts(data.get("mounts", {})),
+        root_path=data.get("root_path", ""),
     )
 
 
