@@ -8,7 +8,6 @@ Usage:
 
 import asyncio
 import sys
-from pathlib import Path
 
 from websockets.asyncio.server import serve
 from y5n.runtime.settings import RuntimeSettings, Settings
