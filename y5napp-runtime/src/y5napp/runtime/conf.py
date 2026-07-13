@@ -20,7 +20,7 @@ class RuntimeConfig:
     name: str = ""
     listen: ListenConfig = field(default_factory=ListenConfig)
     known: dict[str, str] = field(default_factory=dict)
-    root_path: str = ""
+    workspace_path: str = ""
 
 
 def _search_paths() -> list[Path]:
@@ -45,7 +45,7 @@ def _from_dict(data: dict) -> RuntimeConfig:
             else ListenConfig()
         ),
         known=data.get("known", {}),
-        root_path=data.get("root_path", ""),
+        workspace_path=data.get("workspace_path", ""),
     )
 
 
