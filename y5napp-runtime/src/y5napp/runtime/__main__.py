@@ -35,7 +35,7 @@ def main(args: list[str] | None = None) -> None:
     settings = Settings(
         runtime=RuntimeSettings(
             known=cfg.known,
-            root_path=cfg.workspace_path,
+            workspace_path=cfg.workspace_path,
         )
     )
 
