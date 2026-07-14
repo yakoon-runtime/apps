@@ -35,20 +35,18 @@ def main(args: list[str] | None = None) -> None:
     settings = Settings(
         runtime=RuntimeSettings(
             known=cfg.known,
+            workspace_path=cfg.workspace_path,
         )
     )
-    settings.runtime.spaces = cfg.spaces
 
     async def _run():
         global _host
-        runtime = build_runtime(capabilities={}, settings=settings)
+        runtime = build_runtime(settings=settings)
         _host = runtime
         await _host.setup()
         print("Yakoon Runtime", flush=True)
         print(flush=True)
         print(f"Listen : ws://{host}:{port}", flush=True)
-        if cfg.spaces:
-            print(f"Spaces : {', '.join(s.rsplit('.', 1)[-1] for s in cfg.spaces)}", flush=True)
         print(flush=True)
         print("Ready.", flush=True)
         try:

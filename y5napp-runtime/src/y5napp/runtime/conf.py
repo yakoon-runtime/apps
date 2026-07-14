@@ -19,8 +19,8 @@ class ListenConfig:
 class RuntimeConfig:
     name: str = ""
     listen: ListenConfig = field(default_factory=ListenConfig)
-    spaces: list[str] = field(default_factory=list)
     known: dict[str, str] = field(default_factory=dict)
+    workspace_path: str = ""
 
 
 def _search_paths() -> list[Path]:
@@ -39,21 +39,28 @@ def _from_dict(data: dict) -> RuntimeConfig:
     listen_raw = data.get("listen")
     return RuntimeConfig(
         name=data.get("name", ""),
-        listen=ListenConfig(**listen_raw) if isinstance(listen_raw, dict) else ListenConfig(),
-        spaces=data.get("spaces", []),
+        listen=(
+            ListenConfig(**listen_raw)
+            if isinstance(listen_raw, dict)
+            else ListenConfig()
+        ),
         known=data.get("known", {}),
+        workspace_path=data.get("workspace_path", ""),
     )
 
 
 def load_config() -> RuntimeConfig:
+
     for p in _search_paths():
         if p.exists():
             with open(p) as f:
                 return _from_dict(yaml.safe_load(f) or {})
 
-    bundled = files("y5napp.runtime").joinpath("yakoon-runtime.yml")
-    if bundled.exists():
-        with open(bundled) as f:
+    try:
+        bundled = files("y5napp.runtime").joinpath("yakoon-runtime.yml")
+        with bundled.open("r") as f:
             return _from_dict(yaml.safe_load(f) or {})
+    except FileNotFoundError:
+        pass
 
     return RuntimeConfig()

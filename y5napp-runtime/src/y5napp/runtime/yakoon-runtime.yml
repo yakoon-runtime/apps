@@ -2,11 +2,7 @@ listen:
   host: 127.0.0.1
   port: 9100
 
-spaces:
-  - y5nspace.shell
-  - y5nspace.os
-  - y5nspace.crm
-  - y5nspace.luma
+workspace_path: workspace/dev
 
 known:
   office: ws://localhost:9100

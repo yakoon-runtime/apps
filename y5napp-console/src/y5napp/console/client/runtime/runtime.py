@@ -9,14 +9,6 @@ async def create_runtime() -> RuntimeHost:
 
     runtime = build_runtime(
         settings=settings,
-        spaces=[
-            "y5nspace.shell",
-            "y5nspace.ident",
-            "y5nspace.os",
-            "y5nspace.runtime",
-            "y5nspace.crm",
-        ],
-        capabilities={},
     )
 
     return runtime
