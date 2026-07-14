@@ -244,7 +244,12 @@ class TextualOutput:
         )
 
     def _make_table(self, node: Node) -> DataTable:
+        selectable = node.props.get("selectable", True)
+
         dt = DataTable()
+        if not selectable:
+            dt.cursor_type = "row"
+
         columns = node.props.get("columns", [])
         for col in columns:
             title = col.get("title") if isinstance(col, dict) else col.title
