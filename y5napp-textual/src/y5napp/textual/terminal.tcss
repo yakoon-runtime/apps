@@ -118,6 +118,10 @@ TabbedContent {
     margin: 0;
 }
 
+.spacer {
+    height: 1;
+}
+
 .list {
     height: auto;
     margin: 0 0 0 1;
