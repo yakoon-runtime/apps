@@ -7,7 +7,6 @@ from y5n.base.document.transfer import (
     PatchFinishNode,
     PatchReset,
 )
-from y5n.base.document.transfer.node import Node
 
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
@@ -128,8 +127,8 @@ class TextualOutput:
     def _append(self, op: PatchAppendStructure) -> None:
         for spec in op.nodes:
             widget = self._create_widget(spec)
-            self._widgets[spec.id] = widget
-            self._mount(widget, spec.parent)
+            self._widgets[spec["id"]] = widget
+            self._mount(widget, spec["parent"])
 
     def _clear(self) -> None:
         self._widgets.clear()
@@ -167,8 +166,8 @@ class TextualOutput:
 
     # --------------------------------------------------------
 
-    def _create_widget(self, node: Node) -> Widget:
-        match node.type:
+    def _create_widget(self, node: dict) -> Widget:
+        match node["type"]:
             case "text" | "paragraph":
                 return self._make_text(node)
             case "heading":
@@ -206,71 +205,71 @@ class TextualOutput:
             case "image":
                 return self._make_image(node)
             case _:
-                return CopyableStatic(f"<{node.type}>", classes="unknown")
+                return CopyableStatic(f"<{node['type']}>", classes="unknown")
 
     # --------------------------------------------------------
 
-    def _make_text(self, node: Node) -> Static:
+    def _make_text(self, node: dict) -> Static:
         from . import inlines
 
-        text = inlines.render(node.props.get("text", []))
+        text = inlines.render(node["props"].get("text", []))
         return CopyableStatic(text)
 
-    def _make_heading(self, node: Node) -> Static:
+    def _make_heading(self, node: dict) -> Static:
         from . import inlines
 
-        level = node.props.get("level", 1)
-        text = inlines.render(node.props.get("text", []))
+        level = node["props"].get("level", 1)
+        text = inlines.render(node["props"].get("text", []))
         return CopyableStatic(text, classes=f"heading h{level}")
 
-    def _make_list_item(self, node: Node) -> Static:
+    def _make_list_item(self, node: dict) -> Static:
         from rich.text import Text
 
         from . import inlines
 
         bullet = Text(" \u2022 ", style="bold")
-        bullet.append(inlines.render(node.props.get("text", [])))
+        bullet.append(inlines.render(node["props"].get("text", [])))
         return CopyableStatic(bullet, classes="list-item")
 
-    def _make_kv_item(self, node: Node) -> Horizontal:
+    def _make_kv_item(self, node: dict) -> Horizontal:
         from . import inlines
 
-        key = node.props.get("key", "")
-        value = inlines.render(node.props.get("value", []))
+        key = node["props"].get("key", "")
+        value = inlines.render(node["props"].get("value", []))
         return Horizontal(
             CopyableStatic(key, classes="kv-key"),
             CopyableStatic(value, classes="kv-value"),
             classes="kv-row",
         )
 
-    def _make_table(self, node: Node) -> DataTable:
-        selectable = node.props.get("selectable", True)
+    def _make_table(self, node: dict) -> DataTable:
+        selectable = node["props"].get("selectable", True)
 
         dt = DataTable()
         if not selectable:
             dt.cursor_type = "row"
 
-        columns = node.props.get("columns", [])
+        columns = node["props"].get("columns", [])
         for col in columns:
             title = col.get("title") if isinstance(col, dict) else col.title
             dt.add_column(title)
-        rows = node.props.get("rows", [])
+        rows = node["props"].get("rows", [])
         for row in rows:
             dt.add_row(*row)
         return dt
 
-    def _make_action(self, node: Node) -> Button:
-        label = node.props.get("label", "")
-        action_id = node.props.get("id")
+    def _make_action(self, node: dict) -> Button:
+        label = node["props"].get("label", "")
+        action_id = node["props"].get("id")
         btn = Button(label)
         return btn
 
-    def _make_fields(self, node: Node) -> Widget:
+    def _make_fields(self, node: dict) -> Widget:
         from rich.text import Text
 
-        title = node.props.get("title") or node.props.get("name", "")
-        intro = node.props.get("intro")
-        fields = node.props.get("fields", [])
+        title = node["props"].get("title") or node["props"].get("name", "")
+        intro = node["props"].get("intro")
+        fields = node["props"].get("fields", [])
 
         lines = []
         error_line = None
@@ -320,19 +319,19 @@ class TextualOutput:
             children.append(Static(error_line, classes="field-error"))
         return Vertical(*children, classes="fields")
 
-    def _make_pre(self, node: Node) -> Static:
-        code = node.props.get("code", "")
+    def _make_pre(self, node: dict) -> Static:
+        code = node["props"].get("code", "")
         return CopyableStatic(code, classes="code-block")
 
-    def _make_image(self, node: Node) -> Static:
-        alt = node.props.get("alt") or node.props.get("ref", "")
+    def _make_image(self, node: dict) -> Static:
+        alt = node["props"].get("alt") or node["props"].get("ref", "")
         return CopyableStatic(f"[img] {alt}", classes="image")
 
-    def _make_collapsible(self, node: Node) -> Collapsible:
+    def _make_collapsible(self, node: dict) -> Collapsible:
         from . import inlines
 
-        title = inlines.render(node.props.get("title", []))
-        expanded = node.props.get("expanded", False)
+        title = inlines.render(node["props"].get("title", []))
+        expanded = node["props"].get("expanded", False)
         return Collapsible(
             title=title,
             collapsed=not expanded,
