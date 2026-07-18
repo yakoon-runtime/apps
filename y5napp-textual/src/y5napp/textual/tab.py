@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from y5n.base.clients import ClientConnection
+from y5n.base.document import DocumentEvent
 from y5n.base.flow.patterns.public import FormAction
-from y5n.base.projection import ProjectionEvent
 from y5n.base.runtime import Event, Routing
 from y5n.base.runtime.input import InputContext, Origin
 from y5ntrans.websocket.client import WebSocketClientTransport
@@ -121,7 +121,7 @@ class RuntimeTab:
     # ── View ──
 
     def _make_view_callback(self):
-        async def on_view(event: ProjectionEvent) -> None:
+        async def on_view(event: DocumentEvent) -> None:
             if event.view_params:
                 connect_url = event.view_params.get("connect")
                 if connect_url:
@@ -143,7 +143,7 @@ class RuntimeTab:
             w.remove()
         self._error_widgets.clear()
 
-    def update_status(self, event: ProjectionEvent) -> None:
+    def update_status(self, event: DocumentEvent) -> None:
         try:
             path = (
                 event.state.node_path if event.state and event.state.node_path else "/"

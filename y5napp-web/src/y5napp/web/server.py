@@ -66,7 +66,9 @@ def serve(
 ) -> HTTPServer:
     class ConfigHandler(Handler):
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, config=config or WebConfig(), runtime_url=runtime_url, **kwargs)
+            super().__init__(
+                *args, config=config or WebConfig(), runtime_url=runtime_url, **kwargs
+            )
 
     server = HTTPServer((host, port), ConfigHandler)
     print("Yakoon Web", flush=True)

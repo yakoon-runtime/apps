@@ -37,19 +37,21 @@ class TextualApp(App):
         if config.theme:
             theme = _THEME_MANAGER.get(config.theme)
             if theme:
-                self.register_theme(TextualTheme(
-                    name=config.theme,
-                    primary=theme.primary,
-                    secondary=theme.secondary,
-                    accent=theme.accent,
-                    warning=theme.warning,
-                    error=theme.error,
-                    success=theme.success,
-                    foreground=theme.text,
-                    background=theme.bg,
-                    surface=theme.surface,
-                    variables={"font": theme.font},
-                ))
+                self.register_theme(
+                    TextualTheme(
+                        name=config.theme,
+                        primary=theme.primary,
+                        secondary=theme.secondary,
+                        accent=theme.accent,
+                        warning=theme.warning,
+                        error=theme.error,
+                        success=theme.success,
+                        foreground=theme.text,
+                        background=theme.bg,
+                        surface=theme.surface,
+                        variables={"font": theme.font},
+                    )
+                )
                 self.theme = config.theme
 
     # ── Compose ──

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from rich.text import Text as RichText
-from y5n.base.projection.transfer import (
+from y5n.base.document.transfer import (
+    DocumentEvent,
     PatchAppendStructure,
     PatchFinishNode,
     PatchReset,
-    ProjectionEvent,
 )
-from y5n.base.projection.transfer.node import Node
+from y5n.base.document.transfer.node import Node
 
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
@@ -31,7 +31,7 @@ class CopyableStatic(Static):
     def action_copy(self) -> None:
         parent = self.parent
         while parent is not None:
-            if hasattr(parent, "classes") and "projection-group" in parent.classes:
+            if hasattr(parent, "classes") and "document-group" in parent.classes:
                 break
             parent = parent.parent
         if parent is None:
@@ -63,7 +63,7 @@ class TextualOutput:
     def active_field_value(self) -> str | None:
         return self._active_field_value
 
-    async def view(self, event: ProjectionEvent) -> None:
+    async def view(self, event: DocumentEvent) -> None:
         self._active_field_value = None
 
         if event.ctx and event.ctx.echo:
@@ -99,7 +99,7 @@ class TextualOutput:
         if self._current_group is not None:
             self._current_group.remove_children()
         else:
-            group = Vertical(classes="projection-group")
+            group = Vertical(classes="document-group")
             self._container.mount(group)
             self._current_group = group
         if self._pending_input is not None:
@@ -112,7 +112,7 @@ class TextualOutput:
 
     def _start_group(self) -> None:
         self._widgets.clear()
-        group = Vertical(classes="projection-group")
+        group = Vertical(classes="document-group")
         self._container.mount(group)
 
         if self._pending_input is not None:
@@ -135,7 +135,7 @@ class TextualOutput:
         self._widgets.clear()
         self._current_group = None
         self._current_job_id = None
-        self._container.query(".projection-group").remove()
+        self._container.query(".document-group").remove()
 
     def _finish(self, op: PatchFinishNode) -> None:
         pass

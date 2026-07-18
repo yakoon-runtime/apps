@@ -44,8 +44,16 @@ def _from_dict(data: dict) -> WebConfig:
     runtime_raw = data.get("runtime")
     return WebConfig(
         theme=data.get("theme"),
-        server=ServerConfig(**server_raw) if isinstance(server_raw, dict) else ServerConfig(),
-        runtime=RuntimeConfig(**runtime_raw) if isinstance(runtime_raw, dict) else RuntimeConfig(),
+        server=(
+            ServerConfig(**server_raw)
+            if isinstance(server_raw, dict)
+            else ServerConfig()
+        ),
+        runtime=(
+            RuntimeConfig(**runtime_raw)
+            if isinstance(runtime_raw, dict)
+            else RuntimeConfig()
+        ),
     )
 
 

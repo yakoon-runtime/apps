@@ -165,7 +165,7 @@ class Tab {
         this.ws.onmessage = (msg) => {
             try {
                 const data = JSON.parse(msg.data);
-                if (data.type === "projection") {
+                if (data.type === "document") {
                     this.handleProjection(data.payload);
                 }
             } catch (e) {
