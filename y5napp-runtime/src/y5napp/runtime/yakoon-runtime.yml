@@ -2,7 +2,7 @@ listen:
   host: 127.0.0.1
   port: 9100
 
-workspace_path: workspace/dev
+workspace_path: structure
 
 known:
   office: ws://localhost:9100
