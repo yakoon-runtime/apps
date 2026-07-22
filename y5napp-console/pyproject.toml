@@ -8,7 +8,7 @@ version = "0.2.0"
 requires-python = ">=3.13"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Stefan Bergmann" }]
-dependencies = ["y5ncore-base", "y5ncore-runtime"]
+dependencies = ["y5n-runtime-api", "y5n-runtime-engine"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
