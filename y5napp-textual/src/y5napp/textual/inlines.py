@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from rich.text import Text
-from y5n.runtime.engine.document.model.inline import (
+from y5n.runtime.api.document.model.inline import (
     Inline,
     InlineArg,
     InlineBreak,

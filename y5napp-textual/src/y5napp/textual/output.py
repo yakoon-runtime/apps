@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from rich.text import Text as RichText
-from y5n.runtime.engine.document.transfer import (
+from y5n.runtime.api.document.transfer import (
     DocumentEvent,
     PatchAppendStructure,
     PatchFinishNode,

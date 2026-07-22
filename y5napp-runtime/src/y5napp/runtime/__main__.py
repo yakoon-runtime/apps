@@ -10,8 +10,8 @@ import asyncio
 import sys
 
 from websockets.asyncio.server import serve
-from y5n.runtime.settings import RuntimeSettings, Settings
-from y5n.runtime.wire.runtime import build_runtime
+from y5n.runtime.engine.settings import RuntimeSettings, Settings
+from y5n.runtime.engine.wire.runtime import build_runtime
 from y5ntrans.websocket.server import WebSocketServerTransport
 
 from .conf import load_config

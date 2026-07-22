@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from y5n.runtime.engine.theme import ThemeManager, default_themes
+from y5n.runtime.api.theme import ThemeManager, default_themes
 from y5ntrans.websocket.client import WebSocketClientTransport
 
 from textual import events
