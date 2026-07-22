@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 from y5n.runtime.api.theme import ThemeManager, default_themes
-from y5ntrans.websocket.client import WebSocketClientTransport
+from y5n.runtime.transport.client import WebSocketClientTransport
 
 from textual import events
 from textual.app import App, ComposeResult

@@ -7,7 +7,7 @@ from y5n.runtime.api.document import DocumentEvent
 from y5n.runtime.api.flow.patterns.public import FormAction
 from y5n.runtime.api.runtime import Event, Routing
 from y5n.runtime.api.runtime.input import InputContext, Origin
-from y5ntrans.websocket.client import WebSocketClientTransport
+from y5n.runtime.transport.client import WebSocketClientTransport
 
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
