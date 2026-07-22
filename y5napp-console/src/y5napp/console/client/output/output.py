@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 
-from y5n.base.document.percept.perceptual import PerceptualStream
-from y5n.base.document.transfer import (
+from y5n.runtime.engine.document.percept.perceptual import PerceptualStream
+from y5n.runtime.engine.document.transfer import (
     PatchAppendStructure,
     PatchFinishNode,
     PatchReset,

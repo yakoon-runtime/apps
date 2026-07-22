@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from y5n.base.flow.patterns.public import FormAction
+from y5n.runtime.engine.flow.patterns.public import FormAction
 
 from textual import events
 from textual.widgets import TextArea
