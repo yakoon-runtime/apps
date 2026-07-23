@@ -14,6 +14,8 @@ class ShellInput(TextArea):
     BINDINGS = [
         ("ctrl+v", "paste", "Paste"),
         ("ctrl+n", "submit_form", "Next Required"),
+        ("pageup", "scroll_page_up", "Scroll Up"),
+        ("pagedown", "scroll_page_down", "Scroll Down"),
     ]
 
     def __init__(
@@ -35,6 +37,12 @@ class ShellInput(TextArea):
         text = self.app.clipboard
         if text:
             self.insert(text)
+
+    def action_scroll_page_up(self) -> None:
+        self._scroll_output_page(-1)
+
+    def action_scroll_page_down(self) -> None:
+        self._scroll_output_page(1)
 
     async def _on_key(self, event: events.Key) -> None:
         if event.key == "escape":
@@ -63,3 +71,13 @@ class ShellInput(TextArea):
             await self._on_submit("/jobs/stop --current", True)
         else:
             await super()._on_key(event)
+
+    def _scroll_output_page(self, direction: int) -> None:
+        try:
+            output = self.app.query_one(".tab-output")
+            if direction < 0:
+                output.scroll_page_up(animate=False)
+            else:
+                output.scroll_page_down(animate=False)
+        except Exception:
+            pass

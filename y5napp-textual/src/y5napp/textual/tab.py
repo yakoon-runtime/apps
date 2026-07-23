@@ -61,6 +61,7 @@ class RuntimeTab:
             return
         self._built = True
 
+        self._output_container.can_focus = False
         self.pane.mount(self._output_container)
 
         input_card = Vertical(classes="input-card")

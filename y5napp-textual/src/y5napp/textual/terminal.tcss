@@ -28,13 +28,14 @@ TabbedContent {
     padding: 0 1;
     border: none;
     border-left: outer $primary;
+    background: $surface;
     height: auto;
     min-height: 2;
 }
 
 .tab-shell-input {
     border: none;
-    background: $background;
+    background: $surface;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -45,8 +46,15 @@ TabbedContent {
     padding: 0;
 }
 
+.input-card:focus-within {
+    background: $surface;
+    tint: transparent;
+}
+
 .tab-shell-input:focus {
     border: none;
+    background: $surface;
+    tint: transparent;
 }
 
 /* ------- Status Line ------- */

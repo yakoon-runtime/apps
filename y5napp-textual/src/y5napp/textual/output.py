@@ -21,7 +21,7 @@ from textual.widgets import (
 
 class CopyableStatic(Static):
 
-    can_focus = True
+    can_focus = False
 
     BINDINGS = [
         ("ctrl+c", "copy", "Copy"),
