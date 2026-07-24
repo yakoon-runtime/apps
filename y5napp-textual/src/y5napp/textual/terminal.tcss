@@ -46,15 +46,19 @@ TabbedContent {
     padding: 0;
 }
 
-.input-card:focus-within {
-    background: $surface;
-    tint: transparent;
-}
-
 .tab-shell-input:focus {
     border: none;
     background: $surface;
-    tint: transparent;
+}
+
+/* cursor-line focus fix */
+.tab-shell-input .text-area--cursor-line {
+    background: transparent;
+}
+
+.input-card:focus-within {
+    background: $surface;
+    border-left: outer $primary;
 }
 
 /* ------- Status Line ------- */
