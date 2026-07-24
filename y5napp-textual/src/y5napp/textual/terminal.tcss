@@ -56,6 +56,14 @@ TabbedContent {
     background: transparent;
 }
 
+.tab-shell-input .text-area--cursor {
+    background: $foreground 50%;
+}
+
+.tab-shell-input:focus .text-area--cursor {
+    background: $foreground 100%;
+}
+
 .input-card:focus-within {
     background: $surface;
     border-left: outer $primary;

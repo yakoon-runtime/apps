@@ -44,6 +44,15 @@ class ShellInput(TextArea):
     def action_scroll_page_down(self) -> None:
         self._scroll_output_page(1)
 
+    def _watch_has_focus(self, focus: bool) -> None:
+        self._cursor_visible = True
+        if focus:
+            self._restart_blink()
+            self.app.cursor_position = self.cursor_screen_offset
+            self.history.checkpoint()
+        else:
+            self._pause_blink(visible=True)
+
     async def _on_key(self, event: events.Key) -> None:
         if event.key == "escape":
             event.stop()
