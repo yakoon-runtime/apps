@@ -25,7 +25,7 @@ TabbedContent {
 
 .input-card {
     margin: 1 2 2 2;
-    padding: 0 1;
+    padding: 1 1 0 1;
     border: none;
     border-left: outer $primary;
     background: $surface;
