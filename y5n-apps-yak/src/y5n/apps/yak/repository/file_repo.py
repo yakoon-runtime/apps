@@ -26,9 +26,10 @@ class FileRepository:
 
         # 2. Pack manifests across all roots
         for root in self._roots:
-            dist_path = root / f"y5n-packs-{name}" / "pack.toml"
-            if dist_path.exists():
-                return self._parse(dist_path)
+            for prefix in ("y5n-packs-", "y5n-runtime-"):
+                dist_path = root / f"{prefix}{name}" / "pack.toml"
+                if dist_path.exists():
+                    return self._parse(dist_path)
         return None
 
     def resolve_pack(self, name: PackName) -> bool:
@@ -38,7 +39,7 @@ class FileRepository:
         return False
 
     def _find_manifest(self, root: Path, name: PackName) -> Path | None:
-        for candidate in (root / name, root / f"y5n-packs-{name}"):
+        for candidate in (root / name, root / f"y5n-packs-{name}", root / f"y5n-runtime-{name}"):
             manifest = candidate / "pack.toml"
             if manifest.exists():
                 return manifest

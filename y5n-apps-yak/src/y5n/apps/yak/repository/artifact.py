@@ -27,6 +27,9 @@ class DirectoryArtifactStore:
             candidate = root / f"y5n-packs-{name}"
             if candidate.is_dir():
                 return candidate
+            candidate = root / f"y5n-runtime-{name}"
+            if candidate.is_dir():
+                return candidate
         return None
 
     def has_artifact(self, name: PackName) -> bool:

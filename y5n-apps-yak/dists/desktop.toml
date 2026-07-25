@@ -7,7 +7,7 @@ pack = "root"
 target = "/"
 
 [[mount]]
-pack = "runtime"
+pack = "boot"
 target = "/boot"
 
 [[mount]]
