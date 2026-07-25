@@ -19,6 +19,7 @@ Usage:
     yak <command> [options]
 
 Commands:
+    bootstrap   Prepare this repository for development
     install     Install a Yakoon distribution
     update      Update an installation
     status      Show installation status

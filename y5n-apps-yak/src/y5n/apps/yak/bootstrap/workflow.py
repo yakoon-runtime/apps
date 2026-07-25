@@ -25,7 +25,16 @@ def bootstrap(root: Path | None = None) -> bool:
     if root is None:
         root = _find_repo_root()
     if root is None:
-        print("Error: not a Yakoon repository")
+        print(
+            "Error: not a Yakoon repository\n"
+            "\n"
+            "  bootstrap must be run from inside a Yakoon repository.\n"
+            "\n"
+            "    git clone https://github.com/anomalyco/yakoon\n"
+            "    cd yakoon\n"
+            "    pip install -e apps/y5n-apps-yak\n"
+            "    yak bootstrap\n"
+        )
         return False
 
     venv_python = root / ".venv" / "bin" / "python"
