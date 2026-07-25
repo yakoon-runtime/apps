@@ -13,4 +13,4 @@ def run(args, mgr) -> None:
         return
 
     python = path / ".venv" / "bin" / "python"
-    subprocess.run([str(python), "-m", "y5n.packs.shell"], cwd=path)
+    subprocess.run([str(python), "-m", "y5n.apps.shell"], cwd=path)

@@ -62,7 +62,7 @@ def _start(path: Path) -> None:
         "import ctypes, ctypes.util\n"
         "libc = ctypes.CDLL(ctypes.util.find_library('c'))\n"
         "libc.prctl(15, b'yakoon-runtime', 0, 0, 0)\n"
-        "from y5n.packs.runtime.__main__ import main\n"
+        "from y5n.apps.runtime.__main__ import main\n"
         "main()\n"
     )
     wrapper.chmod(0o755)

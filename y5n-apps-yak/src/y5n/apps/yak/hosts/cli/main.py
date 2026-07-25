@@ -9,19 +9,18 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 
 def _build_manager() -> InstallationManager:
-    repo_root = Path(__file__).resolve().parents[5]
-    repos = repo_root / "repos"
+    repo_root = Path(__file__).resolve().parents[8]
+    packs = repo_root / "packs"
     runtime = repo_root / "runtime"
-    dists = repo_root / "yak" / "dists"
+    dists = repo_root / "apps" / "y5n-apps-yak" / "dists"
 
     apps = repo_root / "apps"
-    sdk = repo_root / "sdk" / "python"
-    repo = FileRepository(repos, runtime, sdk, builtin_dists=dists)
-    artifacts = DirectoryArtifactStore(repos, runtime, apps, sdk)
+    sdk = repo_root / "sdk" / "y5n-sdk-python"
+    repo = FileRepository(packs, runtime, sdk, builtin_dists=dists)
+    artifacts = DirectoryArtifactStore(packs, runtime, apps, sdk)
     mgr = InstallationManager(repo, artifacts)
     mgr._sdk_path = sdk
     mgr._installer._apps_root = apps
-    mgr._sdk_path = sdk
     return mgr
 
 
