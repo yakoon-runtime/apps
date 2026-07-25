@@ -30,7 +30,7 @@ def bootstrap(root: Path | None = None) -> bool:
             "\n"
             "  bootstrap must be run from inside a Yakoon repository.\n"
             "\n"
-            "    git clone https://github.com/anomalyco/yakoon\n"
+            "    git clone https://github.com/yakoon-runtime/yakoon\n"
             "    cd yakoon\n"
             "    pip install -e apps/y5n-apps-yak\n"
             "    yak bootstrap\n"
