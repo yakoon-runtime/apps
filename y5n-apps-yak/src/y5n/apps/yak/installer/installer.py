@@ -18,10 +18,14 @@ _TOOL_PACKAGES: dict[str, str] = {
 
 class Installer:
     def __init__(
-        self, artifact_store: ArtifactStore, apps_root: Path | None = None
+        self,
+        artifact_store: ArtifactStore,
+        apps_root: Path | None = None,
+        runtime_root: Path | None = None,
     ) -> None:
         self._artifacts = artifact_store
         self._apps_root = apps_root
+        self._runtime_root = runtime_root
 
     def install(
         self,
@@ -42,14 +46,16 @@ class Installer:
                 continue
             projects.extend(self._find_projects(artifact))
 
+        # Include all runtime projects (api, engine, store, etc.) to satisfy
+        # dependencies declared by packs like boot.
+        if self._runtime_root is not None:
+            projects.extend(self._find_projects(self._runtime_root))
+
         if tools:
             for tool in tools:
                 pkg = self._find_tool(tool.name)
                 if pkg is not None:
                     projects.extend(self._find_projects(pkg))
-
-        if projects:
-            self._pip_install_all(python, projects)
 
     def _find_tool(self, name: str) -> Path | None:
         pkg = _TOOL_PACKAGES.get(name)
