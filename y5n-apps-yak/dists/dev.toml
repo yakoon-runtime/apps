@@ -1,0 +1,27 @@
+name = "dev"
+version = "0.1.0"
+description = "Yakoon Developer Distribution — runtime, shell, web, and SDK"
+
+[[mount]]
+pack = "root"
+target = "/"
+
+[[mount]]
+pack = "boot"
+target = "/boot"
+
+[[mount]]
+pack = "system"
+target = "/usr/bin"
+
+[[tool]]
+name = "runtime"
+optional = false
+
+[[tool]]
+name = "shell"
+optional = false
+
+[[tool]]
+name = "web"
+optional = true
