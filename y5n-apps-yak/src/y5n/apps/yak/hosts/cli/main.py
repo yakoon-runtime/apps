@@ -21,6 +21,8 @@ Usage:
 Commands:
     bootstrap   Prepare this repository for development
     install     Install a Yakoon distribution
+    workspace   Manage Yakoon workspaces
+    create      Create a new pack
     update      Update an installation
     status      Show installation status
     doctor      Check installation health

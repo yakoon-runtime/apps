@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import status as _status
     from y5n.apps.yak.hosts.cli.commands import update as _update
     from y5n.apps.yak.hosts.cli.commands import web as _web
+    from y5n.apps.yak.hosts.cli.commands import workspace as _workspace
 
     parser = argparse.ArgumentParser(
         prog="yak",
@@ -88,6 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("bootstrap", help="Prepare this repository for development")
     p.set_defaults(func=_bootstrap.run)
+
+    p = sub.add_parser("workspace", help="Manage Yakoon workspaces")
+    ws_sub = p.add_subparsers(dest="ws_action", required=True, metavar="<action>")
+    p_create = ws_sub.add_parser("create", help="Create a new workspace")
+    p_create.add_argument("name", help="Workspace name")
+    p_create.set_defaults(func=_workspace.run)
 
     p = sub.add_parser("shell", help="")
     p.add_argument("--path", "-p", help="Path to installation")
