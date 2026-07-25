@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 
-
 VERSION = "0.0.1"
 
 
@@ -26,8 +25,7 @@ def main() -> None:
 
 
 def _show_help() -> None:
-    print(
-        f"""Yakoon Platform Manager {VERSION}
+    print(f"""Yakoon Platform Manager {VERSION}
 
 Usage:
     yak <command> [options]
@@ -40,5 +38,4 @@ Commands:
 
 Resources:
     https://yakoon.org
-"""
-    )
+""")

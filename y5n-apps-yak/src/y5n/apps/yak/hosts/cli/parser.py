@@ -12,6 +12,7 @@ def _add_action(sub, name: str, actions: list[str], func):
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from y5n.apps.yak.hosts.cli.commands import bootstrap as _bootstrap
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
     from y5n.apps.yak.hosts.cli.commands import install as _install
     from y5n.apps.yak.hosts.cli.commands import resolve as _resolve
@@ -47,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
             "    web open           Open browser\n"
             "\n"
             "  Developer\n"
+            "    bootstrap          Prepare this repository for development\n"
             "    resolve            Show resolved pack list\n"
         ),
     )
@@ -83,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_action(sub, "runtime", ["start", "stop", "status", "restart"], _runtime.run)
     _add_action(sub, "web", ["start", "stop", "status", "open"], _web.run)
+
+    p = sub.add_parser("bootstrap", help="Prepare this repository for development")
+    p.set_defaults(func=_bootstrap.run)
 
     p = sub.add_parser("shell", help="")
     p.add_argument("--path", "-p", help="Path to installation")

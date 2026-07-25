@@ -1,11 +1,36 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.parser import build_parser
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
+
+VERSION = "0.1.0"
+
+
+def _show_banner() -> None:
+    print(
+        f"""Yakoon Platform Manager {VERSION}
+
+Usage:
+    yak <command> [options]
+
+Commands:
+    install     Install a Yakoon distribution
+    update      Update an installation
+    status      Show installation status
+    doctor      Check installation health
+    runtime     Manage the runtime service
+    web         Manage the web service
+    shell       Open an interactive Yakoon shell
+    resolve     Show resolved pack list
+
+Use 'yak <command> --help' for detailed options.
+"""
+    )
 
 
 def _build_manager() -> InstallationManager:
@@ -26,6 +51,13 @@ def _build_manager() -> InstallationManager:
 
 
 def main() -> None:
+    if len(sys.argv) <= 1:
+        _show_banner()
+        return
+    if sys.argv[1] in ("-V", "--version"):
+        print(f"Yakoon Platform Manager {VERSION}")
+        return
+
     parser = build_parser()
     args = parser.parse_args()
     manager = _build_manager()
