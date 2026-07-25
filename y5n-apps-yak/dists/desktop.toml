@@ -1,0 +1,30 @@
+name = "desktop"
+version = "0.1.0"
+description = "Yakoon Desktop — runtime with system tools and interactive world"
+
+[[mount]]
+pack = "root"
+target = "/"
+
+[[mount]]
+pack = "runtime"
+target = "/boot"
+
+[[mount]]
+pack = "system"
+target = "/usr/bin"
+
+[[mount]]
+pack = "luma"
+target = "/opt/luma"
+
+[[tool]]
+name = "runtime"
+
+[[tool]]
+name = "shell"
+optional = true
+
+[[tool]]
+name = "web"
+optional = true

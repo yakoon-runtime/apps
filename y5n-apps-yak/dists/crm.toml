@@ -1,0 +1,14 @@
+name = "crm"
+version = "0.1.0"
+description = "Yakoon CRM — contact management with identity"
+
+[[distribution]]
+name = "desktop"
+
+[[mount]]
+pack = "ident"
+target = "/usr/sbin/ident"
+
+[[mount]]
+pack = "crm"
+target = "/opt/crm"
