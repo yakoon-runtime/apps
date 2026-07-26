@@ -96,6 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_build.run)
 
     p = sub.add_parser("bootstrap", help="Prepare this repository for development")
+    p.add_argument("--force", "-f", action="store_true", help="Recreate everything from scratch")
+    p.add_argument("--check", action="store_true", help="Only verify, don't modify")
     p.set_defaults(func=_bootstrap.run)
 
     p = sub.add_parser("workspace", help="Manage Yakoon workspaces")

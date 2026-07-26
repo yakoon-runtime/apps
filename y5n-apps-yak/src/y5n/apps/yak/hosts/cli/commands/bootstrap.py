@@ -6,4 +6,6 @@ from y5n.apps.yak.bootstrap.workflow import bootstrap
 
 
 def run(args, mgr) -> None:
-    bootstrap()
+    force = getattr(args, "force", False)
+    check = getattr(args, "check", False)
+    bootstrap(force=force, check=check)

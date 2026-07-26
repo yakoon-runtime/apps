@@ -15,7 +15,7 @@ from y5n.apps.yak.bootstrap.tasks import (
 )
 
 
-def bootstrap(root: Path | None = None) -> bool:
+def bootstrap(root: Path | None = None, force: bool = False, check: bool = False) -> bool:
     if root is None:
         root = _find_repo_root()
     if root is None:
@@ -25,7 +25,6 @@ def bootstrap(root: Path | None = None) -> bool:
     venv_python = root / ".venv" / "bin" / "python"
 
     # Determine bootstrap environment from yak.yml
-    # Priority: 1) repo root yak.yml  2) bundled yak.yml in y5n-apps-yak
     env_name = "dev"
     artifacts_dir = root / "apps" / "y5n-apps-yak" / "artifacts"
 
@@ -48,30 +47,37 @@ def bootstrap(root: Path | None = None) -> bool:
         return False
 
     tasks = [
-        ("Virtual environment", CreateVenvTask(root)),
-        ("Install projects", InstallProjectsTask(root, venv_python)),
-        ("Workspace", MaterializeWorkspaceTask(root, env_file=env_file)),
-        ("Verify", VerifyTask(venv_python)),
+        ("Virtual environment", CreateVenvTask(root, force=force)),
+        ("Install projects", InstallProjectsTask(root, venv_python, force=force)),
+        ("Workspace", MaterializeWorkspaceTask(root, env_file=env_file, force=force)),
     ]
 
-    all_ok = True
-    for label, task in tasks:
-        label = f"  {label:<24}"
-        try:
-            ok = task.run()
-            if ok:
-                print(f"✓ {label}")
-            else:
-                print(f"✘ {label}")
+    if not check:
+        all_ok = True
+        for label, task in tasks:
+            label = f"  {label:<24}"
+            try:
+                ok = task.run()
+                if ok:
+                    print(f"✓ {label}")
+                else:
+                    print(f"✘ {label}")
+                    all_ok = False
+            except Exception as e:
+                print(f"✘ {label}  {e}")
                 all_ok = False
-        except Exception as e:
-            print(f"✘ {label}  {e}")
-            all_ok = False
 
-    if all_ok:
-        SummaryTask(root, venv_python).run()
+        if all_ok:
+            ok = VerifyTask(venv_python).run()
+            print(f"  {'✓' if ok else '✘'} {'Verify':<24}")
+            SummaryTask(root, venv_python).run()
+    else:
+        # --check mode: just verify what's present
+        print("  Repo        ✓" if root else "  Repo        ✘")
+        print("  .venv       ✓" if (root / ".venv" / "bin" / "python").exists() else "  .venv       ✘")
+        print("  Workspace   ✓" if (root / "workspace").exists() else "  Workspace   ✘")
 
-    return all_ok
+    return True
 
 
 def _find_repo_root() -> Path | None:

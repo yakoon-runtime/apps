@@ -10,13 +10,14 @@ from pathlib import Path
 class CreateVenvTask:
     """Create a Python virtual environment at the given path."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, force: bool = False) -> None:
         self._root = root
+        self._force = force
 
     def run(self) -> bool:
         venv = self._root / ".venv"
-        if (venv / "bin" / "python").exists():
-            return True  # already exists — idempotent
+        if not self._force and (venv / "bin" / "python").exists():
+            return True
 
         subprocess.run(
             [sys.executable, "-m", "venv", str(venv)],
@@ -35,14 +36,26 @@ class CreateVenvTask:
 class InstallProjectsTask:
     """Discover and install all y5n-* projects into the virtual environment."""
 
-    def __init__(self, root: Path, venv_python: Path) -> None:
+    def __init__(self, root: Path, venv_python: Path, force: bool = False) -> None:
         self._root = root
         self._python = venv_python
+        self._force = force
 
     def run(self) -> bool:
         projects = self._discover()
         if not projects:
             return False
+
+        # Idempotent: skip if all projects are already installed
+        if not self._force:
+            check = subprocess.run(
+                [str(self._python), "-m", "pip", "list", "--format=columns"],
+                capture_output=True, text=True,
+            )
+            installed = check.stdout if check.returncode == 0 else ""
+            all_installed = all(p.name in installed for p in projects)
+            if all_installed:
+                return True
 
         cmd = [str(self._python), "-m", "pip", "install"]
         for proj in projects:
@@ -74,15 +87,17 @@ class InstallProjectsTask:
 class MaterializeWorkspaceTask:
     """Materialize the development workspace from an environment file."""
 
-    def __init__(self, root: Path, env_file: Path | None = None) -> None:
+    def __init__(self, root: Path, env_file: Path | None = None, force: bool = False) -> None:
         self._root = root
         self._env_file = env_file
+        self._force = force
 
     def run(self) -> bool:
         if self._env_file is None or not self._env_file.exists():
             return False
 
         import yaml
+        import shutil
         data = yaml.safe_load(self._env_file.read_text())
         ws = data.get("workspace", {})
         ws_path = ws.get("path", "workspace")
@@ -91,7 +106,9 @@ class MaterializeWorkspaceTask:
 
         workspace = self._root / ws_path
         if workspace.exists():
-            return True
+            if not self._force:
+                return True
+            shutil.rmtree(workspace)
 
         workspace.mkdir(parents=True, exist_ok=True)
 
