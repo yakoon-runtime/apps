@@ -28,12 +28,13 @@ Usage:
   Development
     create pack            Create a new pack
     create command         Add a command to the current pack
-
-  Build
-    build                  Build artifacts
     bootstrap              Prepare this repository for development
 
-  Install
+  Packaging
+    build                  Build artifacts
+    publish                Publish an artifact
+
+  Environment
     install                Install a pack
     sync                   Sync workspace with environment
 
@@ -44,7 +45,6 @@ Usage:
 
   Tools
     status                 Show installation status
-    publish                Publish an artifact
     resolve                Show resolved artifacts
     logs                   Show logs
     doctor                 Check installation health

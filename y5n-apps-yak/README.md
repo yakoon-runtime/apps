@@ -31,60 +31,13 @@ yak shell                   # Open the interactive shell
 ```bash
 yak build hello             # Build the pack
 yak publish y5n-packs-hello # Publish to ~/.yak/artifacts/
-# Other developer:
+
+# Another developer:
 mkdir other && cd other
 yak init
 yak install y5n-packs-hello # Finds it from ~/.yak/artifacts/
 yak sync
 yak shell
-```
-
-## Architecture
-
-Every `yak` command starts by locating a **YakContext**. The context is the
-central workspace for all Yakoon operations — a directory containing `.yak/`.
-
-```
-Template → Environment (Desired State) → Workspace (Materialized) → Runtime
-```
-
-| Layer | Location | Created by |
-|-------|----------|------------|
-| **YakContext** | `<root>/.yak/` | `yak init` |
-| **Context marker** | `.yak/context.toml` | `yak init` |
-| **Environment** | `.yak/environment.yml` | `install` / `bootstrap` / `sync` |
-| **Installation state** | `.yak/state.toml` | `install` |
-| **Build artifacts** | `.yak/artifacts/` | `build` |
-
-## Commands
-
-```
-  Getting started
-    init                   Create a Yak context
-
-  Development
-    create pack            Create a new pack
-    create command         Add a command to the current pack
-
-  Build
-    build                  Build artifacts
-    bootstrap              Prepare this repository for development
-
-  Install
-    install                Install a pack
-    sync                   Sync workspace with environment
-
-  Run
-    shell                  Open the Yakoon shell
-    runtime                Manage the runtime service
-    web                    Manage the web service
-
-  Tools
-    status                 Show installation status
-    publish                Publish an artifact to ~/.yak/artifacts/
-    resolve                Show resolved artifacts
-    logs                   Show logs
-    doctor                 Check installation health
 ```
 
 ## Artifact lifecycle
@@ -97,18 +50,95 @@ create → build → publish → install → sync → shell
 |------|---------|--------|
 | 1 | `yak create pack <name>` | Scaffolds a new pack project |
 | 2 | `yak build <source>` | Builds wheel + artifact.yml → `.yak/artifacts/` |
-| 3 | `yak publish <name>` | Copies artifact → `~/.yak/artifacts/` |
+| 3 | `yak publish <name>` | Copies artifact → `~/.yak/artifacts/` (shareable) |
 | 4 | `yak install <name>` | Installs wheel → `.venv` + `.yak/state.toml` |
 | 5 | `yak sync` | Reconciles environment → `.yak/environment.yml` + workspace |
 | 6 | `yak shell` | Opens interactive shell |
 
-## Context model (like Git)
+## Architecture
+
+Every `yak` command starts by locating a **YakContext** — similar to a
+Git repository, it defines the root for builds, artifacts, environments,
+and the workspace. Commands find it by walking up from the current
+working directory.
+
+```
+YakContext
+    │
+    ▼
+Template (desired state)
+    │
+    ▼
+Environment (instance)
+    │
+    ▼
+Workspace (materialized)
+    │
+    ▼
+Runtime
+```
+
+| Layer | Location | Created by |
+|-------|----------|------------|
+| **YakContext** | `<root>/.yak/` | `yak init` |
+| **Context marker** | `.yak/context.toml` | `yak init` |
+| **Environment** | `.yak/environment.yml` | `install` / `bootstrap` / `sync` |
+| **Installation state** | `.yak/state.toml` | `install` |
+| **Build artifacts** | `.yak/artifacts/` | `build` |
+
+## Language-neutral artifacts
+
+Yakoon artifacts are independent of the implementation language.
+A single artifact may contain:
+
+- Python wheels (`.whl`)
+- .NET assemblies (`.dll`)
+- Java archives (`.jar`)
+- Native binaries
+- WebAssembly modules
+
+The `artifact.yml` manifest describes the builder, host, and fingerprint —
+the runtime installs and materializes artifacts without depending on a
+specific programming language.
+
+## Commands
+
+```
+  Getting started
+    init                   Create a Yak context
+
+  Development
+    create pack            Create a new pack
+    create command         Add a command to the current pack
+    bootstrap              Prepare this repository for development
+
+  Packaging
+    build                  Build artifacts
+    publish                Publish an artifact to ~/.yak/artifacts/
+
+  Environment
+    install                Install a pack
+    sync                   Sync workspace with environment
+
+  Run
+    shell                  Open the Yakoon shell
+    runtime                Manage the runtime service
+    web                    Manage the web service
+
+  Tools
+    status                 Show installation status
+    resolve                Show resolved artifacts
+    logs                   Show logs
+    doctor                 Check installation health
+```
+
+## Context model
 
 ```bash
 yak init                    #  .yak/context.toml
 yak create pack hello       #  hello/pack.toml + structure/
 yak build hello             #  → .yak/artifacts/
-yak publish y5n-packs-hello #  → ~/.yak/artifacts/
+yak publish y5n-packs-hello #  → ~/.yak/artifacts/ (shareable)
 yak install y5n-packs-hello #  → .venv + .yak/state.toml
 yak sync                    #  → .yak/environment.yml + workspace
 yak shell                   #  → interactive shell
@@ -117,4 +147,3 @@ yak shell                   #  → interactive shell
 - `init` and `install` create context markers.
 - All other commands find the context via `find_context_root()`.
 - No global state — each context is self‑contained.
-- Artifacts are language‑neutral: works with .whl, .dll, .jar, etc.
