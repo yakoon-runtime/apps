@@ -99,15 +99,53 @@ class InstallationManager:
         if not root.exists():
             issues.append("Installation root missing")
 
-        if not (root / "workspace.toml").exists():
-            issues.append("workspace.toml missing")
-
         if not (root / ".yak" / "state.toml").exists():
             issues.append("state.toml missing")
 
+        # Pack checks (from state.toml)
         for pack in inst.packs:
             if not self._artifacts.has_artifact(pack):
                 issues.append(f"Pack '{pack}' not found")
+
+        # Environment checks (optional — env may not exist in older installs)
+        from y5n.apps.yak.environment.io import load as load_env
+
+        env = load_env(root)
+        if env is None:
+            issues.append(".yak/environment.yml missing or invalid")
+        else:
+            if not env.mounts:
+                issues.append("no mounts defined in environment.yml")
+            for mount in env.mounts:
+                artifact = self._artifacts.get_artifact(mount.pack)
+                if artifact is None:
+                    issues.append(
+                        f"mount '{mount.pack}' → '{mount.target}': pack not found"
+                    )
+                else:
+                    struct = artifact / "structure"
+                    if not struct.is_dir():
+                        issues.append(f"mount '{mount.pack}': no structure/ directory")
+
+        # Workspace checks
+        ws_path = root / "structure"
+        if not ws_path.is_dir():
+            issues.append("workspace/structure/ missing")
+        elif env and env.mounts:
+            for mount in env.mounts:
+                target = (
+                    ws_path / mount.target.strip("/")
+                    if mount.target != "/"
+                    else ws_path
+                )
+                if not target.exists():
+                    issues.append(
+                        f"workspace mount '{mount.pack}' → '{mount.target}': symlink missing"
+                    )
+                elif target.is_symlink() and not target.resolve().exists():
+                    issues.append(
+                        f"workspace mount '{mount.pack}': broken symlink at {target}"
+                    )
 
         return issues
 
