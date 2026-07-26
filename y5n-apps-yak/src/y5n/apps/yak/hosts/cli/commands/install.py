@@ -21,7 +21,7 @@ def run(args, mgr) -> None:
 
 def _artifact_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
-    ok = install_artifact(args.artifact, target_root=target)
+    ok = ui.task("Artifacts", lambda: install_artifact(args.artifact, target_root=target))
     if ok:
         _write_artifact_state(args.artifact, target)
         ui.ok(f"Installed {args.artifact} at {target}")
