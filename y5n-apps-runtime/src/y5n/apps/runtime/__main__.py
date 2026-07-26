@@ -4,10 +4,13 @@ Usage:
 
     python -m y5n.apps.runtime                    # port from config
     python -m y5n.apps.runtime 9101               # override port
+
+The runtime resolves its workspace from the project context (yak.yml → env.yml).
 """
 
 import asyncio
 import sys
+from pathlib import Path
 
 from websockets.asyncio.server import serve
 from y5n.runtime.engine.settings import RuntimeSettings, Settings
@@ -17,6 +20,41 @@ from y5n.runtime.transport.server import WebSocketServerTransport
 from .conf import load_config
 
 _host = None
+
+
+def _resolve_workspace() -> str:
+    """Walk up from CWD looking for a repo root → yak.yml → env → workspace.path."""
+    import yaml
+
+    cwd = Path.cwd()
+
+    for parent in [cwd, *cwd.parents]:
+        if not (parent / "runtime").is_dir():
+            continue
+
+        yml = parent / "yak.yml"
+        if not yml.exists():
+            yml = parent / "apps" / "y5n-apps-yak" / "yak.yml"
+        if not yml.exists():
+            continue
+
+        try:
+            cfg = yaml.safe_load(yml.read_text())
+            bs = cfg.get("bootstrap", {})
+            env = bs.get("environment", "dev")
+            art_rel = bs.get("artifacts", "apps/y5n-apps-yak/artifacts")
+            art_dir = (parent / art_rel).resolve()
+            env_file = art_dir / f"{env}.yml"
+            if env_file.exists():
+                env_cfg = yaml.safe_load(env_file.read_text())
+                ws = env_cfg.get("workspace", {})
+                path = ws.get("path", "")
+                if path:
+                    return path
+        except Exception:
+            pass
+
+    return "structure"
 
 
 async def handler(websocket):
@@ -32,10 +70,12 @@ def main(args: list[str] | None = None) -> None:
     host = cfg.listen.host
     port = int(args[0]) if args else cfg.listen.port
 
+    workspace_path = _resolve_workspace()
+
     settings = Settings(
         runtime=RuntimeSettings(
             known=cfg.known,
-            workspace_path=cfg.workspace_path,
+            workspace_path=workspace_path,
         )
     )
 

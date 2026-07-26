@@ -116,7 +116,6 @@ class MaterializeWorkspaceTask:
         )
 
         (self._root / "yakoon-runtime.yml").write_text(
-            f"workspace_path: {ws_path}\n"
             "listen:\n  host: 127.0.0.1\n  port: 9100\n"
         )
 
