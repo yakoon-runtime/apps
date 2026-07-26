@@ -26,16 +26,34 @@ yak sync                    # Sync environment + materialize workspace
 yak shell                   # Open the interactive shell
 ```
 
-### Share with others
+### Share via GitHub Releases
 
 ```bash
-yak build hello             # Build the pack
-yak publish y5n-packs-hello # Publish to ~/.yak/artifacts/
+# Publisher:
+yak build hello
+yak publish y5n-packs-hello --repository github:yakoon-runtime/packs
+# → creates a draft release (reviewable on GitHub)
+yak publish y5n-packs-hello --repository github:yakoon-runtime/packs --release
+# → publishes immediately (for CI/CD)
 
-# Another developer:
+# Consumer:
 mkdir other && cd other
 yak init
-yak install y5n-packs-hello # Finds it from ~/.yak/artifacts/
+yak install y5n-packs-hello --repository github:yakoon-runtime/packs
+yak sync
+yak shell
+```
+
+### Share via local filesystem
+
+```bash
+yak build hello
+yak publish y5n-packs-hello             # → ~/.yak/artifacts/
+
+# Another developer on the same machine:
+mkdir other && cd other
+yak init
+yak install y5n-packs-hello             # finds it from ~/.yak/artifacts/
 yak sync
 yak shell
 ```

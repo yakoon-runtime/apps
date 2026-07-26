@@ -90,6 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--upgrade", "-u", action="store_true", help="Upgrade to latest version"
     )
+    p.add_argument("--repository", help="Package repository (e.g. github:owner/repo)")
     p.set_defaults(func=_install.run)
 
     p = sub.add_parser("status", help="Show installation status")
@@ -127,8 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
 
-    p = sub.add_parser("publish", help="Publish an artifact to ~/.yak/artifacts/")
+    p = sub.add_parser("publish", help="Publish an artifact")
     p.add_argument("name", help="Artifact name (e.g. y5n-packs-hello)")
+    p.add_argument("--repository", help="Target repository (e.g. github:owner/repo)")
+    p.add_argument(
+        "--release", action="store_true", help="Publish immediately (not draft)"
+    )
     p.set_defaults(func=_publish.run)
 
     p = sub.add_parser(
