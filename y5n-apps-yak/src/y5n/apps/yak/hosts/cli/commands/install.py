@@ -6,16 +6,50 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
-from y5n.apps.yak.resolver.install import install_artifact
+from y5n.apps.yak.resolver.install import install_artifact, _collect_roots
+from y5n.apps.yak.resolver.artifact import _parse_manifest
 
 
 def run(args, mgr) -> None:
+    name = getattr(args, "artifact", None)
+    if not name:
+        _list_environments()
+        return
+
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
 
-    if _is_distribution(args.artifact, mgr):
+    if _is_distribution(name, mgr):
         _distribution_install(args, mgr, ui)
     else:
         _artifact_install(args, mgr, ui)
+
+
+def _list_environments() -> None:
+    from pathlib import Path
+    seen: set[str] = set()
+    names: list[str] = []
+
+    # Bundled environments
+    bundle_dir = Path(__file__).resolve().parents[7] / "artifacts"
+    if bundle_dir.is_dir():
+        for f in sorted(bundle_dir.iterdir()):
+            if f.suffix == ".yml":
+                meta = _parse_manifest(f)
+                if meta.get("kind") == "meta":
+                    name = meta.get("name", "")
+                    desc = meta.get("description", "")
+                    if name and name not in seen:
+                        seen.add(name)
+                        names.append((name, desc))
+
+    if names:
+        print("  Available environments\n")
+        for name, desc in names:
+            desc_str = f"  — {desc}" if desc else ""
+            print(f"    {name}{desc_str}")
+    else:
+        print("  No environments available.")
+        print("  Run 'yak build <source>' to build artifacts first.")
 
 
 def _artifact_install(args, mgr, ui) -> None:

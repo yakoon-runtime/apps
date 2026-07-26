@@ -13,7 +13,6 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import bootstrap as _bootstrap
     from y5n.apps.yak.hosts.cli.commands import build as _build
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
-    from y5n.apps.yak.hosts.cli.commands import artifacts as _artifacts
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
     from y5n.apps.yak.hosts.cli.commands import install as _install
     from y5n.apps.yak.hosts.cli.commands import logs as _logs
@@ -42,11 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
             "    resolve  <name>        Show resolved artifacts\n"
             "\n"
             "  Management\n"
-            "    install <name>          Install a distribution\n"
+            "    install       [name]    Install an environment or list available\n"
             "    update                 Update an installation\n"
             "    status                 Show installation status\n"
             "    doctor                 Check installation health\n"
-            "    artifacts      [name]   List artifacts or show details\n"
             "    logs         [name]    Show logs for the current context\n"
             "\n"
             "  Services\n"
@@ -65,8 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", nargs="?", default=".", help="Target directory (default: .)")
     p.set_defaults(func=_init.run)
 
-    p = sub.add_parser("install", help="Install an artifact or distribution")
-    p.add_argument("artifact")
+    p = sub.add_parser("install", help="Install an environment (list available when run without args)")
+    p.add_argument("artifact", nargs="?", help="Environment name (dev, desktop, crm, ...)")
     p.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_install.run)
@@ -81,10 +79,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("doctor", help="Check installation health")
     p.set_defaults(func=_doctor.run)
-
-    p = sub.add_parser("artifacts", help="List artifacts or show details")
-    p.add_argument("name", nargs="?", help="Artifact name (shows details)")
-    p.set_defaults(func=_artifacts.run)
 
     p = sub.add_parser("logs", help="Show installation logs")
     p.add_argument("target", nargs="?", help="Log name (e.g. 'runtime', 'shell')")
