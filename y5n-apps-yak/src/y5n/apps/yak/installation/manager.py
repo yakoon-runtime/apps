@@ -93,45 +93,61 @@ class InstallationManager:
         issues: list[str] = []
         inst = self.load(path)
         if inst is None:
-            return ["Installation not found"]
+            return ["✘ Installation   not found"]
 
         root = inst.root
+
+        # Context
         if not root.exists():
-            issues.append("Installation root missing")
+            issues.append("✘ Context       root missing")
+        else:
+            issues.append(f"✓ Context       {root}")
 
         if not (root / ".yak" / "state.toml").exists():
-            issues.append("state.toml missing")
+            issues.append("✘ State         .yak/state.toml missing")
+        else:
+            issues.append("✓ State         .yak/state.toml")
 
-        # Pack checks (from state.toml)
-        for pack in inst.packs:
-            if not self._artifacts.has_artifact(pack):
-                issues.append(f"Pack '{pack}' not found")
-
-        # Environment checks (optional — env may not exist in older installs)
+        # Environment
         from y5n.apps.yak.environment.io import load as load_env
 
         env = load_env(root)
         if env is None:
-            issues.append(".yak/environment.yml missing or invalid")
+            issues.append("✘ Environment   .yak/environment.yml missing")
         else:
-            if not env.mounts:
-                issues.append("no mounts defined in environment.yml")
+            issues.append(
+                f"✓ Environment   {len(env.mounts)} mount(s), {len(env.dependencies)} dep(s)"
+            )
+
+        # Packs from state
+        if inst.packs:
+            for pack in inst.packs:
+                if self._artifacts.has_artifact(pack):
+                    issues.append(f"✓ Pack          {pack}")
+                else:
+                    issues.append(f"✘ Pack          {pack} not found")
+
+        # Mount resolution
+        if env:
             for mount in env.mounts:
                 artifact = self._artifacts.get_artifact(mount.pack)
                 if artifact is None:
                     issues.append(
-                        f"mount '{mount.pack}' → '{mount.target}': pack not found"
+                        f"✘ Mount         {mount.pack} → {mount.target}: not found"
                     )
                 else:
                     struct = artifact / "structure"
-                    if not struct.is_dir():
-                        issues.append(f"mount '{mount.pack}': no structure/ directory")
+                    if struct.is_dir():
+                        issues.append(f"✓ Mount         {mount.pack} → {mount.target}")
+                    else:
+                        issues.append(f"✘ Mount         {mount.pack}: no structure/")
 
-        # Workspace checks
+        # Workspace
         ws_path = root / "structure"
         if not ws_path.is_dir():
-            issues.append("workspace/structure/ missing")
+            issues.append("✘ Workspace     structure/ missing")
         elif env and env.mounts:
+            issues.append(f"✓ Workspace     {ws_path}")
             for mount in env.mounts:
                 target = (
                     ws_path / mount.target.strip("/")
@@ -140,12 +156,38 @@ class InstallationManager:
                 )
                 if not target.exists():
                     issues.append(
-                        f"workspace mount '{mount.pack}' → '{mount.target}': symlink missing"
+                        f"✘ Symlink       {mount.pack} → {mount.target}: missing"
                     )
                 elif target.is_symlink() and not target.resolve().exists():
-                    issues.append(
-                        f"workspace mount '{mount.pack}': broken symlink at {target}"
-                    )
+                    issues.append(f"✘ Symlink       {mount.pack}: broken at {target}")
+
+        # Fingerprint check (compare installed vs current artifact)
+        from y5n.apps.yak.resolver.install import _fingerprint_matches
+
+        for pack in inst.packs:
+            artifact = self._artifacts.get_artifact(pack)
+            if artifact is not None:
+                if _fingerprint_matches(artifact, root):
+                    issues.append(f"✓ Fingerprint   {pack} current")
+                else:
+                    issues.append(f"✘ Fingerprint   {pack} outdated — run 'yak sync'")
+
+        # Runtime
+        pid_file = root / ".yak" / "runtime.pid"
+        if pid_file.exists():
+            pid = pid_file.read_text().strip()
+            try:
+                import os
+                import signal
+
+                os.kill(int(pid), 0)
+                issues.append(f"✓ Runtime       running (pid {pid})")
+            except (OSError, ValueError):
+                issues.append(
+                    "✘ Runtime       pid file stale — run 'yak runtime restart'"
+                )
+        else:
+            issues.append("— Runtime       not running")
 
         return issues
 
