@@ -55,18 +55,39 @@ def _discover_packs(context_root: Path) -> list[PackName]:
 
     packs: list[PackName] = []
 
-    # Known artifact roots
-    for root in [context_root]:
-        if not root.is_dir():
-            continue
-        for child in sorted(root.iterdir()):
-            if child.is_dir() and (child / "pack.toml").exists():
-                packs.append(PackName(child.name))
+    if not context_root.is_dir():
+        return packs
+
+    # Context root itself may be a pack (e.g. sales/.yak/ + sales/pack.toml)
+    if (context_root / "pack.toml").exists():
+        from y5n.apps.yak.generator.command import _find_pack_root
+
+        found = _find_pack_root(context_root)
+        if found:
+            _, name = found
+            packs.append(PackName(name))
+
+    # Child directories with pack.toml
+    for child in sorted(context_root.iterdir()):
+        if child.is_dir() and (child / "pack.toml").exists():
+            packs.append(PackName(child.name))
 
     return packs
 
 
 def _install_artifact(path: Path, args, ui, inst, mgr) -> None:
+    from y5n.apps.yak.resolver.artifact import DirectorySource
+    from y5n.apps.yak.resolver.install import _collect_roots
+
+    # Check if artifact exists before attempting install
+    found = any(
+        DirectorySource(root).resolve(inst.distribution)
+        for root in _collect_roots(None)
+    )
+    if not found:
+        print("  No artifacts found — run 'yak build <source>' first")
+        return
+
     ok = ui.task(
         "Artifacts",
         lambda: install_artifact(
@@ -83,7 +104,7 @@ def _install_artifact(path: Path, args, ui, inst, mgr) -> None:
         _materialize_dev_workspace(inst.distribution, path, mgr)
         print("  Artifacts installed")
     else:
-        print("  Update failed — run 'yak build' first to refresh artifacts")
+        print("  Pip install failed")
 
 
 def _install_distribution(path: Path, mgr, ui, inst) -> None:
