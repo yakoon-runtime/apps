@@ -24,20 +24,23 @@ def bootstrap(root: Path | None = None) -> bool:
 
     venv_python = root / ".venv" / "bin" / "python"
 
-    # Read project config (yak.yml) to determine bootstrap environment
+    # Determine bootstrap environment from yak.yml
+    # Priority: 1) repo root yak.yml  2) bundled yak.yml in y5n-apps-yak
     env_name = "dev"
     artifacts_dir = root / "apps" / "y5n-apps-yak" / "artifacts"
-    proj = root / "yak.yml"
-    if proj.exists():
-        try:
-            cfg = yaml.safe_load(proj.read_text())
-            bs = cfg.get("bootstrap", {})
-            env_name = bs.get("environment", env_name)
-            art_rel = bs.get("artifacts", "")
-            if art_rel:
-                artifacts_dir = (root / art_rel).resolve()
-        except Exception:
-            pass
+
+    for candidate in [root / "yak.yml", root / "apps" / "y5n-apps-yak" / "yak.yml"]:
+        if candidate.exists():
+            try:
+                cfg = yaml.safe_load(candidate.read_text())
+                bs = cfg.get("bootstrap", {})
+                env_name = bs.get("environment", env_name)
+                art_rel = bs.get("artifacts", "")
+                if art_rel:
+                    artifacts_dir = (root / art_rel).resolve()
+            except Exception:
+                pass
+            break
 
     env_file = artifacts_dir / f"{env_name}.yml"
     if not env_file.exists():
@@ -74,8 +77,6 @@ def bootstrap(root: Path | None = None) -> bool:
 def _find_repo_root() -> Path | None:
     cwd = Path.cwd()
     for parent in [cwd] + list(cwd.parents):
-        if (parent / "yak.yml").exists():
-            return parent
         if (parent / "runtime").is_dir() and (parent / "pyproject.toml").exists():
             return parent
     return None

@@ -1,0 +1,4 @@
+# Yakoon project configuration
+bootstrap:
+  environment: dev
+  artifacts: apps/y5n-apps-yak/artifacts
