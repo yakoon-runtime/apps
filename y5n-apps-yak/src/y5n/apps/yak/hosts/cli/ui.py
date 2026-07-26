@@ -18,6 +18,11 @@ class TerminalUI:
     def step(self, label: str) -> StepContext:
         return StepContext(self, label)
 
+    def task(self, label: str, func, *args, **kwargs):
+        """Run a callable with a spinner. Returns its result."""
+        with self.step(label):
+            return func(*args, **kwargs)
+
     def detail(self, text: str) -> None:
         if self._verbose:
             indent = "    " * self._indent
