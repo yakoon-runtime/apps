@@ -8,20 +8,20 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 def _make_env(root, pack_name="test-pack"):
     repos = root / "repos"
-    dists = root / "dists"
+    artifacts = root / "artifacts"
     (repos / pack_name / "structure").mkdir(parents=True)
     (repos / pack_name / "pack.toml").write_text(
         f'name = "{pack_name}"\nversion = "0.1"\n'
     )
-    dists.mkdir()
-    (dists / "myapp.toml").write_text(
-        f'name = "myapp"\nversion = "0.1"\n\n[[mount]]\npack = "{pack_name}"\ntarget = "/"\n'
+    artifacts.mkdir()
+    (artifacts / "myapp.yml").write_text(
+        f'name: myapp\nversion: "0.1"\nkind: meta\nworkspace:\n  mounts:\n    - pack: {pack_name}\n      target: /\n'
     )
-    return repos, dists
+    return repos, artifacts
 
 
-def _mgr(repos, dists):
-    repo = FileRepository(repos, builtin_dists=dists)
+def _mgr(repos, artifacts):
+    repo = FileRepository(repos, builtin_artifacts=artifacts)
     artifacts = DirectoryArtifactStore(repos)
     return InstallationManager(repo, artifacts)
 
@@ -29,8 +29,8 @@ def _mgr(repos, dists):
 def test_install_creates_installation():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repos, dists = _make_env(root)
-        mgr = _mgr(repos, dists)
+        repos, artifacts = _make_env(root)
+        mgr = _mgr(repos, artifacts)
 
         inst_path = root / "inst" / "myapp"
         inst = mgr.install("myapp", inst_path)
@@ -46,7 +46,7 @@ def test_install_creates_installation():
 def test_install_unknown_target_raises():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repo = FileRepository(root / "repos", builtin_dists=root / "dists")
+        repo = FileRepository(root / "repos", builtin_artifacts=root / "artifacts")
         artifacts = DirectoryArtifactStore(root / "repos")
         mgr = InstallationManager(repo, artifacts)
 
@@ -59,8 +59,8 @@ def test_install_unknown_target_raises():
 def test_load_from_path():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repos, dists = _make_env(root)
-        mgr = _mgr(repos, dists)
+        repos, artifacts = _make_env(root)
+        mgr = _mgr(repos, artifacts)
 
         inst_path = root / "inst" / "myapp"
         mgr.install("myapp", inst_path)
@@ -74,7 +74,7 @@ def test_load_from_path():
 def test_load_returns_none_for_invalid_path():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repo = FileRepository(root / "repos", builtin_dists=root / "dists")
+        repo = FileRepository(root / "repos", builtin_artifacts=root / "artifacts")
         artifacts = DirectoryArtifactStore(root / "repos")
         mgr = InstallationManager(repo, artifacts)
 
@@ -84,8 +84,8 @@ def test_load_returns_none_for_invalid_path():
 def test_update_rematerializes():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repos, dists = _make_env(root)
-        mgr = _mgr(repos, dists)
+        repos, artifacts = _make_env(root)
+        mgr = _mgr(repos, artifacts)
 
         inst_path = root / "inst" / "myapp"
         mgr.install("myapp", inst_path)
@@ -98,8 +98,8 @@ def test_update_rematerializes():
 def test_doctor_reports_missing_pack():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repos, dists = _make_env(root)
-        mgr = _mgr(repos, dists)
+        repos, artifacts = _make_env(root)
+        mgr = _mgr(repos, artifacts)
 
         inst_path = root / "inst" / "myapp"
         mgr.install("myapp", inst_path)
@@ -115,8 +115,8 @@ def test_doctor_reports_missing_pack():
 def test_doctor_reports_missing_installation():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repos, dists = _make_env(root)
-        mgr = _mgr(repos, dists)
+        repos, artifacts = _make_env(root)
+        mgr = _mgr(repos, artifacts)
         issues = mgr.doctor(root / "nonexistent")
         assert "not found" in issues[0]
 
@@ -124,8 +124,8 @@ def test_doctor_reports_missing_installation():
 def test_update_unknown_raises():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repos, dists = _make_env(root)
-        mgr = _mgr(repos, dists)
+        repos, artifacts = _make_env(root)
+        mgr = _mgr(repos, artifacts)
         import pytest
 
         with pytest.raises(ValueError, match="not found"):

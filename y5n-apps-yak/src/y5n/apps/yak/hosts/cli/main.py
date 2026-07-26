@@ -18,12 +18,12 @@ Usage:
     yak <command> [options]
 
   Getting started
-    init          [dir]     Create a Yak context in current or given directory
+    init          [dir]     Create a Yak context
 
   Development
-    build                   Build artifacts from the current project
+    build         [src]     Build artifacts into the current context
     bootstrap               Prepare this repository for development
-    workspace create <name> Create a new workspace
+    workspace create <n>    Create a new workspace
     resolve  <name>         Show resolved artifacts
 
   Management
@@ -31,11 +31,11 @@ Usage:
     update                  Update an installation
     status                  Show installation status
     doctor                  Check installation health
-    logs      [name]        Show logs for the current context
+    logs          [name]    Show logs for the current context
 
   Services
-    runtime <act>           Manage the runtime service
-    web     <act>           Manage the web service
+    runtime <act> [dir]     Manage the runtime service
+    web     <act> [dir]     Manage the web service
     shell                   Open the Yakoon shell
 
 Use 'yak <command> --help' for detailed options.

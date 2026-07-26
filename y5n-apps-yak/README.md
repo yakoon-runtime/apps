@@ -9,6 +9,7 @@ language‑neutral runtime platform.
 mkdir demo && cd demo
 yak init                    # Create a Yak context
 yak install dev             # Install the developer distribution
+yak runtime start           # Start the runtime
 yak shell                   # Open the interactive shell
 ```
 
