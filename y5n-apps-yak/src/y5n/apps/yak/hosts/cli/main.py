@@ -25,10 +25,11 @@ Usage:
   Getting started
     init                   Create a Yak context
 
+  Typical workflow
     create → build → install → sync → shell
 
   Development
-    create pack            Scaffold a new pack
+    create pack            Create a new pack
     create command         Add a command to the current pack
 
   Build
@@ -36,8 +37,8 @@ Usage:
     bootstrap              Prepare this repository for development
 
   Install
-    install                Install an environment
-    sync                   Sync environment with workspace
+    install                Install a pack
+    sync                   Sync workspace with environment
 
   Run
     shell                  Open the Yakoon shell

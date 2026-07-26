@@ -37,10 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
             "  Getting started\n"
             "    init                   Create a Yak context\n"
             "\n"
+            "  Typical workflow\n"
             "    create → build → install → sync → shell\n"
             "\n"
             "  Development\n"
-            "    create pack            Scaffold a new pack\n"
+            "    create pack            Create a new pack\n"
             "    create command         Add a command to the current pack\n"
             "\n"
             "  Build\n"
@@ -48,8 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
             "    bootstrap              Prepare this repository for development\n"
             "\n"
             "  Install\n"
-            "    install                Install an environment\n"
-            "    sync                   Sync environment with workspace\n"
+            "    install                Install a pack\n"
+            "    sync                   Sync workspace with environment\n"
             "\n"
             "  Run\n"
             "    shell                  Open the Yakoon shell\n"
@@ -76,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_init.run)
 
     p = sub.add_parser(
-        "install", help="Install an environment (list available when run without args)"
+        "install", help="Install a pack (list available when run without args)"
     )
     p.add_argument(
         "artifact", nargs="?", help="Environment name (dev, desktop, crm, ...)"
@@ -90,7 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "sync",
-        help="Sync environment: install wheels + sync env + materialize workspace",
+        help="Sync workspace with environment",
     )
     p.add_argument(
         "--force",
@@ -137,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("create", help="Scaffold new Yakoon projects")
     create_sub = p.add_subparsers(dest="create_action", required=True)
-    p_pack = create_sub.add_parser("pack", help="Create a new pack (container)")
+    p_pack = create_sub.add_parser("pack", help="Create a new pack")
     p_pack.add_argument("name", help="Pack name (e.g. hello)")
     p_pack.add_argument("--target", help="Target directory (default: CWD)")
     p_pack.add_argument(
