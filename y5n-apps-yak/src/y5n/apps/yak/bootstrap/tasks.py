@@ -50,7 +50,8 @@ class InstallProjectsTask:
         if not self._force:
             check = subprocess.run(
                 [str(self._python), "-m", "pip", "list", "--format=columns"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             installed = check.stdout if check.returncode == 0 else ""
             all_installed = all(p.name in installed for p in projects)
@@ -87,7 +88,9 @@ class InstallProjectsTask:
 class MaterializeWorkspaceTask:
     """Materialize the development workspace from an environment file."""
 
-    def __init__(self, root: Path, env_file: Path | None = None, force: bool = False) -> None:
+    def __init__(
+        self, root: Path, env_file: Path | None = None, force: bool = False
+    ) -> None:
         self._root = root
         self._env_file = env_file
         self._force = force
@@ -96,8 +99,10 @@ class MaterializeWorkspaceTask:
         if self._env_file is None or not self._env_file.exists():
             return False
 
-        import yaml
         import shutil
+
+        import yaml
+
         data = yaml.safe_load(self._env_file.read_text())
         ws = data.get("workspace", {})
         ws_path = ws.get("path", "workspace")
@@ -129,7 +134,9 @@ class MaterializeWorkspaceTask:
             workspace,
             "dev",
             [PackName(p) for p in packs_raw],
-            mounts=[Mount(pack=PackName(m["pack"]), target=m["target"]) for m in mounts_raw],
+            mounts=[
+                Mount(pack=PackName(m["pack"]), target=m["target"]) for m in mounts_raw
+            ],
         )
 
         return True

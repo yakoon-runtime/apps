@@ -30,6 +30,8 @@ def find_context_root() -> Path | None:
 
 def find_installation_path() -> Path | None:
     return find_context_root()
+
+
 def default_artifact_dir() -> Path | None:
     """Return the default artifact directory for the current context."""
     ctx = find_context_root()
@@ -38,4 +40,3 @@ def default_artifact_dir() -> Path | None:
     d = ctx / ".yak" / "artifacts"
     d.mkdir(parents=True, exist_ok=True)
     return d
-

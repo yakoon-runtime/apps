@@ -23,37 +23,25 @@ _host = None
 
 
 def _resolve_workspace() -> str:
-    """Walk up from CWD looking for a repo root → yak.yml → env → workspace.path."""
+    """Read workspace path from .yak/environment.yml, walking up from CWD."""
     import yaml
 
     cwd = Path.cwd()
 
     for parent in [cwd, *cwd.parents]:
-        if not (parent / "runtime").is_dir():
-            continue
+        env_yml = parent / ".yak" / "environment.yml"
+        if env_yml.exists():
+            try:
+                data = yaml.safe_load(env_yml.read_text())
+                ws = data.get("workspace", {})
+                path = (
+                    ws.get("path", "structure") if isinstance(ws, dict) else "structure"
+                )
+                return str(parent / path)
+            except Exception:
+                pass
 
-        yml = parent / "yak.yml"
-        if not yml.exists():
-            yml = parent / "apps" / "y5n-apps-yak" / "yak.yml"
-        if not yml.exists():
-            continue
-
-        try:
-            cfg = yaml.safe_load(yml.read_text())
-            bs = cfg.get("bootstrap", {})
-            env = bs.get("environment", "dev")
-            art_rel = bs.get("artifacts", "apps/y5n-apps-yak/artifacts")
-            art_dir = (parent / art_rel).resolve()
-            env_file = art_dir / f"{env}.yml"
-            if env_file.exists():
-                env_cfg = yaml.safe_load(env_file.read_text())
-                ws = env_cfg.get("workspace", {})
-                path = ws.get("path", "")
-                if path:
-                    return path
-        except Exception:
-            pass
-
+    # Fallback: monorepo boot path
     return "structure"
 
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-
 from y5n.apps.yak.bootstrap.tasks import (
     CreateVenvTask,
     InstallProjectsTask,
@@ -15,7 +14,9 @@ from y5n.apps.yak.bootstrap.tasks import (
 )
 
 
-def bootstrap(root: Path | None = None, force: bool = False, check: bool = False) -> bool:
+def bootstrap(
+    root: Path | None = None, force: bool = False, check: bool = False
+) -> bool:
     if root is None:
         root = _find_repo_root()
     if root is None:
@@ -46,6 +47,12 @@ def bootstrap(root: Path | None = None, force: bool = False, check: bool = False
         print(f"Error: bootstrap environment '{env_name}' not found at {env_file}")
         return False
 
+    # Write .yak/environment.yml from template
+    from y5n.apps.yak.environment.io import from_template, save
+
+    env = from_template(env_file)
+    save(env, root)
+
     tasks = [
         ("Virtual environment", CreateVenvTask(root, force=force)),
         ("Install projects", InstallProjectsTask(root, venv_python, force=force)),
@@ -74,7 +81,11 @@ def bootstrap(root: Path | None = None, force: bool = False, check: bool = False
     else:
         # --check mode: just verify what's present
         print("  Repo        ✓" if root else "  Repo        ✘")
-        print("  .venv       ✓" if (root / ".venv" / "bin" / "python").exists() else "  .venv       ✘")
+        print(
+            "  .venv       ✓"
+            if (root / ".venv" / "bin" / "python").exists()
+            else "  .venv       ✘"
+        )
         print("  Workspace   ✓" if (root / "workspace").exists() else "  Workspace   ✘")
 
     return True

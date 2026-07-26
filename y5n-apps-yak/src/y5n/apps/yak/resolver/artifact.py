@@ -86,6 +86,7 @@ class DirectorySource:
 def _parse_manifest(path: Path) -> dict:
     try:
         import yaml
+
         text = path.read_text()
         data = yaml.safe_load(text)
         if isinstance(data, dict):

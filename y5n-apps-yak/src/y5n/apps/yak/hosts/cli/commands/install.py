@@ -61,9 +61,52 @@ def _artifact_install(args, mgr, ui) -> None:
     if ok:
         _write_artifact_state(args.artifact, target)
         _materialize_dev_workspace(args.artifact, target, mgr)
+        _write_environment(target, args.artifact)
         ui.ok(f"Installed {args.artifact} at {target}")
     else:
         ui.fail(f"Unknown target: {args.artifact}")
+
+
+def _write_environment(root: Path, env_name: str) -> None:
+    """Write .yak/environment.yml from context or template."""
+    from y5n.apps.yak.distribution.models import Mount, PackName
+    from y5n.apps.yak.environment.io import load, save
+    from y5n.apps.yak.environment.models import Environment
+    from y5n.apps.yak.resolver.artifact import DirectorySource
+    from y5n.apps.yak.resolver.install import _collect_roots
+
+    existing = load(root)
+    if existing:
+        return
+
+    # Try to read workspace config from installed meta-artifact
+    for artifact_root in _collect_roots(None):
+        source = DirectorySource(artifact_root)
+        art = source.resolve(env_name)
+        if art and art.kind == "meta" and art.path:
+            import yaml
+
+            manifest = art.path / "artifact.yml"
+            if manifest.exists():
+                data = yaml.safe_load(manifest.read_text())
+                ws = data.get("workspace", {})
+                if ws:
+                    deps = [PackName(p) for p in data.get("dependencies", [])]
+                    mounts = [
+                        Mount(pack=PackName(m["pack"]), target=m["target"])
+                        for m in ws.get("mounts", [])
+                    ]
+                    env = Environment(
+                        name=env_name,
+                        dependencies=deps,
+                        mounts=mounts,
+                        workspace_path=ws.get("path", "structure"),
+                    )
+                    save(env, root)
+                    return
+
+    # Fallback: minimal env
+    save(Environment(name=env_name), root)
 
 
 def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
@@ -101,7 +144,7 @@ def _write_artifact_state(name: str, root: Path) -> None:
 name = "{name}"
 distribution = "{name}"
 status = "created"
-packs = ["root", "boot", "system"]
+packs = []
 created = "{now}"
 updated = "{now}"
 """
@@ -147,6 +190,7 @@ def _create_new(args, mgr, ui, name, root):
         with ui.step("Environment"):
             from datetime import UTC, datetime
 
+            from y5n.apps.yak.environment.io import save
             from y5n.apps.yak.installation.models import (
                 Installation,
                 InstallationStatus,
@@ -167,6 +211,12 @@ def _create_new(args, mgr, ui, name, root):
             inst.status = InstallationStatus.CREATED
             inst.updated = datetime.now(UTC)
             mgr._write_state(inst)
+
+            # Write .yak/environment.yml from packs + mounts
+            from y5n.apps.yak.environment.models import Environment
+
+            env = Environment(name=name, dependencies=list(packs), mounts=list(mounts))
+            save(env, root)
 
         ui.ok(f"{name} ready at {root}")
 

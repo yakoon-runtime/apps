@@ -39,7 +39,11 @@ class FileRepository:
         return False
 
     def _find_manifest(self, root: Path, name: PackName) -> Path | None:
-        for candidate in (root / name, root / f"y5n-packs-{name}", root / f"y5n-runtime-{name}"):
+        for candidate in (
+            root / name,
+            root / f"y5n-packs-{name}",
+            root / f"y5n-runtime-{name}",
+        ):
             manifest = candidate / "pack.toml"
             if manifest.exists():
                 return manifest
@@ -79,8 +83,12 @@ class FileRepository:
             parent = self._resolve_extends(extends)
             if parent is None:
                 return None
-            mounts = [self._mount(m) for m in data.get("workspace", {}).get("mounts", [])]
-            parent_mounts = [m for m in parent.mounts if m.pack not in {mo.pack for mo in mounts}]
+            mounts = [
+                self._mount(m) for m in data.get("workspace", {}).get("mounts", [])
+            ]
+            parent_mounts = [
+                m for m in parent.mounts if m.pack not in {mo.pack for mo in mounts}
+            ]
             all_mounts = parent_mounts + mounts
 
             tools = [self._tool(t) for t in data.get("tools", [])]
@@ -111,7 +119,9 @@ class FileRepository:
         if isinstance(raw, str):
             ot = ToolReference(name=raw)
             return ot
-        return ToolReference(name=raw.get("name", ""), optional=raw.get("optional", False))
+        return ToolReference(
+            name=raw.get("name", ""), optional=raw.get("optional", False)
+        )
 
     @staticmethod
     def _mount(raw: dict) -> Mount:

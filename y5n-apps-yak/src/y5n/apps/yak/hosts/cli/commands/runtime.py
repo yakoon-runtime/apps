@@ -36,6 +36,7 @@ def _start(path: Path, env_file: str | None = None) -> None:
 
     if env_file:
         import shutil
+
         target_config = path / "yakoon-runtime.yml"
         shutil.copy2(env_file, target_config)
 
@@ -77,9 +78,7 @@ def _start(path: Path, env_file: str | None = None) -> None:
     wrapper.chmod(0o755)
 
     with open(log_file, "a") as lf:
-        proc = subprocess.Popen(
-            [str(wrapper)], cwd=path, stdout=lf, stderr=lf
-        )
+        proc = subprocess.Popen([str(wrapper)], cwd=path, stdout=lf, stderr=lf)
     pid_file.write_text(str(proc.pid))
     print(f"Runtime started (pid {proc.pid})")
     print(f"Logs     : {log_file}")

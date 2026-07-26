@@ -26,7 +26,10 @@ def _collect_roots(artifact_root: Path | None) -> list[Path]:
         roots.append(local)
 
     # Shared read-only fallback for pre-built meta packages
-    for d in [Path.home() / ".yak" / "cache" / "artifacts", Path.home() / ".yak" / "artifacts"]:
+    for d in [
+        Path.home() / ".yak" / "cache" / "artifacts",
+        Path.home() / ".yak" / "artifacts",
+    ]:
         if d.is_dir() and d not in roots:
             roots.append(d)
 
@@ -80,7 +83,8 @@ def install_artifact(
         if not (venv / "bin" / "python").exists():
             subprocess.run(
                 [sys.executable, "-m", "venv", str(venv)],
-                check=True, capture_output=True,
+                check=True,
+                capture_output=True,
             )
         python = venv / "bin" / "python"
     else:

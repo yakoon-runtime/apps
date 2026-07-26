@@ -36,6 +36,7 @@ class PythonBuildProvider:
 
         wheel = wheels[0]
         import hashlib
+
         wheel_bytes = wheel.read_bytes()
         fingerprint = hashlib.sha256(wheel_bytes).hexdigest()
 
