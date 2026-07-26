@@ -9,6 +9,7 @@ from typing import Protocol
 class ArtifactInfo:
     name: str
     version: str
+    kind: str
     host: str
     builder: str
     entry: str | None
@@ -17,12 +18,14 @@ class ArtifactInfo:
         self,
         name: str,
         version: str,
+        kind: str = "package",
         host: str = "python",
         builder: str = "python",
         entry: str | None = None,
     ) -> None:
         self.name = name
         self.version = version
+        self.kind = kind
         self.host = host
         self.builder = builder
         self.entry = entry
@@ -35,6 +38,7 @@ class ArtifactInfo:
         lines = [
             f"name: {self.name}",
             f"version: {self.version}",
+            f"kind: {self.kind}",
             f"host: {self.host}",
             f"builder: {self.builder}",
         ]

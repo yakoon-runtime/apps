@@ -9,47 +9,48 @@ from typing import Protocol
 class Artifact:
     """A resolved artifact — metadata + bytes on disk."""
 
-    name: str
-    version: str
-    host: str
-    builder: str
-    path: Path  # the .artifact directory
-
     def __init__(
         self,
         name: str,
         version: str,
-        host: str,
-        builder: str,
-        path: Path,
+        kind: str = "package",
+        host: str = "python",
+        builder: str = "python",
+        dependencies: list[str] | None = None,
+        path: Path | None = None,
     ) -> None:
         self.name = name
         self.version = version
-        self.host = host
+        self.kind = kind          # package, meta, bundle, template, …
+        self.host = host          # python, dotnet, ruby, … (only for kind=package)
         self.builder = builder
+        self.dependencies = dependencies or []
         self.path = path
 
     @property
     def package_file(self) -> Path | None:
+        if self.path is None:
+            return None
         for f in self.path.iterdir():
             if f.suffix == ".whl":
                 return f
         return None
 
     @property
-    def manifest(self) -> Path:
+    def manifest(self) -> Path | None:
+        if self.path is None:
+            return None
         return self.path / "artifact.yml"
+
+    def is_meta(self) -> bool:
+        return self.kind == "meta"
 
 
 class ArtifactSource(Protocol):
-    """A source that stores and serves artifacts."""
-
     def resolve(self, name: str) -> Artifact | None: ...
 
 
 class DirectorySource:
-    """Resolves artifacts from a local directory of .artifact folders."""
-
     def __init__(self, root: Path) -> None:
         self._root = root
 
@@ -63,25 +64,46 @@ class DirectorySource:
             if not manifest.exists():
                 continue
             meta = _parse_manifest(manifest)
-            if meta is not None and meta["name"] == name:
+            if meta is not None and meta.get("name") == name:
                 return Artifact(
                     name=meta["name"],
                     version=meta.get("version", "0"),
+                    kind=meta.get("kind", "package"),
                     host=meta.get("host", "python"),
                     builder=meta.get("builder", "python"),
+                    dependencies=meta.get("dependencies", []),
                     path=entry,
                 )
         return None
 
 
-def _parse_manifest(path: Path) -> dict[str, str] | None:
+def _parse_manifest(path: Path) -> dict:
     try:
+        import yaml
         text = path.read_text()
-        meta: dict[str, str] = {}
-        for line in text.strip().splitlines():
+        data = yaml.safe_load(text)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    try:
+        meta: dict = {}
+        deps: list[str] = []
+        in_deps = False
+        for line in path.read_text().splitlines():
+            if in_deps:
+                line = line.strip()
+                if line.startswith("- "):
+                    deps.append(line[2:])
+                continue
             if ":" in line:
                 key, _, val = line.partition(":")
-                meta[key.strip()] = val.strip()
+                if key.strip() == "dependencies":
+                    in_deps = True
+                else:
+                    meta[key.strip()] = val.strip()
+        if deps:
+            meta["dependencies"] = deps
         return meta
     except Exception:
-        return None
+        return {}
