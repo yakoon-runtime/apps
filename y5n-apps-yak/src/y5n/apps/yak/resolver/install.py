@@ -33,12 +33,20 @@ def _collect_roots(artifact_root: Path | None) -> list[Path]:
     return roots
 
 
+_FORCE = False
+
+
 def install_artifact(
     name: str,
     target_root: Path | None = None,
     artifact_root: Path | None = None,
+    force: bool = False,
     _seen: set[str] | None = None,
 ) -> bool:
+    global _FORCE
+    if force:
+        _FORCE = True
+
     if _seen is None:
         _seen = set()
 
@@ -63,7 +71,7 @@ def install_artifact(
     if artifact.is_meta():
         all_ok = True
         for dep in artifact.dependencies:
-            if not install_artifact(dep, target_root, artifact_root, _seen):
+            if not install_artifact(dep, target_root, artifact_root, _FORCE, _seen):
                 all_ok = False
         return all_ok
 
@@ -78,8 +86,46 @@ def install_artifact(
     else:
         python = Path(sys.executable)
 
+    # Check fingerprint — skip if unchanged
+    if not _FORCE and _fingerprint_matches(artifact, target_root):
+        return True
+
     _INSTALLED.append(name)
-    return _install_one(artifact, python)
+    ok = _install_one(artifact, python)
+    if ok and target_root is not None:
+        _write_fingerprint(artifact, target_root)
+    return ok
+
+
+def _fingerprints_dir(target_root: Path | None) -> Path | None:
+    if target_root is None:
+        return None
+    d = target_root / ".yak" / "cache" / "fingerprints"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _fingerprint_path(artifact, target_root: Path | None) -> Path | None:
+    d = _fingerprints_dir(target_root)
+    if d is None:
+        return None
+    return d / artifact.name
+
+
+def _fingerprint_matches(artifact, target_root: Path | None) -> bool:
+    fp = _fingerprint_path(artifact, target_root)
+    if fp is None or not fp.exists():
+        return False
+    if not artifact.fingerprint:
+        return False
+    return fp.read_text().strip() == artifact.fingerprint
+
+
+def _write_fingerprint(artifact, target_root: Path | None) -> None:
+    fp = _fingerprint_path(artifact, target_root)
+    if fp is None or not artifact.fingerprint:
+        return
+    fp.write_text(artifact.fingerprint)
 
 
 def _install_one(artifact, python: Path) -> bool:
@@ -87,10 +133,12 @@ def _install_one(artifact, python: Path) -> bool:
     if wheel is None or not wheel.exists():
         return False
 
-    result = subprocess.run(
-        [str(python), "-m", "pip", "install", str(wheel)],
-        capture_output=True, text=True,
-    )
+    cmd = [str(python), "-m", "pip", "install"]
+    if _FORCE:
+        cmd.append("--force-reinstall")
+    cmd.append(str(wheel))
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode == 0
 
 

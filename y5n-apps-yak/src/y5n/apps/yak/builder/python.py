@@ -35,15 +35,19 @@ class PythonBuildProvider:
             return None
 
         wheel = wheels[0]
+        import hashlib
+        wheel_bytes = wheel.read_bytes()
+        fingerprint = hashlib.sha256(wheel_bytes).hexdigest()
+
         info = self._parse_wheel(wheel)
         if info is None:
             return None
+        info.fingerprint = fingerprint
 
         artifact_dir = output_dir / info.filename
         artifact_dir.mkdir(parents=True, exist_ok=True)
 
-        import shutil
-        shutil.copy2(str(wheel), str(artifact_dir / wheel.name))
+        (artifact_dir / wheel.name).write_bytes(wheel_bytes)
         wheel.unlink()
         (artifact_dir / "artifact.yml").write_text(info.to_yml())
         return info

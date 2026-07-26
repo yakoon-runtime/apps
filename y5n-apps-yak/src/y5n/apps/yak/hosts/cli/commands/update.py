@@ -24,7 +24,9 @@ def run(args, mgr) -> None:
 
     # Artifact installation — re-install from cache
     if not mgr._repo.resolve_distribution(inst.distribution):
-        ok = ui.task("Artifacts", lambda: install_artifact(inst.distribution, target_root=path))
+        ok = ui.task("Artifacts", lambda: install_artifact(
+            inst.distribution, target_root=path, force=getattr(args, "force", False),
+        ))
         if ok:
             print(f"  {path.name} updated")
         else:

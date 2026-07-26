@@ -73,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_status.run)
 
     p = sub.add_parser("update", help="Update an installation")
+    p.add_argument("--force", "-f", action="store_true", help="Force reinstall even if version is unchanged")
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_update.run)
 

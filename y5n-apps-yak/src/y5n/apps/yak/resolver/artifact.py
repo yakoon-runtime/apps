@@ -17,14 +17,16 @@ class Artifact:
         host: str = "python",
         builder: str = "python",
         dependencies: list[str] | None = None,
+        fingerprint: str = "",
         path: Path | None = None,
     ) -> None:
         self.name = name
         self.version = version
-        self.kind = kind          # package, meta, bundle, template, …
-        self.host = host          # python, dotnet, ruby, … (only for kind=package)
+        self.kind = kind
+        self.host = host
         self.builder = builder
         self.dependencies = dependencies or []
+        self.fingerprint = fingerprint
         self.path = path
 
     @property
@@ -65,6 +67,9 @@ class DirectorySource:
                 continue
             meta = _parse_manifest(manifest)
             if meta is not None and meta.get("name") == name:
+                fp = meta.get("fingerprint", "")
+                if fp.startswith("sha256:"):
+                    fp = fp[7:]
                 return Artifact(
                     name=meta["name"],
                     version=meta.get("version", "0"),
@@ -72,6 +77,7 @@ class DirectorySource:
                     host=meta.get("host", "python"),
                     builder=meta.get("builder", "python"),
                     dependencies=meta.get("dependencies", []),
+                    fingerprint=fp,
                     path=entry,
                 )
         return None

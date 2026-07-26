@@ -13,6 +13,7 @@ class ArtifactInfo:
     host: str
     builder: str
     entry: str | None
+    fingerprint: str
 
     def __init__(
         self,
@@ -22,6 +23,7 @@ class ArtifactInfo:
         host: str = "python",
         builder: str = "python",
         entry: str | None = None,
+        fingerprint: str = "",
     ) -> None:
         self.name = name
         self.version = version
@@ -29,6 +31,7 @@ class ArtifactInfo:
         self.host = host
         self.builder = builder
         self.entry = entry
+        self.fingerprint = fingerprint
 
     @property
     def filename(self) -> str:
@@ -44,6 +47,8 @@ class ArtifactInfo:
         ]
         if self.entry:
             lines.append(f"entry: {self.entry}")
+        if self.fingerprint:
+            lines.append(f"fingerprint: sha256:{self.fingerprint}")
         return "\n".join(lines) + "\n"
 
 
