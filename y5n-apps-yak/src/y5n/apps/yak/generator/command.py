@@ -34,12 +34,18 @@ async def main():
 
 
 DEFAULT_YDF = """\
-{% if user %}{{ user }}{% else %}use 'su' to login{% endif %}
+{% if user %}
+Hello {{ user }}!
+{% else %}
+Welcome to Yakoon. Use 'su' to log in.
+{% endif %}
 """
 
 
 MAN_YDF = """\
-{{ title }} — short description
+Yakoon command reference.
+
+Edit the resources/man.ydf file to document this command.
 """
 
 

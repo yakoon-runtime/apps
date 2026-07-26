@@ -10,7 +10,12 @@ def run(args, mgr) -> None:
     target = Path(args.target) if args.target else None
     force = getattr(args, "force", False)
 
-    root = create_pack(name, target=target, force=force)
+    try:
+        root = create_pack(name, target=target, force=force)
+    except FileExistsError as e:
+        print(f"\nError: {e}")
+        return
+
     print(f"\nPack '{name}' created at {root}\n")
 
     for p in sorted(root.rglob("*")):

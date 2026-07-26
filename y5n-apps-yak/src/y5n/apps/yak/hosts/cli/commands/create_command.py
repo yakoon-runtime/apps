@@ -20,7 +20,12 @@ def run(args, mgr) -> None:
     pack_name = getattr(args, "pack", None)
     force = getattr(args, "force", False)
 
-    structure_dir = create_command(name, pack_name=pack_name, force=force)
+    try:
+        structure_dir = create_command(name, pack_name=pack_name, force=force)
+    except (FileExistsError, RuntimeError) as e:
+        print(f"\nError: {e}")
+        return
+
     pack_root = structure_dir.parent.parent
     pname = _pack_name_from_root(pack_root)
     src_file = pack_root / "src" / "y5n" / "packs" / pname / f"{name}.py"
