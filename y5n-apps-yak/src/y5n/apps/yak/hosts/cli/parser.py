@@ -60,9 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target")
     p.set_defaults(func=_resolve.run)
 
-    p = sub.add_parser("install", help="")
-    p.add_argument("target")
-    p.add_argument("--path", "-p", help="Installation path (default: ./<target>)")
+    p = sub.add_parser("install", help="Install an artifact or distribution")
+    p.add_argument("artifact", help="Artifact or distribution name (e.g. dev, runtime, crm)")
+    p.add_argument(
+        "target", nargs="?", default=".",
+        help="Target directory (default: current directory)",
+    )
     p.add_argument(
         "--verbose", "-v", action="store_true", help="Show detailed progress"
     )

@@ -1,54 +1,55 @@
+"""yak install <artifact> [<target>] — install an artifact or distribution."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
-from y5n.apps.yak.resolver.install import install_artifact, resolve_external_dependencies
+from y5n.apps.yak.resolver.install import install_artifact
 
 
 def run(args, mgr) -> None:
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
 
-    # Try artifact install first (single package from local cache)
-    if not _is_distribution(args.target, mgr):
-        target_path = Path(args.path).resolve() if args.path else None
-        ok = install_artifact(args.target, target_root=target_path)
-        if ok:
-            if target_path:
-                resolve_external_dependencies(target_path)
-            path_info = f" at {target_path}" if target_path else ""
-            ui.ok(f"Installed {args.target}{path_info}")
-        else:
-            ui.fail(f"Unknown target: {args.target}")
-        return
-
-    # Distribution install (existing behaviour)
-    if args.path:
-        target_path = Path(args.path).resolve()
+    if _is_distribution(args.artifact, mgr):
+        _distribution_install(args, mgr, ui)
     else:
-        target_path = find_installation_path()
-        if target_path is None:
-            target_path = Path(args.target).resolve()
+        _artifact_install(args, ui)
 
-    existing = target_path if (target_path / ".yak" / "state.toml").exists() else None
+
+def _artifact_install(args, ui) -> None:
+    target = Path(args.target).resolve()
+    ok = install_artifact(args.artifact, target_root=target)
+    if ok:
+        ui.ok(f"Installed {args.artifact} at {target}")
+    else:
+        ui.fail(f"Unknown target: {args.artifact}")
+
+
+def _distribution_install(args, mgr, ui) -> None:
+    artifact = args.artifact
+    target = Path(args.target).resolve()
+    root = target / artifact
+
+    existing = root if (root / ".yak" / "state.toml").exists() else None
 
     if existing is not None:
         _add_to_existing(args, mgr, ui, existing)
     else:
-        _create_new(args, mgr, ui, target_path)
+        _create_new(args, mgr, ui, artifact, root)
 
 
 def _is_distribution(name: str, mgr) -> bool:
     return mgr._repo.resolve_distribution(name) is not None
 
 
-def _create_new(args, mgr, ui, root):
-    ui.title(f'Installing "{args.target}"')
+def _create_new(args, mgr, ui, name, root):
+    ui.title(f'Installing "{name}"')
 
     try:
         with ui.step("Distribution"):
-            dist = mgr._repo.resolve_distribution(args.target)
+            dist = mgr._repo.resolve_distribution(name)
 
         with ui.step("Packs"):
             packs, mounts, tools = mgr._resolver.resolve(dist)
@@ -65,11 +66,14 @@ def _create_new(args, mgr, ui, root):
         with ui.step("Environment"):
             from datetime import UTC, datetime
 
-            from y5n.apps.yak.installation.models import Installation, InstallationStatus
+            from y5n.apps.yak.installation.models import (
+                Installation,
+                InstallationStatus,
+            )
 
             now = datetime.now(UTC)
             inst = Installation(
-                name=args.target,
+                name=name,
                 distribution=dist.name,
                 root=root,
                 packs=packs,
@@ -83,34 +87,34 @@ def _create_new(args, mgr, ui, root):
             inst.updated = datetime.now(UTC)
             mgr._write_state(inst)
 
-        ui.ok(f"{args.target} ready at {root}")
+        ui.ok(f"{name} ready at {root}")
 
     except Exception as e:
         ui.fail(f"Installation failed: {e}")
 
 
 def _add_to_existing(args, mgr, ui, existing):
-    ui.title(f'Adding "{args.target}" to {existing.name}')
+    name = args.artifact
+    ui.title(f'Adding "{name}" to {existing.name}')
 
     try:
         with ui.step("Resolving"):
             inst = mgr.load(existing)
             if inst is None:
                 raise RuntimeError("Installation not found")
-            dist = mgr._repo.resolve_distribution(args.target)
+            dist = mgr._repo.resolve_distribution(name)
             if dist is None:
-                raise ValueError(f"Unknown pack: {args.target}")
-            ui.detail(args.target)
+                raise ValueError(f"Unknown pack: {name}")
+            ui.detail(name)
 
         with ui.step("Packs"):
             new_packs, new_mounts, new_tools = mgr._resolver.resolve(dist)
             if not new_packs:
-                # Leaf pack — add it directly
                 from y5n.apps.yak.distribution.models import Mount, PackName
 
-                new_packs = [PackName(args.target)]
+                new_packs = [PackName(name)]
                 new_mounts = [
-                    Mount(pack=PackName(args.target), target=f"/{args.target}")
+                    Mount(pack=PackName(name), target=f"/{name}")
                 ]
             added = [p for p in new_packs if p not in inst.packs]
             if not added:
@@ -138,7 +142,7 @@ def _add_to_existing(args, mgr, ui, existing):
             inst.updated = datetime.now(UTC)
             mgr._write_state(inst)
 
-        ui.ok(f"Added {args.target}")
+        ui.ok(f"Added {name}")
 
     except Exception as e:
         ui.fail(f"Failed: {e}")
