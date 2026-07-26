@@ -11,8 +11,12 @@ from y5n.apps.yak.builder.python import PythonBuildProvider
 def _find_project_root() -> Path | None:
     cwd = Path.cwd()
     for parent in [cwd] + list(cwd.parents):
-        if (parent / "pyproject.toml").exists():
-            return parent
+        pyproject = parent / "pyproject.toml"
+        if pyproject.exists():
+            # Ensure this is a buildable project (has [build-system])
+            text = pyproject.read_text()
+            if "[build-system]" in text and "build-backend" in text:
+                return parent
     return None
 
 
@@ -30,7 +34,7 @@ def build(output_dir: Path | None = None) -> bool:
 
     project_dir = _find_project_root()
     if project_dir is None:
-        print("Error: no project found (no pyproject.toml)")
+        print("Error: no buildable project found. Run 'yak build' from a project directory.")
         return False
 
     builder = _select_builder(project_dir)
