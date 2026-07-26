@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
     from y5n.apps.yak.hosts.cli.commands import install as _install
     from y5n.apps.yak.hosts.cli.commands import logs as _logs
+    from y5n.apps.yak.hosts.cli.commands import publish as _publish
     from y5n.apps.yak.hosts.cli.commands import resolve as _resolve
     from y5n.apps.yak.hosts.cli.commands import runtime as _runtime
     from y5n.apps.yak.hosts.cli.commands import shell as _shell
@@ -59,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
             "\n"
             "  Tools\n"
             "    status                 Show installation status\n"
+            "    publish                Publish an artifact\n"
             "    resolve                Show resolved artifacts\n"
             "    logs                   Show logs\n"
             "    doctor                 Check installation health\n"
@@ -120,6 +122,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
+
+    p = sub.add_parser("publish", help="Publish an artifact to ~/.yak/artifacts/")
+    p.add_argument("name", help="Artifact name (e.g. y5n-packs-hello)")
+    p.set_defaults(func=_publish.run)
 
     p = sub.add_parser(
         "build", help="Build artifacts from source into the current context"

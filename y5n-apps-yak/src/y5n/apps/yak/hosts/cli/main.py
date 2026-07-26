@@ -44,6 +44,7 @@ Usage:
 
   Tools
     status                 Show installation status
+    publish                Publish an artifact
     resolve                Show resolved artifacts
     logs                   Show logs
     doctor                 Check installation health
