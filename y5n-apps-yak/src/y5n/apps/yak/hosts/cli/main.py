@@ -17,18 +17,22 @@ def _show_banner() -> None:
 Usage:
     yak <command> [options]
 
-Commands:
-    install <name>  [dir]   Install an artifact or distribution
+  Installation
+    install <name>  [dir]   Install a distribution
     update          [dir]   Update an installation
     status          [dir]   Show installation status
     doctor          [dir]   Check installation health
+
+  Services
     runtime <act>   [dir]   Manage the runtime service
     web     <act>   [dir]   Manage the web service
-    shell           [dir]   Open an interactive Yakoon shell
+    shell           [dir]   Open the Yakoon shell
+
+  Development
     bootstrap               Prepare this repository for development
-    build                   Build an artifact from the current project
+    build           [dir]   Build artifacts from the current project
     workspace create <name> Create a new workspace
-    resolve  <name>         Show resolved pack list
+    resolve  <name>         Show resolved artifacts
 
 Use 'yak <command> --help' for detailed options.
 """)

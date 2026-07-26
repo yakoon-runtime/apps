@@ -29,22 +29,23 @@ def build_parser() -> argparse.ArgumentParser:
         usage="yak <command> [options]",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "  Installation (target is always a directory)\n"
-            "    install  <name> [dir]   Install an artifact or distribution\n"
+            "\n"
+            "  Installation\n"
+            "    install  <name> [dir]   Install a distribution\n"
             "    update        [dir]     Update an installation\n"
             "    status        [dir]     Show installation status\n"
             "    doctor        [dir]     Check installation health\n"
             "\n"
             "  Services\n"
-            "    runtime <action> [dir]  Manage the runtime service\n"
-            "    web     <action> [dir]  Manage the web service\n"
+            "    runtime <act> [dir]     Manage the runtime service\n"
+            "    web     <act> [dir]     Manage the web service\n"
             "    shell         [dir]     Open the Yakoon shell\n"
             "\n"
-            "  Developer\n"
+            "  Development\n"
             "    bootstrap               Prepare this repository for development\n"
-            "    build                   Build an artifact from the current project\n"
+            "    build          [dir]    Build artifacts from the current project\n"
             "    workspace create <name> Create a new workspace\n"
-            "    resolve <name>          Show resolved pack list\n"
+            "    resolve  <name>         Show resolved artifacts\n"
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
