@@ -27,7 +27,7 @@ def run(args, mgr) -> None:
         if ok:
             ui.ok(f"{path.name} updated")
         else:
-            ui.fail(f"Update failed")
+            ui.fail("Update failed — run 'yak build' first to refresh artifacts")
         return
 
     # Distribution installation — resolve and materialize
