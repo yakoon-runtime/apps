@@ -14,20 +14,12 @@ def run(args, mgr) -> None:
         print("cd into an installation directory or pass one.")
         return
 
-    state = path / ".yak" / "state.toml"
-    marker = path / ".yak" / "installation.yml"
-
-    if state.exists():
-        inst = mgr.load(path)
-        if inst is not None:
-            _show(inst)
-            return
-
-    if marker.exists():
-        _show_marker(marker)
+    inst = mgr.load(path)
+    if inst is None:
+        print("Not a valid Yak installation.")
         return
 
-    print("Not a valid Yak installation.")
+    _show(inst)
 
 
 def _resolve_path(args) -> Path | None:
@@ -42,13 +34,3 @@ def _show(inst) -> None:
     print(f"    distribution: {inst.distribution}")
     print(f"    status: {inst.status.value}")
     print(f"    packs: {', '.join(inst.packs)}")
-
-
-def _show_marker(path: Path) -> None:
-    import yaml
-
-    data = yaml.safe_load(path.read_text())
-    print(f"  {data.get('distribution', '?')}")
-    print(f"    created: {data.get('created', '?')}")
-    deps = data.get("artifacts", [])
-    print(f"    artifacts: {', '.join(deps)}")

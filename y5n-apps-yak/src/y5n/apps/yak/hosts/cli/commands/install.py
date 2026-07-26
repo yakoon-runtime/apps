@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
-from y5n.apps.yak.resolver.install import install_artifact, write_installation_marker
+from y5n.apps.yak.resolver.install import install_artifact
 
 
 def run(args, mgr) -> None:
@@ -15,17 +16,34 @@ def run(args, mgr) -> None:
     if _is_distribution(args.artifact, mgr):
         _distribution_install(args, mgr, ui)
     else:
-        _artifact_install(args, ui)
+        _artifact_install(args, mgr, ui)
 
 
-def _artifact_install(args, ui) -> None:
+def _artifact_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
     ok = install_artifact(args.artifact, target_root=target)
     if ok:
-        write_installation_marker(args.artifact, target)
+        _write_artifact_state(args.artifact, target)
         ui.ok(f"Installed {args.artifact} at {target}")
     else:
         ui.fail(f"Unknown target: {args.artifact}")
+
+
+def _write_artifact_state(name: str, root: Path) -> None:
+    """Write .yak/state.toml to mark this as a Yakoon installation."""
+    yak_dir = root / ".yak"
+    yak_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(UTC).isoformat()
+    state = f"""\
+[installation]
+name = "{name}"
+distribution = "{name}"
+status = "created"
+packs = []
+created = "{now}"
+updated = "{now}"
+"""
+    (yak_dir / "state.toml").write_text(state)
 
 
 def _distribution_install(args, mgr, ui) -> None:

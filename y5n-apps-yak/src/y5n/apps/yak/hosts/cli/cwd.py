@@ -23,6 +23,4 @@ def find_installation_path() -> Path | None:
     for parent in [cwd, *cwd.parents]:
         if (parent / ".yak" / "state.toml").exists():
             return parent
-        if (parent / ".yak" / "installation.yml").exists():
-            return parent
     return None
