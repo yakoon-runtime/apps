@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
 from y5n.apps.yak.resolver.install import install_artifact
 
@@ -21,7 +20,9 @@ def run(args, mgr) -> None:
 
 def _artifact_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
-    ok = ui.task("Artifacts", lambda: install_artifact(args.artifact, target_root=target))
+    ok = ui.task(
+        "Artifacts", lambda: install_artifact(args.artifact, target_root=target)
+    )
     if ok:
         _write_artifact_state(args.artifact, target)
         _materialize_dev_workspace(args.artifact, target, mgr)
@@ -33,8 +34,8 @@ def _artifact_install(args, mgr, ui) -> None:
 def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
     """Materialize workspace from the artifact's manifest, if configured."""
     from y5n.apps.yak.distribution.models import Mount, PackName
-    from y5n.apps.yak.resolver.install import _collect_roots
     from y5n.apps.yak.resolver.artifact import DirectorySource
+    from y5n.apps.yak.resolver.install import _collect_roots
 
     for artifact_root in _collect_roots(None):
         source = DirectorySource(artifact_root)
@@ -43,6 +44,7 @@ def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
             manifest = art.path / "artifact.yml"
             if manifest.exists():
                 import yaml
+
                 data = yaml.safe_load(manifest.read_text())
                 ws = data.get("workspace")
                 if ws:
@@ -158,9 +160,7 @@ def _add_to_existing(args, mgr, ui, existing):
                 from y5n.apps.yak.distribution.models import Mount, PackName
 
                 new_packs = [PackName(name)]
-                new_mounts = [
-                    Mount(pack=PackName(name), target=f"/{name}")
-                ]
+                new_mounts = [Mount(pack=PackName(name), target=f"/{name}")]
             added = [p for p in new_packs if p not in inst.packs]
             if not added:
                 ui.ok("Already installed")

@@ -22,12 +22,14 @@ def run(args, mgr) -> None:
         ui.fail("Installation not found")
         return
 
-    # Artifact installation — re-install from cache
+    # Artifact installation — re-install from cache + rematerialize workspace
     if not mgr._repo.resolve_distribution(inst.distribution):
         ok = ui.task("Artifacts", lambda: install_artifact(
             inst.distribution, target_root=path, force=getattr(args, "force", False),
         ))
         if ok:
+            from y5n.apps.yak.hosts.cli.commands.install import _materialize_dev_workspace
+            _materialize_dev_workspace(inst.distribution, path, mgr)
             print(f"  {path.name} updated")
         else:
             print("  Update failed — run 'yak build' first to refresh artifacts")
