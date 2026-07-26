@@ -7,7 +7,7 @@ from pathlib import Path
 from y5n.apps.yak.distribution.models import PackName
 from y5n.apps.yak.environment.io import load, save
 from y5n.apps.yak.environment.sync import add_mount
-from y5n.apps.yak.hosts.cli.cwd import find_installation_path
+from y5n.apps.yak.hosts.cli.cwd import find_context_root, find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
 from y5n.apps.yak.resolver.install import install_artifact
 
@@ -34,19 +34,24 @@ def run(args, mgr) -> None:
         _install_distribution(path, mgr, ui, inst)
 
     # 2. Sync environment: add mounts for all discovered packs
-    env = load(path)
+    # Environment lives at context root, not nested installation
+    ctx = find_context_root() or path
+    env = load(ctx)
+    if env is None:
+        print("  Warning: no .yak/environment.yml found at context root")
+        env = load(path)
     if env is None:
         print("  Warning: no .yak/environment.yml found")
     else:
-        discovered = _discover_packs(path)
+        discovered = _discover_packs(ctx)
         for pack in discovered:
             add_mount(env, pack)
-        save(env, path)
+        save(env, ctx)
         print(f"  Environment synced ({len(env.mounts)} mounts)")
 
-    # 3. Materialize workspace from environment
+    # 3. Materialize workspace from environment (at context root)
     if env:
-        _materialize_from_env(path, mgr, env)
+        _materialize_from_env(ctx, mgr, env)
 
 
 def _discover_packs(context_root: Path) -> list[PackName]:
