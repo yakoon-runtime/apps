@@ -50,9 +50,10 @@ def _start(path: Path) -> None:
         except Exception:
             pass
 
+    venv_python = path / ".venv" / "bin" / "python"
     wrapper = path / ".venv" / "bin" / "yakoon-web"
     wrapper.write_text(
-        "#!/usr/bin/env python3\n"
+        f"#!{venv_python}\n"
         "import ctypes, ctypes.util\n"
         "libc = ctypes.CDLL(ctypes.util.find_library('c'))\n"
         "libc.prctl(15, b'yakoon-web', 0, 0, 0)\n"
