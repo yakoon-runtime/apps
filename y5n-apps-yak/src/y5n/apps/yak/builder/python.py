@@ -42,10 +42,8 @@ class PythonBuildProvider:
         artifact_dir = output_dir / info.filename
         artifact_dir.mkdir(exist_ok=True)
 
-        (artifact_dir / "package.whl").write_bytes(wheel.read_bytes())
+        wheel.rename(artifact_dir / wheel.name)
         (artifact_dir / "artifact.yml").write_text(info.to_yml())
-
-        wheel.unlink()
         return info
 
     def _parse_wheel(self, wheel: Path) -> ArtifactInfo | None:

@@ -4,12 +4,22 @@ from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
+from y5n.apps.yak.resolver.install import install_artifact
 
 
 def run(args, mgr) -> None:
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
 
-    # Determine target path
+    # Try artifact install first (single package from local cache)
+    if not _is_distribution(args.target, mgr):
+        ok = install_artifact(args.target)
+        if ok:
+            ui.ok(f"Installed {args.target}")
+        else:
+            ui.fail(f"Unknown target: {args.target}")
+        return
+
+    # Distribution install (existing behaviour)
     if args.path:
         target_path = Path(args.path).resolve()
     else:
@@ -23,6 +33,10 @@ def run(args, mgr) -> None:
         _add_to_existing(args, mgr, ui, existing)
     else:
         _create_new(args, mgr, ui, target_path)
+
+
+def _is_distribution(name: str, mgr) -> bool:
+    return mgr._repo.resolve_distribution(name) is not None
 
 
 def _create_new(args, mgr, ui, root):
