@@ -39,6 +39,19 @@ def _collect_roots(artifact_root: Path | None) -> list[Path]:
 _FORCE = False
 
 
+def find_artifact(name: str, artifact_root: Path | None = None) -> Artifact | None:
+    """Resolve an artifact by name from all configured roots."""
+    from y5n.apps.yak.resolver.artifact import Artifact, DirectorySource
+
+    roots = _collect_roots(artifact_root)
+    for root in roots:
+        source = DirectorySource(root)
+        candidate = source.resolve(name)
+        if candidate is not None:
+            return candidate
+    return None
+
+
 def install_artifact(
     name: str,
     target_root: Path | None = None,

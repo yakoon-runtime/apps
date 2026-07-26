@@ -7,7 +7,11 @@ from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
 from y5n.apps.yak.resolver.artifact import _parse_manifest
-from y5n.apps.yak.resolver.install import _collect_roots, install_artifact
+from y5n.apps.yak.resolver.install import (
+    _collect_roots,
+    find_artifact,
+    install_artifact,
+)
 
 
 def run(args, mgr) -> None:
@@ -55,16 +59,40 @@ def _list_environments() -> None:
 
 def _artifact_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
+    upgrade = getattr(args, "upgrade", False)
+    force = getattr(args, "force", False) or upgrade
+
+    # Resolve artifact to show version info
+    artifact = find_artifact(args.artifact)
+    if artifact is None:
+        ui.fail(f"Unknown target: {args.artifact}")
+        return
+
+    version = artifact.version or "?"
+    label = f"{args.artifact} {version}"
+
+    # Check if already installed
+    from y5n.apps.yak.resolver.install import _fingerprint_matches
+
+    if not force and _fingerprint_matches(artifact, target):
+        ui.ok(f"{label} already up to date")
+        return
+
     ok = ui.task(
-        "Artifacts", lambda: install_artifact(args.artifact, target_root=target)
+        "Artifacts",
+        lambda: install_artifact(
+            args.artifact,
+            target_root=target,
+            force=force,
+        ),
     )
     if ok:
         _write_artifact_state(args.artifact, target)
         _materialize_dev_workspace(args.artifact, target, mgr)
         _write_environment(target, args.artifact)
-        ui.ok(f"Installed {args.artifact} at {target}")
+        ui.ok(f"{label} installed at {target}")
     else:
-        ui.fail(f"Unknown target: {args.artifact}")
+        ui.fail(f"{label} install failed")
 
 
 def _write_environment(root: Path, env_name: str) -> None:
