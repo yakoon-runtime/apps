@@ -1,0 +1,23 @@
+name: dev
+version: "1"
+kind: meta
+dependencies:
+  - y5n-sdk-python
+  - y5n-runtime-api
+  - y5n-runtime-store
+  - y5n-runtime-transport
+  - y5n-runtime-llm
+  - y5n-runtime-engine
+  - y5n-runtime-boot
+  - y5n-apps-runtime
+  - y5n-apps-shell
+  - y5n-apps-web
+workspace:
+  packs: [root, boot, system]
+  mounts:
+    - pack: root
+      target: /
+    - pack: boot
+      target: /boot
+    - pack: system
+      target: /usr/bin
