@@ -115,10 +115,6 @@ class MaterializeWorkspaceTask:
             mounts=[Mount(pack=PackName(m["pack"]), target=m["target"]) for m in mounts_raw],
         )
 
-        (self._root / "yakoon-runtime.yml").write_text(
-            "listen:\n  host: 127.0.0.1\n  port: 9100\n"
-        )
-
         return True
 
 
