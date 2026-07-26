@@ -18,7 +18,7 @@ Usage:
     yak <command> [options]
 
   Getting started
-    init          [dir]     Create a Yak context
+    init           [dir]    Create a Yak context
 
   Development
     create pack    <name>   Scaffold a new pack (container)
@@ -36,8 +36,8 @@ Usage:
     logs           [name]   Show logs for the current context
 
   Services
-    runtime <act>  [dir]    Manage the runtime service
-    web     <act>  [dir]    Manage the web service
+    runtime <act>           Manage the runtime service
+    web     <act>           Manage the web service
     shell                   Open the Yakoon shell
 
 Use 'yak <command> --help' for detailed options.
@@ -45,6 +45,8 @@ Use 'yak <command> --help' for detailed options.
 
 
 def _build_manager() -> InstallationManager:
+    from y5n.apps.yak.hosts.cli.cwd import find_context_root
+
     repo_root = Path(__file__).resolve().parents[8]
     packs = repo_root / "packs"
     runtime = repo_root / "runtime"
@@ -52,8 +54,15 @@ def _build_manager() -> InstallationManager:
 
     apps = repo_root / "apps"
     sdk = repo_root / "sdk" / "y5n-sdk-python"
+
+    # ArtifactStore-Roots: Monorepo + Context (für standalone-Packs)
+    store_roots = [packs, runtime, apps, sdk]
+    ctx = find_context_root()
+    if ctx is not None:
+        store_roots.append(ctx)
+
     repo = FileRepository(packs, runtime, sdk, builtin_artifacts=artifact_dir)
-    artifacts = DirectoryArtifactStore(packs, runtime, apps, sdk)
+    artifacts = DirectoryArtifactStore(*store_roots)
     mgr = InstallationManager(repo, artifacts)
     mgr._sdk_path = sdk
     mgr._installer._apps_root = apps

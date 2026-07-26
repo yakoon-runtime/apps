@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from y5n.apps.yak.distribution.models import PackName
 from y5n.apps.yak.environment.io import load, save
 from y5n.apps.yak.environment.sync import add_mount
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
@@ -32,12 +33,13 @@ def run(args, mgr) -> None:
     else:
         _install_distribution(path, mgr, ui, inst)
 
-    # 2. Sync environment: add mounts for all installed packs
+    # 2. Sync environment: add mounts for all discovered packs
     env = load(path)
     if env is None:
         print("  Warning: no .yak/environment.yml found")
     else:
-        for pack in inst.packs:
+        discovered = _discover_packs(path)
+        for pack in discovered:
             add_mount(env, pack)
         save(env, path)
         print(f"  Environment synced ({len(env.mounts)} mounts)")
@@ -45,6 +47,23 @@ def run(args, mgr) -> None:
     # 3. Materialize workspace from environment
     if env:
         _materialize_from_env(path, mgr, env)
+
+
+def _discover_packs(context_root: Path) -> list[PackName]:
+    """Scan context root for directories with pack.toml."""
+    from y5n.apps.yak.distribution.models import PackName
+
+    packs: list[PackName] = []
+
+    # Known artifact roots
+    for root in [context_root]:
+        if not root.is_dir():
+            continue
+        for child in sorted(root.iterdir()):
+            if child.is_dir() and (child / "pack.toml").exists():
+                packs.append(PackName(child.name))
+
+    return packs
 
 
 def _install_artifact(path: Path, args, ui, inst, mgr) -> None:
@@ -108,29 +127,11 @@ def _install_distribution(path: Path, mgr, ui, inst) -> None:
 
 def _materialize_from_env(path: Path, mgr, env) -> None:
     """Materialize workspace from environment.yml mounts."""
+    from y5n.apps.yak.distribution.models import Mount, PackName
+    from y5n.apps.yak.workspace.materializer import Materializer
 
-    ws_path = path / env.workspace_path
-    ws_path.mkdir(parents=True, exist_ok=True)
-    structure = ws_path / "structure"
-    structure.mkdir(exist_ok=True)
-
-    for mount in env.mounts:
-        artifact = mgr._artifacts.get_artifact(mount.pack)
-        if artifact is None:
-            continue
-        pack_struct = artifact / "structure"
-        if not pack_struct.is_dir():
-            continue
-
-        if mount.target == "/":
-            for child in sorted(pack_struct.iterdir()):
-                dst = structure / child.name
-                if not dst.exists():
-                    dst.symlink_to(child.resolve(), target_is_directory=child.is_dir())
-        else:
-            target = structure / mount.target.strip("/")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if not target.exists():
-                target.symlink_to(pack_struct, target_is_directory=True)
-
-    print(f"  Workspace materialized at {structure}")
+    materializer = Materializer(mgr._artifacts)
+    mounts = [Mount(pack=PackName(m.pack), target=m.target) for m in env.mounts]
+    packs = [PackName(m.pack) for m in env.mounts]
+    ws = materializer.materialize(path, env.name, packs, mounts=mounts)
+    print(f"  Workspace materialized at {ws.path / 'structure'}")
