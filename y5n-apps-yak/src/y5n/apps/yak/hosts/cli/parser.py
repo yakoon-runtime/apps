@@ -128,8 +128,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
 
-    p = sub.add_parser("publish", help="Publish an artifact to ~/.yak/artifacts/")
+    p = sub.add_parser("publish", help="Publish an artifact")
     p.add_argument("name", help="Artifact name (e.g. y5n-packs-hello)")
+    p.add_argument("--target", help="Target (e.g. github:owner/repo)")
     p.set_defaults(func=_publish.run)
 
     p = sub.add_parser(
