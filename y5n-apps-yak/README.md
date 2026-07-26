@@ -14,24 +14,29 @@ yak shell                   # Open the interactive shell
 
 ## Architecture
 
-Every `yak` command operates within a **YakContext** — a directory containing
-`.yak/` (context.toml or state.toml). Commands find the context automatically
-by walking up from the current working directory.
+Every `yak` command starts by locating a **YakContext**. The context is the
+central workspace for all Yakoon operations — a directory containing `.yak/`
+(context.toml or state.toml). Commands find it automatically by walking up
+from the current working directory.
 
 ```
-yak init → YakContext
-               │
-    ┌──────────┼──────────┐
-    │          │          │
-    ▼          ▼          ▼
- Sources   Artifacts   Installations
-    │          │          │
-    ▼          ▼          ▼
-  build     publish    runtime / shell
-    │          │
-    ▼          ▼
-          install
+             YakContext
+                  │
+      ┌───────────┼────────────┐
+      │           │            │
+      ▼           ▼            ▼
+   Sources    Artifacts   Installations
+      │           ▲
+      │           │
+      └── build ──┘
+                  │
+          ┌───────┴────────┐
+          ▼                ▼
+       publish         install
 ```
+
+`build` reads from **Sources** and writes **Artifacts** into the context.
+`publish` and `install` read from **Artifacts** within the same context.
 
 | Layer | Location | Created by |
 |-------|----------|------------|
