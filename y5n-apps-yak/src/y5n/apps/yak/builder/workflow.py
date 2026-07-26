@@ -8,12 +8,12 @@ from y5n.apps.yak.builder.protocol import Builder
 from y5n.apps.yak.builder.python import PythonBuildProvider
 
 
-def _find_project_root() -> Path | None:
-    cwd = Path.cwd()
+def _find_project_root(cwd: Path | None = None) -> Path | None:
+    if cwd is None:
+        cwd = Path.cwd()
     for parent in [cwd] + list(cwd.parents):
         pyproject = parent / "pyproject.toml"
         if pyproject.exists():
-            # Ensure this is a buildable project (has [build-system])
             text = pyproject.read_text()
             if "[build-system]" in text and "build-backend" in text:
                 return parent
@@ -28,18 +28,21 @@ def _select_builder(project_dir: Path) -> Builder | None:
     return None
 
 
-def build(output_dir: Path | None = None) -> bool:
-    if output_dir is None:
-        from y5n.apps.yak.hosts.cli.cwd import default_artifact_dir
+def build(project_dir: Path | None = None, output_dir: Path | None = None) -> bool:
+    from y5n.apps.yak.hosts.cli.cwd import default_artifact_dir
 
+    if output_dir is None:
         output_dir = default_artifact_dir()
         if output_dir is None:
-            print("Error: no Yak context found. Run 'yak init' first.")
+            print("Error: no default artifact directory found")
             return False
 
-    project_dir = _find_project_root()
+    if project_dir is not None:
+        project_dir = project_dir.resolve()
+    else:
+        project_dir = _find_project_root()
     if project_dir is None:
-        print("Error: no buildable project found. Run 'yak build' from a project directory.")
+        print("Error: no buildable project found. Specify a path or cd into one.")
         return False
 
     builder = _select_builder(project_dir)

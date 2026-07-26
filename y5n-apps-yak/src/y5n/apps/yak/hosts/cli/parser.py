@@ -83,8 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
 
-    p = sub.add_parser("build", help="Build artifacts from the current project")
-    p.add_argument("target", nargs="?", help="Output directory (default: context artifacts)")
+    p = sub.add_parser("build", help="Build artifacts from source into the current context")
+    p.add_argument("source", nargs="?", help="Source project path (default: current directory)")
     p.set_defaults(func=_build.run)
 
     p = sub.add_parser("bootstrap", help="Prepare this repository for development")

@@ -1,4 +1,4 @@
-"""yak build [<target>] — build an artifact from the current project."""
+"""yak build [<source>] — build an artifact from the given source."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ def run(args, mgr) -> None:
     ui = TerminalUI()
 
     def _build():
-        target = Path(args.target).resolve() if args.target else None
-        return build_workflow(output_dir=target)
+        source = Path(args.source).resolve() if args.source else None
+        return build_workflow(project_dir=source)
 
     ok = ui.task("Build", _build)
     if not ok:
