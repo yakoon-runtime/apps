@@ -1,5 +1,4 @@
 name: dev
-version: "1"
 kind: meta
 dependencies:
   - y5n-sdk-python
@@ -15,6 +14,7 @@ dependencies:
   - y5n-packs-root
   - y5n-packs-system
 workspace:
+  path: workspace
   packs: [root, boot, system]
   mounts:
     - pack: root

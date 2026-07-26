@@ -5,6 +5,7 @@ dependencies:
   - y5n-packs-ident
   - y5n-packs-crm
 workspace:
+  path: structure
   packs: [root, boot, system, ident, crm]
   mounts:
     - pack: ident

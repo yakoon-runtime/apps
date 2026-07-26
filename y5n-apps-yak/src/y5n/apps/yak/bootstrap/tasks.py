@@ -79,25 +79,21 @@ class MaterializeWorkspaceTask:
         self._env_file = env_file
 
     def run(self) -> bool:
-        workspace = self._root / "workspace"
+        if self._env_file is None or not self._env_file.exists():
+            return False
+
+        import yaml
+        data = yaml.safe_load(self._env_file.read_text())
+        ws = data.get("workspace", {})
+        ws_path = ws.get("path", "workspace")
+        packs_raw = ws.get("packs", [])
+        mounts_raw = ws.get("mounts", [])
+
+        workspace = self._root / ws_path
         if workspace.exists():
             return True
 
         workspace.mkdir(parents=True, exist_ok=True)
-
-        if self._env_file and self._env_file.exists():
-            import yaml
-            data = yaml.safe_load(self._env_file.read_text())
-            ws = data.get("workspace", {})
-            packs_raw = ws.get("packs", [])
-            mounts_raw = ws.get("mounts", [])
-        else:
-            packs_raw = ["root", "boot", "system"]
-            mounts_raw = [
-                {"pack": "root", "target": "/"},
-                {"pack": "boot", "target": "/boot"},
-                {"pack": "system", "target": "/usr/bin"},
-            ]
 
         from y5n.apps.yak.distribution.models import Mount, PackName
         from y5n.apps.yak.repository.artifact import DirectoryArtifactStore as Store
@@ -118,6 +114,12 @@ class MaterializeWorkspaceTask:
             [PackName(p) for p in packs_raw],
             mounts=[Mount(pack=PackName(m["pack"]), target=m["target"]) for m in mounts_raw],
         )
+
+        (self._root / "yakoon-runtime.yml").write_text(
+            f"workspace_path: {ws_path}\n"
+            "listen:\n  host: 127.0.0.1\n  port: 9100\n"
+        )
+
         return True
 
 
