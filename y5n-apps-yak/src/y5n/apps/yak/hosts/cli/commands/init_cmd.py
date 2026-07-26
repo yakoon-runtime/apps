@@ -12,13 +12,10 @@ def run(args, mgr) -> None:
 
 
 def _init(root: Path) -> None:
-    if (root / ".yak").exists():
-        print(f"Error: {root} is already a Yak context")
-        return
+    yak_dir = root / ".yak"
+    already = yak_dir.exists()
 
     root.mkdir(parents=True, exist_ok=True)
-
-    yak_dir = root / ".yak"
     yak_dir.mkdir(exist_ok=True)
 
     now = datetime.now(UTC).isoformat()
@@ -29,4 +26,7 @@ created = "{now}"
 """
     (yak_dir / "context.toml").write_text(ctx)
 
-    print(f"Yak context created at {root}")
+    if already:
+        print(f"Reinitialized existing Yak context in {yak_dir}")
+    else:
+        print(f"Initialized empty Yak context in {yak_dir}")
