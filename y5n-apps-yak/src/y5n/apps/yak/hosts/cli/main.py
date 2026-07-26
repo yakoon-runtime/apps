@@ -8,7 +8,12 @@ from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
 
-VERSION = "0.1.0"
+try:
+    from importlib.metadata import version as _pkg_version
+
+    VERSION = _pkg_version("y5n-apps-yak")
+except Exception:
+    VERSION = "0.1.0"
 
 
 def _show_banner() -> None:
@@ -77,7 +82,7 @@ def main() -> None:
         _show_banner()
         return
     if sys.argv[1] in ("-V", "--version"):
-        print(f"Yakoon Platform Manager {VERSION}")
+        print(f"Yakoon {VERSION}")
         return
 
     parser = build_parser()
