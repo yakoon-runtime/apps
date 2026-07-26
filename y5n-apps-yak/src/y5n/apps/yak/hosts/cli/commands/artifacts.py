@@ -1,23 +1,17 @@
-"""yak artifacts — list and inspect available artifacts."""
+"""yak artifacts [<name>] — list artifacts or show details."""
 
 from __future__ import annotations
-
-from pathlib import Path
 
 from y5n.apps.yak.resolver.install import _collect_roots
 from y5n.apps.yak.resolver.artifact import _parse_manifest, DirectorySource
 
 
 def run(args, mgr) -> None:
-    action = getattr(args, "action", "list")
-    if action == "list":
-        _list_artifacts()
-    elif action == "info":
-        name = getattr(args, "name", "")
-        if not name:
-            print("Usage: yak artifacts info <name>")
-            return
+    name = getattr(args, "name", None)
+    if name:
         _show_info(name)
+    else:
+        _list_artifacts()
 
 
 def _list_artifacts() -> None:
@@ -47,6 +41,7 @@ def _list_artifacts() -> None:
 
 
 def _show_info(name: str) -> None:
+    from pathlib import Path
     roots = _collect_roots(None)
 
     for root in roots:
