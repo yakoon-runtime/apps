@@ -4,7 +4,7 @@ from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
-from y5n.apps.yak.resolver.install import install_artifact
+from y5n.apps.yak.resolver.install import install_artifact, resolve_external_dependencies
 
 
 def run(args, mgr) -> None:
@@ -12,9 +12,13 @@ def run(args, mgr) -> None:
 
     # Try artifact install first (single package from local cache)
     if not _is_distribution(args.target, mgr):
-        ok = install_artifact(args.target)
+        target_path = Path(args.path).resolve() if args.path else None
+        ok = install_artifact(args.target, target_root=target_path)
         if ok:
-            ui.ok(f"Installed {args.target}")
+            if target_path:
+                resolve_external_dependencies(target_path)
+            path_info = f" at {target_path}" if target_path else ""
+            ui.ok(f"Installed {args.target}{path_info}")
         else:
             ui.fail(f"Unknown target: {args.target}")
         return

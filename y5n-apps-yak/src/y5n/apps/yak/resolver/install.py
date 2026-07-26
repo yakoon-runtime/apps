@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 from y5n.apps.yak.resolver.artifact import DirectorySource
 
+_INSTALLED: list[str] = []
+
 
 def install_artifact(
     name: str,
+    target_root: Path | None = None,
     artifact_root: Path | None = None,
     _seen: set[str] | None = None,
 ) -> bool:
@@ -29,10 +34,36 @@ def install_artifact(
     if artifact.is_meta():
         all_ok = True
         for dep in artifact.dependencies:
-            if not install_artifact(dep, artifact_root, _seen):
+            if not install_artifact(dep, target_root, artifact_root, _seen):
                 all_ok = False
         return all_ok
 
-    from y5n.apps.yak.installer.wheel import install_wheel
+    if target_root is not None:
+        venv = target_root / ".venv"
+        if not (venv / "bin" / "python").exists():
+            subprocess.run(
+                [sys.executable, "-m", "venv", str(venv)],
+                check=True, capture_output=True,
+            )
+        python = venv / "bin" / "python"
+    else:
+        python = Path(sys.executable)
 
-    return install_wheel(artifact)
+    _INSTALLED.append(name)
+    return _install_one(artifact, python)
+
+
+def _install_one(artifact, python: Path) -> bool:
+    wheel = artifact.package_file
+    if wheel is None or not wheel.exists():
+        return False
+
+    result = subprocess.run(
+        [str(python), "-m", "pip", "install", str(wheel)],
+        capture_output=True, text=True,
+    )
+    return result.returncode == 0
+
+
+def resolve_external_dependencies(target_root: Path | None = None) -> bool:
+    return True
