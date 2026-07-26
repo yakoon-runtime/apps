@@ -19,10 +19,15 @@ def _init(root: Path) -> None:
     yak_dir.mkdir(exist_ok=True)
 
     now = datetime.now(UTC).isoformat()
+    (yak_dir / "logs").mkdir(exist_ok=True)
+
     ctx = f"""\
 [context]
 name = "{root.name}"
 created = "{now}"
+
+[logs]
+path = ".yak/logs"
 """
     (yak_dir / "context.toml").write_text(ctx)
 
