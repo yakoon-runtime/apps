@@ -1,83 +1,85 @@
-# yak — Yakoon Platform Manager
+# yak — Yakoon CLI
 
-`yak` is the command-line interface for managing Yakoon — a composable,
+`yak` is the command-line interface for Yakoon — a composable,
 language‑neutral runtime platform.
+
+## Typical workflow
+
+```
+create → build → install → sync → shell
+```
 
 ## Quick start
 
 ```bash
 mkdir demo && cd demo
 yak init                    # Create a Yak context
-yak install dev             # Install the developer distribution
-yak runtime start           # Start the runtime
+yak create pack hello       # Scaffold a new pack
+cd hello
+yak create command greet    # Add a command to the pack
+cd ..
+yak build hello             # Build the pack
+yak install y5n-packs-hello # Install the artifact
+yak sync                    # Sync environment + materialize workspace
 yak shell                   # Open the interactive shell
 ```
 
 ## Architecture
 
 Every `yak` command starts by locating a **YakContext**. The context is the
-central workspace for all Yakoon operations — a directory containing `.yak/`
-(context.toml or state.toml). Commands find it automatically by walking up
-from the current working directory.
+central workspace for all Yakoon operations — a directory containing `.yak/`.
 
 ```
-             YakContext
-                  │
-      ┌───────────┼────────────┐
-      │           │            │
-      ▼           ▼            ▼
-   Sources    Artifacts   Installations
-      │           ▲
-      │           │
-      └── build ──┘
-                  │
-          ┌───────┴────────┐
-          ▼                ▼
-       publish         install
+Template → Environment (Desired State) → Workspace (Materialized) → Runtime
 ```
-
-`build` reads from **Sources** and writes **Artifacts** into the context.
-`publish` and `install` read from **Artifacts** within the same context.
 
 | Layer | Location | Created by |
 |-------|----------|------------|
 | **YakContext** | `<root>/.yak/` | `yak init` |
 | **Context marker** | `.yak/context.toml` | `yak init` |
-| **Installation state** | `.yak/state.toml` | `yak install` |
-| **Build artifacts** | `.yak/artifacts/` | `yak build` |
+| **Environment** | `.yak/environment.yml` | `install` / `bootstrap` / `sync` |
+| **Installation state** | `.yak/state.toml` | `install` |
+| **Build artifacts** | `.yak/artifacts/` | `build` |
 
 ## Commands
 
 ```
   Getting started
-    init  [dir]     Create a Yak context
+    init                   Create a Yak context
 
   Development
-    build [source]  Build artifacts from source into the current context
-    bootstrap       Prepare this repository for development
-    workspace create <name>  Create a new workspace
-    resolve <name>  Show resolved artifacts
+    create pack            Create a new pack
+    create command         Add a command to the current pack
 
-  Management
-    install <name>  Install a distribution
-    update          Update the current installation
-    status          Show installation status
-    doctor          Check installation health
+  Build
+    build                  Build artifacts
+    bootstrap              Prepare this repository for development
 
-  Services
-    runtime <act>   Manage the runtime service
-    web     <act>   Manage the web service
-    shell           Open the Yakoon shell
+  Install
+    install                Install a pack
+    sync                   Sync workspace with environment
+
+  Run
+    shell                  Open the Yakoon shell
+    runtime                Manage the runtime service
+    web                    Manage the web service
+
+  Tools
+    status                 Show installation status
+    resolve                Show resolved artifacts
+    logs                   Show logs
+    doctor                 Check installation health
 ```
 
 ## Context model (like Git)
 
 ```bash
 yak init                    #  .yak/context.toml
-yak install dev             #  .venv + .yak/state.toml
-yak build ../project        #  → .yak/artifacts/
-yak status                  #  ← .yak/state.toml (auto‑detected)
-yak update                  #  re‑installs from cache
+yak create pack hello       #  hello/pack.toml + structure/
+yak build hello             #  → .yak/artifacts/
+yak install y5n-packs-hello #  → .venv + .yak/state.toml
+yak sync                    #  → .yak/environment.yml + workspace
+yak shell                   #  → interactive shell
 ```
 
 - `init` and `install` create context markers.
