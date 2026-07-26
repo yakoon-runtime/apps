@@ -39,13 +39,33 @@ def _collect_roots(artifact_root: Path | None) -> list[Path]:
 _FORCE = False
 
 
-def find_artifact(name: str, artifact_root: Path | None = None) -> Artifact | None:
-    """Resolve an artifact by name from all configured roots."""
-    from y5n.apps.yak.resolver.artifact import Artifact, DirectorySource
+def _all_sources(extra_sources: list[str] | None = None) -> list:
+    """Collect all source implementations."""
+    from y5n.apps.yak.resolver.artifact import DirectorySource
 
-    roots = _collect_roots(artifact_root)
-    for root in roots:
-        source = DirectorySource(root)
+    sources: list = []
+
+    # Local roots
+    for root in _collect_roots(None):
+        sources.append(DirectorySource(root))
+
+    # Remote sources (github:owner/repo, etc.)
+    for src in extra_sources or []:
+        if src.startswith("github:") or "/" in src:
+            from y5n.apps.yak.resolver.github import GithubReleaseRepository
+
+            sources.append(GithubReleaseRepository(src))
+
+    return sources
+
+
+def find_artifact(
+    name: str,
+    artifact_root: Path | None = None,
+    sources: list[str] | None = None,
+) -> Artifact | None:
+    """Resolve an artifact by name from all configured sources."""
+    for source in _all_sources(sources):
         candidate = source.resolve(name)
         if candidate is not None:
             return candidate
@@ -57,6 +77,7 @@ def install_artifact(
     target_root: Path | None = None,
     artifact_root: Path | None = None,
     force: bool = False,
+    sources: list[str] | None = None,
     _seen: set[str] | None = None,
 ) -> bool:
     global _FORCE
@@ -70,17 +91,8 @@ def install_artifact(
         return True
     _seen.add(name)
 
-    roots = _collect_roots(artifact_root)
-
-    # Search all roots for the artifact
-    artifact = None
-    for root in roots:
-        source = DirectorySource(root)
-        candidate = source.resolve(name)
-        if candidate is not None:
-            artifact = candidate
-            break
-
+    # Search all sources for the artifact
+    artifact = find_artifact(name, artifact_root=artifact_root, sources=sources)
     if artifact is None:
         return False
 
