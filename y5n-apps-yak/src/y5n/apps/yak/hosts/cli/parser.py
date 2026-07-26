@@ -46,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
             "    update                 Update an installation\n"
             "    status                 Show installation status\n"
             "    doctor                 Check installation health\n"
+            "    artifacts list          List available artifacts\n"
+            "    artifacts info <name>   Show artifact details\n"
             "    logs         [name]    Show logs for the current context\n"
             "\n"
             "  Services\n"

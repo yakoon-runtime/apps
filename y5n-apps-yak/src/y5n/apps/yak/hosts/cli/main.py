@@ -31,6 +31,8 @@ Usage:
     update                  Update an installation
     status                  Show installation status
     doctor                  Check installation health
+    artifacts list          List available artifacts
+    artifacts info <name>   Show artifact details
     logs         [name]     Show logs for the current context
 
   Services
