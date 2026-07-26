@@ -19,6 +19,7 @@ Usage:
     yak <command> [options]
 
 Commands:
+    build       Build an artifact from the current project
     bootstrap   Prepare this repository for development
     install     Install a Yakoon distribution
     workspace   Manage Yakoon workspaces
