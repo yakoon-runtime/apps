@@ -4,6 +4,7 @@ from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
+from y5n.apps.yak.resolver.install import install_artifact
 
 
 def run(args, mgr) -> None:
@@ -15,11 +16,22 @@ def run(args, mgr) -> None:
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
     ui.title(f'Updating "{path.name}"')
 
-    try:
-        inst = mgr.load(path)
-        if inst is None:
-            raise RuntimeError("Installation not found")
+    inst = mgr.load(path)
+    if inst is None:
+        ui.fail("Installation not found")
+        return
 
+    # Artifact installation — re-install from cache
+    if not mgr._repo.resolve_distribution(inst.distribution):
+        ok = ui.task("Artifacts", lambda: install_artifact(inst.distribution, target_root=path))
+        if ok:
+            ui.ok(f"{path.name} updated")
+        else:
+            ui.fail(f"Update failed")
+        return
+
+    # Distribution installation — resolve and materialize
+    try:
         with ui.step("Distribution"):
             dist = mgr._repo.resolve_distribution(inst.distribution)
             ui.detail(inst.distribution)
