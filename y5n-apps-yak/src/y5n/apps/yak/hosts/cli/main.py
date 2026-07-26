@@ -12,33 +12,35 @@ VERSION = "0.1.0"
 
 
 def _show_banner() -> None:
-    print(f"""Yakoon Platform Manager {VERSION}
+    print(f"""Yakoon {VERSION}
 
 Usage:
     yak <command> [options]
 
   Getting started
-    init           [dir]    Create a Yak context
+    init                   Create a Yak context
 
-  Development
-    create pack    <name>   Scaffold a new pack (container)
-    create command <name>   Add a command to the current pack
-    build          [src]    Build artifacts into the current context
-    bootstrap               Prepare this repository for development
-    workspace create <n>    Create a new workspace
-    resolve  <name>         Show resolved artifacts
+  Build
+    create pack            Scaffold a new pack
+    create command         Add a command to the current pack
+    build                  Build artifacts
+    bootstrap              Prepare this repository for development
 
-  Management
-    install       [name]    Install an environment or list available
-    sync                    Sync environment with workspace
-    status                  Show installation status
-    doctor                  Check installation health
-    logs          [name]    Show logs for the current context
+  Install
+    install                Install an environment
+    sync                   Sync environment with workspace
 
-  Services
-    runtime <act>           Manage the runtime service
-    web     <act>           Manage the web service
-    shell                   Open the Yakoon shell
+  Run
+    runtime                Manage the runtime service
+    shell                  Open the Yakoon shell
+    web                    Manage the web service
+
+  Tools
+    status                 Show installation status
+    doctor                 Check installation health
+    logs                   Show logs
+    resolve                Show resolved artifacts
+    workspace create       Create a new workspace
 
 Use 'yak <command> --help' for detailed options.
 """)
