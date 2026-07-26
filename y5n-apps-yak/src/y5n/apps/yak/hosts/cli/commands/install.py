@@ -61,8 +61,8 @@ def _artifact_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
     upgrade = getattr(args, "upgrade", False)
     force = getattr(args, "force", False) or upgrade
-    sources = getattr(args, "source", None)
-    sources = [sources] if sources else None
+    repositories = getattr(args, "repository", None)
+    repositories = [repositories] if repositories else None
 
     # Resolve artifact to show version info
     artifact = find_artifact(args.artifact, sources=sources)

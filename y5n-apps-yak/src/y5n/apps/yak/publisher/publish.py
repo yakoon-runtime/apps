@@ -39,7 +39,7 @@ def publish_local(name: str) -> Path | None:
     return dest
 
 
-def publish_github(name: str, repo: str) -> bool:
+def publish_github(name: str, repo: str, draft: bool = True) -> bool:
     """Upload artifact as a GitHub Release asset.
 
     Requires GITHUB_TOKEN environment variable.
@@ -67,12 +67,11 @@ def publish_github(name: str, repo: str) -> bool:
             "Accept": "application/vnd.github.v3+json",
         }
 
-        # Try to find existing draft release, or create one
-        tag = f"{name}-v0.1.0"
+        tag = f"{name}-v{src.name.split('-')[-1].split('.')[0] or '0.1.0'}"
         release_data = {
             "tag_name": tag,
-            "name": f"{name} v0.1.0",
-            "draft": True,
+            "name": f"{name} {tag.removeprefix(name + '-')}",
+            "draft": draft,
         }
         req = Request(
             f"https://api.github.com/repos/{repo}/releases",
@@ -116,6 +115,8 @@ def publish_github(name: str, repo: str) -> bool:
 def publish_artifact(name: str, target: str | None = None) -> Path | bool | None:
     """Publish artifact. target can be a path or 'github:owner/repo'."""
     if target and target.startswith("github:"):
-        ok = publish_github(name, target)
+        draft = "?release" not in target
+        repo = target.split("?")[0]
+        ok = publish_github(name, repo, draft=draft)
         return ok
     return publish_local(name)
