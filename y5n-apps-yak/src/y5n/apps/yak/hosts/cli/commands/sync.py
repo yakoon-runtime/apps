@@ -1,4 +1,4 @@
-"""yak update — reconcile environment: install wheels + sync env + materialize workspace."""
+"""yak sync — reconcile environment: install wheels + sync env + materialize workspace."""
 
 from __future__ import annotations
 
@@ -20,16 +20,19 @@ def run(args, mgr) -> None:
         return
 
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
-    print(f'\n  Updating "{path.name}"\n')
+    print(f'\n  Syncing "{path.name}"\n')
 
     inst = mgr.load(path)
     if inst is None:
         ui.fail("Installation not found")
         return
 
+    all_ok = True
+
     # 1. Install wheels
     if not mgr._repo.resolve_distribution(inst.distribution):
-        _install_artifact(path, args, ui, inst, mgr)
+        if not _install_artifact(path, args, ui, inst, mgr):
+            all_ok = False
     else:
         _install_distribution(path, mgr, ui, inst)
 
@@ -38,20 +41,23 @@ def run(args, mgr) -> None:
     ctx = find_context_root() or path
     env = load(ctx)
     if env is None:
-        print("  Warning: no .yak/environment.yml found at context root")
         env = load(path)
     if env is None:
-        print("  Warning: no .yak/environment.yml found")
+        print("  ✘ Environment  no .yak/environment.yml found")
+        all_ok = False
     else:
         discovered = _discover_packs(ctx)
         for pack in discovered:
             add_mount(env, pack)
         save(env, ctx)
-        print(f"  Environment synced ({len(env.mounts)} mounts)")
+        print(f"  ✓ Environment  ({len(env.mounts)} mounts)")
 
     # 3. Materialize workspace from environment (at context root)
     if env:
         _materialize_from_env(ctx, mgr, env)
+
+    if all_ok:
+        print("  Sync complete")
 
 
 def _discover_packs(context_root: Path) -> list[PackName]:
@@ -80,18 +86,17 @@ def _discover_packs(context_root: Path) -> list[PackName]:
     return packs
 
 
-def _install_artifact(path: Path, args, ui, inst, mgr) -> None:
+def _install_artifact(path: Path, args, ui, inst, mgr) -> bool:
     from y5n.apps.yak.resolver.artifact import DirectorySource
     from y5n.apps.yak.resolver.install import _collect_roots
 
-    # Check if artifact exists before attempting install
     found = any(
         DirectorySource(root).resolve(inst.distribution)
         for root in _collect_roots(None)
     )
     if not found:
-        print("  No artifacts found — run 'yak build <source>' first")
-        return
+        print("  ✘ Artifacts    no artifact found — run 'yak build' first")
+        return False
 
     ok = ui.task(
         "Artifacts",
@@ -107,9 +112,11 @@ def _install_artifact(path: Path, args, ui, inst, mgr) -> None:
         )
 
         _materialize_dev_workspace(inst.distribution, path, mgr)
-        print("  Artifacts installed")
+        print("  ✓ Artifacts")
+        return True
     else:
-        print("  Pip install failed")
+        print("  ✘ Artifacts    pip install failed")
+        return False
 
 
 def _install_distribution(path: Path, mgr, ui, inst) -> None:
@@ -148,7 +155,7 @@ def _install_distribution(path: Path, mgr, ui, inst) -> None:
             mgr._write_state(inst)
 
     except Exception as e:
-        print(f"  Update failed: {e}")
+        print(f"  ✘ Distribution  {e}")
 
 
 def _materialize_from_env(path: Path, mgr, env) -> None:
@@ -160,4 +167,4 @@ def _materialize_from_env(path: Path, mgr, env) -> None:
     mounts = [Mount(pack=PackName(m.pack), target=m.target) for m in env.mounts]
     packs = [PackName(m.pack) for m in env.mounts]
     ws = materializer.materialize(path, env.name, packs, mounts=mounts)
-    print(f"  Workspace materialized at {ws.path / 'structure'}")
+    print(f"  ✓ Workspace    {ws.path / 'structure'}")
