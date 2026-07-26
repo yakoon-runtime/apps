@@ -6,9 +6,9 @@ from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 
 
 def run(args, mgr) -> None:
-    path = args.path or find_installation_path()
+    path = args.target or find_installation_path()
     if path is None:
-        print("No installation specified. Use --path <dir> or cd into one.")
+        print("No installation specified. cd into one or pass a directory.")
         return
 
     issues = mgr.doctor(path)

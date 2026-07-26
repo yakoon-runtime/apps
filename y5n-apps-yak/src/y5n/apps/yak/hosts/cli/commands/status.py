@@ -9,7 +9,7 @@ def run(args, mgr) -> None:
     path = _resolve_path(args)
     if path is None:
         print("Not inside a Yak installation.")
-        print("Use --path <dir> or cd into an installation directory.")
+        print("cd into an installation directory or pass one.")
         return
 
     inst = mgr.load(path)
@@ -21,8 +21,9 @@ def run(args, mgr) -> None:
 
 
 def _resolve_path(args) -> Path | None:
-    if hasattr(args, "path") and args.path:
-        return Path(args.path).resolve()
+    target = args.target
+    if target and target != ".":
+        return Path(target).resolve()
     return find_installation_path()
 
 

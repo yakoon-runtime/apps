@@ -25,9 +25,9 @@ def run(args, mgr) -> None:
 
 
 def _resolve_path(args) -> Path | None:
-    path = Path(args.path).resolve() if args.path else find_installation_path()
+    path = Path(args.target).resolve() if args.target else find_installation_path()
     if path is None:
-        print("No installation specified. Use --path <dir> or cd into one.")
+        print("No installation specified. cd into one or pass a directory.")
     return path
 
 

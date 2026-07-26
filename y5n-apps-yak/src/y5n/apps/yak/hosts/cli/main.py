@@ -19,18 +19,17 @@ Usage:
     yak <command> [options]
 
 Commands:
-    build       Build an artifact from the current project
-    bootstrap   Prepare this repository for development
-    install     Install a Yakoon distribution
-    workspace   Manage Yakoon workspaces
-    create      Create a new pack
-    update      Update an installation
-    status      Show installation status
-    doctor      Check installation health
-    runtime     Manage the runtime service
-    web         Manage the web service
-    shell       Open an interactive Yakoon shell
-    resolve     Show resolved pack list
+    install  <name> [dir]   Install an artifact or distribution
+    update        [dir]     Update an installation
+    status        [dir]     Show installation status
+    doctor        [dir]     Check installation health
+    runtime <act> [dir]     Manage the runtime service
+    web     <act> [dir]     Manage the web service
+    shell         [dir]     Open an interactive Yakoon shell
+    bootstrap               Prepare this repository for development
+    build                   Build an artifact from the current project
+    workspace create <name> Create a new workspace
+    resolve  <name>         Show resolved pack list
 
 Use 'yak <command> --help' for detailed options.
 """

@@ -4,10 +4,9 @@ import argparse
 
 
 def _add_action(sub, name: str, actions: list[str], func):
-    """Add a subparser with required action argument."""
     p = sub.add_parser(name, help="")
     p.add_argument("action", choices=actions, help="")
-    p.add_argument("--path", "-p", help="Path to installation")
+    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.set_defaults(func=func)
 
 
@@ -30,28 +29,22 @@ def build_parser() -> argparse.ArgumentParser:
         usage="yak <command> [options]",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "  Installation\n"
-            "    install            Install a distribution\n"
-            "    update             Update an installation\n"
-            "    status             Show installation status\n"
-            "    doctor             Check installation health\n"
+            "  Installation (target is always a directory)\n"
+            "    install  <name> [dir]   Install an artifact or distribution\n"
+            "    update        [dir]     Update an installation\n"
+            "    status        [dir]     Show installation status\n"
+            "    doctor        [dir]     Check installation health\n"
             "\n"
             "  Services\n"
-            "    runtime start      Start the runtime\n"
-            "    runtime stop       Stop the runtime\n"
-            "    runtime status     Check if runtime is running\n"
-            "    runtime restart    Restart the runtime\n"
-            "\n"
-            "  Interfaces\n"
-            "    shell              Open the Yakoon shell\n"
-            "    web start          Start the web server\n"
-            "    web stop           Stop the web server\n"
-            "    web status         Check web server status\n"
-            "    web open           Open browser\n"
+            "    runtime <action> [dir]  Manage the runtime service\n"
+            "    web     <action> [dir]  Manage the web service\n"
+            "    shell         [dir]     Open the Yakoon shell\n"
             "\n"
             "  Developer\n"
-            "    bootstrap          Prepare this repository for development\n"
-            "    resolve            Show resolved pack list\n"
+            "    bootstrap               Prepare this repository for development\n"
+            "    build                   Build an artifact from the current project\n"
+            "    workspace create <name> Create a new workspace\n"
+            "    resolve <name>          Show resolved pack list\n"
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
@@ -71,21 +64,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(func=_install.run)
 
-    p = sub.add_parser("status", help="")
-    p.add_argument(
-        "--path", "-p", help="Path to installation (default: current directory)"
-    )
+    p = sub.add_parser("status", help="Show installation status")
+    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.set_defaults(func=_status.run)
 
-    p = sub.add_parser("update", help="")
-    p.add_argument("--path", "-p", help="Path to installation")
+    p = sub.add_parser("update", help="Update an installation")
+    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.add_argument(
         "--verbose", "-v", action="store_true", help="Show detailed progress"
     )
     p.set_defaults(func=_update.run)
 
-    p = sub.add_parser("doctor", help="")
-    p.add_argument("--path", "-p", help="Path to installation")
+    p = sub.add_parser("doctor", help="Check installation health")
+    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.set_defaults(func=_doctor.run)
 
     _add_action(sub, "runtime", ["start", "stop", "status", "restart"], _runtime.run)
@@ -103,8 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_create.add_argument("name", help="Workspace name")
     p_create.set_defaults(func=_workspace.run)
 
-    p = sub.add_parser("shell", help="")
-    p.add_argument("--path", "-p", help="Path to installation")
+    p = sub.add_parser("shell", help="Open the Yakoon shell")
+    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.set_defaults(func=_shell.run)
 
     return parser
