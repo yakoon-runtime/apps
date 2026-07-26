@@ -9,8 +9,10 @@ from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 
 
 def run(args, mgr) -> None:
-    path = _resolve_path(args)
+    path = find_installation_path()
     if path is None:
+        print("Not inside a Yak installation.")
+        print("Run 'yak install' first or cd into one.")
         return
 
     match args.action:
@@ -22,13 +24,6 @@ def run(args, mgr) -> None:
             _status(path)
         case "open":
             _open(path)
-
-
-def _resolve_path(args) -> Path | None:
-    path = Path(args.target).resolve() if args.target else find_installation_path()
-    if path is None:
-        print("No installation specified. cd into one or pass a directory.")
-    return path
 
 
 def _start(path: Path) -> None:

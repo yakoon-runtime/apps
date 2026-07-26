@@ -6,7 +6,6 @@ import argparse
 def _add_action(sub, name: str, actions: list[str], func):
     p = sub.add_parser(name, help="")
     p.add_argument("action", choices=actions, help="")
-    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.set_defaults(func=func)
 
 
@@ -31,59 +30,54 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "\n"
             "  Installation\n"
-            "    install  <name> [dir]   Install a distribution\n"
-            "    update        [dir]     Update an installation\n"
-            "    status        [dir]     Show installation status\n"
-            "    doctor        [dir]     Check installation health\n"
+            "    install <name> [dir]   Install a distribution\n"
             "\n"
             "  Services\n"
-            "    runtime <act> [dir]     Manage the runtime service\n"
-            "    web     <act> [dir]     Manage the web service\n"
-            "    shell         [dir]     Open the Yakoon shell\n"
+            "    runtime <act>          Manage the runtime service\n"
+            "    web     <act>          Manage the web service\n"
+            "    shell                  Open the Yakoon shell\n"
+            "\n"
+            "  Management\n"
+            "    update                 Update an installation\n"
+            "    status                 Show installation status\n"
+            "    doctor                 Check installation health\n"
             "\n"
             "  Development\n"
-            "    bootstrap               Prepare this repository for development\n"
-            "    build          [dir]    Build artifacts from the current project\n"
-            "    workspace create <name> Create a new workspace\n"
-            "    resolve  <name>         Show resolved artifacts\n"
+            "    bootstrap              Prepare this repository for development\n"
+            "    build                  Build artifacts from the current project\n"
+            "    workspace create <n>   Create a new workspace\n"
+            "    resolve  <name>        Show resolved artifacts\n"
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
 
-    p = sub.add_parser("resolve", help="")
-    p.add_argument("target")
+    p = sub.add_parser("resolve", help="Show resolved artifacts")
+    p.add_argument("name")
     p.set_defaults(func=_resolve.run)
 
     p = sub.add_parser("install", help="Install an artifact or distribution")
-    p.add_argument("artifact", help="Artifact or distribution name (e.g. dev, runtime, crm)")
-    p.add_argument(
-        "target", nargs="?", default=".",
-        help="Target directory (default: current directory)",
-    )
-    p.add_argument(
-        "--verbose", "-v", action="store_true", help="Show detailed progress"
-    )
+    p.add_argument("artifact")
+    p.add_argument("target", nargs="?", default=".", help="Target directory (default: .)")
+    p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_install.run)
 
     p = sub.add_parser("status", help="Show installation status")
-    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.set_defaults(func=_status.run)
 
     p = sub.add_parser("update", help="Update an installation")
-    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
-    p.add_argument(
-        "--verbose", "-v", action="store_true", help="Show detailed progress"
-    )
+    p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_update.run)
 
     p = sub.add_parser("doctor", help="Check installation health")
-    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
     p.set_defaults(func=_doctor.run)
 
     _add_action(sub, "runtime", ["start", "stop", "status", "restart"], _runtime.run)
     _add_action(sub, "web", ["start", "stop", "status", "open"], _web.run)
 
-    p = sub.add_parser("build", help="Build an artifact from the current project")
+    p = sub.add_parser("shell", help="Open the Yakoon shell")
+    p.set_defaults(func=_shell.run)
+
+    p = sub.add_parser("build", help="Build artifacts from the current project")
     p.add_argument("target", nargs="?", help="Output directory (default: ~/.yak/cache/artifacts)")
     p.set_defaults(func=_build.run)
 
@@ -91,13 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_bootstrap.run)
 
     p = sub.add_parser("workspace", help="Manage Yakoon workspaces")
-    ws_sub = p.add_subparsers(dest="ws_action", required=True, metavar="<action>")
+    ws_sub = p.add_subparsers(dest="ws_action", required=True)
     p_create = ws_sub.add_parser("create", help="Create a new workspace")
-    p_create.add_argument("name", help="Workspace name")
+    p_create.add_argument("name")
     p_create.set_defaults(func=_workspace.run)
-
-    p = sub.add_parser("shell", help="Open the Yakoon shell")
-    p.add_argument("target", nargs="?", default=".", help="Target installation directory")
-    p.set_defaults(func=_shell.run)
 
     return parser

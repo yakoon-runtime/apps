@@ -18,21 +18,23 @@ Usage:
     yak <command> [options]
 
   Installation
-    install <name>  [dir]   Install a distribution
-    update          [dir]   Update an installation
-    status          [dir]   Show installation status
-    doctor          [dir]   Check installation health
+    install <name> [dir]    Install a distribution
 
   Services
-    runtime <act>   [dir]   Manage the runtime service
-    web     <act>   [dir]   Manage the web service
-    shell           [dir]   Open the Yakoon shell
+    runtime <act>           Manage the runtime service
+    web     <act>           Manage the web service
+    shell                   Open the Yakoon shell
+
+  Management
+    update                  Update an installation
+    status                  Show installation status
+    doctor                  Check installation health
 
   Development
     bootstrap               Prepare this repository for development
-    build           [dir]   Build artifacts from the current project
+    build                   Build artifacts from the current project
     workspace create <name> Create a new workspace
-    resolve  <name>         Show resolved artifacts
+    resolve <name>          Show resolved artifacts
 
 Use 'yak <command> --help' for detailed options.
 """)

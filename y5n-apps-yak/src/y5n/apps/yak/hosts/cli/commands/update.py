@@ -1,6 +1,6 @@
-from __future__ import annotations
+"""yak update — update an installation."""
 
-from pathlib import Path
+from __future__ import annotations
 
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
@@ -8,13 +8,14 @@ from y5n.apps.yak.resolver.install import install_artifact
 
 
 def run(args, mgr) -> None:
-    path = Path(args.target).resolve() if args.target else find_installation_path()
+    path = find_installation_path()
     if path is None:
-        print("No installation specified. cd into one or pass a directory.")
+        print("Not inside a Yak installation.")
+        print("Run 'yak install' first or cd into one.")
         return
 
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
-    ui.title(f'Updating "{path.name}"')
+    print(f'\n  Updating "{path.name}"\n')
 
     inst = mgr.load(path)
     if inst is None:
@@ -25,35 +26,25 @@ def run(args, mgr) -> None:
     if not mgr._repo.resolve_distribution(inst.distribution):
         ok = ui.task("Artifacts", lambda: install_artifact(inst.distribution, target_root=path))
         if ok:
-            ui.ok(f"{path.name} updated")
+            print(f"  {path.name} updated")
         else:
-            ui.fail("Update failed — run 'yak build' first to refresh artifacts")
+            print("  Update failed — run 'yak build' first to refresh artifacts")
         return
 
-    # Distribution installation — resolve and materialize
+    # Distribution installation
     try:
+        ui.title(f'Updating "{path.name}"')
+
         with ui.step("Distribution"):
             dist = mgr._repo.resolve_distribution(inst.distribution)
             ui.detail(inst.distribution)
 
+        from y5n.apps.yak.resolver.resolver import Resolver
+
+        resolver = Resolver(lambda n: mgr._repo.resolve_distribution(n))
+        packs, mounts, tools = resolver.resolve(dist)
+
         with ui.step("Packs"):
-            packs, mounts, tools = mgr._resolver.resolve(dist)
-
-            # Add extra packs from --add
-            if hasattr(args, "add") and args.add:
-                for extra in args.add:
-                    extra_dist = mgr._repo.resolve_distribution(extra)
-                    if extra_dist is None:
-                        raise ValueError(f"Unknown pack: {extra}")
-                    extra_packs, extra_mounts, extra_tools = mgr._resolver.resolve(
-                        extra_dist
-                    )
-                    new_packs = [p for p in extra_packs if p not in packs]
-                    packs.extend(new_packs)
-                    mounts.extend(extra_mounts)
-                    tools.extend(extra_tools)
-                    ui.detail(f"+ {extra}")
-
             ui.detail(", ".join(packs))
 
         with ui.step("Workspace"):
@@ -65,7 +56,6 @@ def run(args, mgr) -> None:
 
         with ui.step("Environment"):
             from datetime import UTC, datetime
-
             from y5n.apps.yak.installation.models import InstallationStatus
 
             now = datetime.now(UTC)
@@ -78,7 +68,7 @@ def run(args, mgr) -> None:
             inst.updated = datetime.now(UTC)
             mgr._write_state(inst)
 
-        ui.ok(f"{path.name} updated")
+        print(f"  {path.name} updated")
 
     except Exception as e:
-        ui.fail(f"Update failed: {e}")
+        print(f"  Update failed: {e}")
