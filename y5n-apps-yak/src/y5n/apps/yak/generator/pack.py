@@ -54,7 +54,7 @@ def create_pack(name: str, target: Path | None = None, force: bool = False) -> P
     (root / "README.md").write_text(f"# {title}\n\n{title} pack.\n")
 
     src_dir = root / "src" / "y5n" / "packs" / name
-    src_dir.mkdir(parents=True)
+    src_dir.mkdir(parents=True, exist_ok=True)
     (src_dir / "__init__.py").write_text("")
 
     structure_dir = root / "structure"
