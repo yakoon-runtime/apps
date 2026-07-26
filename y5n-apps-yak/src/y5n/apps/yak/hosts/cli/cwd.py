@@ -18,17 +18,28 @@ def find_installation_from_cwd() -> str | None:
 
 
 def find_context_root() -> Path | None:
-    """Walk up from CWD looking for a Yak context marker."""
+    """Walk up from CWD looking for the outermost context marker.
+
+    context.toml (created by 'yak init') defines the context boundary.
+    Used by shell, logs, runtime to find the dev environment.
+    """
+    cwd = Path.cwd()
+    found: Path | None = None
+    for parent in [cwd, *cwd.parents]:
+        if (parent / ".yak" / "context.toml").exists():
+            found = parent
+    return found
+
+
+def find_installation_path() -> Path | None:
+    """Walk up from CWD looking for a .yak/state.toml.
+
+    Used by update, status, doctor to find the nearest installation.
+    """
     cwd = Path.cwd()
     for parent in [cwd, *cwd.parents]:
         if (parent / ".yak" / "state.toml").exists():
             return parent
-        if (parent / ".yak" / "context.toml").exists():
-            return parent
-    return None
-
-
-def find_installation_path() -> Path | None:
     return find_context_root()
 
 
