@@ -24,9 +24,23 @@ def _artifact_install(args, mgr, ui) -> None:
     ok = ui.task("Artifacts", lambda: install_artifact(args.artifact, target_root=target))
     if ok:
         _write_artifact_state(args.artifact, target)
+        _materialize_dev_workspace(args.artifact, target, mgr)
         ui.ok(f"Installed {args.artifact} at {target}")
     else:
         ui.fail(f"Unknown target: {args.artifact}")
+
+
+def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
+    """Materialize the default development workspace (root, boot, system)."""
+    from y5n.apps.yak.distribution.models import Mount, PackName
+
+    packs = [PackName("root"), PackName("boot"), PackName("system")]
+    mounts = [
+        Mount(pack=PackName("root"), target="/"),
+        Mount(pack=PackName("boot"), target="/boot"),
+        Mount(pack=PackName("system"), target="/usr/bin"),
+    ]
+    mgr._materializer.materialize(root, name, packs, mounts=mounts)
 
 
 def _write_artifact_state(name: str, root: Path) -> None:
@@ -39,7 +53,7 @@ def _write_artifact_state(name: str, root: Path) -> None:
 name = "{name}"
 distribution = "{name}"
 status = "created"
-packs = []
+packs = ["root", "boot", "system"]
 created = "{now}"
 updated = "{now}"
 """
