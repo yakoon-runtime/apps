@@ -9,26 +9,35 @@ from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 
 
 def run(args, mgr) -> None:
-    path = find_installation_path()
-    if path is None:
-        print("Not inside a Yak installation.")
-        print("Run 'yak install' first or cd into one.")
-        return
+    env_file = getattr(args, "environment", None)
+    if env_file:
+        path = Path(env_file).resolve().parent
+    else:
+        path = find_installation_path()
+        if path is None:
+            print("Not inside a Yak installation.")
+            print("Run 'yak install' first or cd into one.")
+            return
 
     match args.action:
         case "start":
-            _start(path)
+            _start(path, env_file=env_file)
         case "stop":
             _stop(path)
         case "status":
             _status(path)
         case "restart":
             _stop(path)
-            _start(path)
+            _start(path, env_file=env_file)
 
 
-def _start(path: Path) -> None:
+def _start(path: Path, env_file: str | None = None) -> None:
     pid_file = path / ".yak" / "runtime.pid"
+
+    if env_file:
+        import shutil
+        target_config = path / "yakoon-runtime.yml"
+        shutil.copy2(env_file, target_config)
 
     if pid_file.exists():
         try:

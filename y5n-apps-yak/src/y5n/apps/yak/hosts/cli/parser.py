@@ -6,6 +6,7 @@ import argparse
 def _add_action(sub, name: str, actions: list[str], func):
     p = sub.add_parser(name, help="")
     p.add_argument("action", choices=actions, help="")
+    p.add_argument("--environment", "-e", help="Path to environment.yml file")
     p.set_defaults(func=func)
 
 

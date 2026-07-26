@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
-from y5n.apps.yak.resolver.install import install_artifact, _collect_roots
 from y5n.apps.yak.resolver.artifact import _parse_manifest
+from y5n.apps.yak.resolver.install import _collect_roots, install_artifact
 
 
 def run(args, mgr) -> None:
@@ -26,6 +26,7 @@ def run(args, mgr) -> None:
 
 def _list_environments() -> None:
     from pathlib import Path
+
     seen: set[str] = set()
     names: list[str] = []
 
@@ -43,7 +44,7 @@ def _list_environments() -> None:
                         names.append((name, desc))
 
     if names:
-        print("  Available environments\n")
+        print("  Available environments:")
         for name, desc in names:
             desc_str = f"  — {desc}" if desc else ""
             print(f"    {name}{desc_str}")
@@ -69,7 +70,6 @@ def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
     """Materialize workspace from the artifact's manifest, if configured."""
     from y5n.apps.yak.distribution.models import Mount, PackName
     from y5n.apps.yak.resolver.artifact import DirectorySource
-    from y5n.apps.yak.resolver.install import _collect_roots
 
     for artifact_root in _collect_roots(None):
         source = DirectorySource(artifact_root)

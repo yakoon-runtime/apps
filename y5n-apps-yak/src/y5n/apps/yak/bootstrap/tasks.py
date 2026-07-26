@@ -72,20 +72,52 @@ class InstallProjectsTask:
 
 
 class MaterializeWorkspaceTask:
-    """Materialize the default workspace for development."""
+    """Materialize the development workspace from an environment file."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, env_file: Path | None = None) -> None:
         self._root = root
+        self._env_file = env_file
 
     def run(self) -> bool:
         workspace = self._root / "workspace"
         if workspace.exists():
-            return True  # already exists — idempotent
+            return True
 
         workspace.mkdir(parents=True, exist_ok=True)
-        # TODO: delegate to shared Workspace Materializer
-        # For now, create a minimal workspace marker
-        (workspace / ".workspace").write_text("dev")
+
+        if self._env_file and self._env_file.exists():
+            import yaml
+            data = yaml.safe_load(self._env_file.read_text())
+            ws = data.get("workspace", {})
+            packs_raw = ws.get("packs", [])
+            mounts_raw = ws.get("mounts", [])
+        else:
+            packs_raw = ["root", "boot", "system"]
+            mounts_raw = [
+                {"pack": "root", "target": "/"},
+                {"pack": "boot", "target": "/boot"},
+                {"pack": "system", "target": "/usr/bin"},
+            ]
+
+        from y5n.apps.yak.distribution.models import Mount, PackName
+        from y5n.apps.yak.repository.artifact import DirectoryArtifactStore as Store
+        from y5n.apps.yak.workspace.materializer import Materializer
+
+        materializer = Materializer(
+            Store(
+                self._root / "packs",
+                self._root / "runtime",
+                self._root / "apps",
+                self._root / "sdk" / "y5n-sdk-python",
+            )
+        )
+
+        materializer.materialize(
+            workspace,
+            "dev",
+            [PackName(p) for p in packs_raw],
+            mounts=[Mount(pack=PackName(m["pack"]), target=m["target"]) for m in mounts_raw],
+        )
         return True
 
 
@@ -120,7 +152,8 @@ class SummaryTask:
     def run(self) -> bool:
         result = subprocess.run(
             [str(self._python), "--version"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         py_version = result.stdout.strip()
 
