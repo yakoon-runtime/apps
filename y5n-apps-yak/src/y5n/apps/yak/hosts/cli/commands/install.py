@@ -6,7 +6,7 @@ from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_installation_path
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
-from y5n.apps.yak.resolver.install import install_artifact
+from y5n.apps.yak.resolver.install import install_artifact, write_installation_marker
 
 
 def run(args, mgr) -> None:
@@ -22,6 +22,7 @@ def _artifact_install(args, ui) -> None:
     target = Path(args.target).resolve()
     ok = install_artifact(args.artifact, target_root=target)
     if ok:
+        write_installation_marker(args.artifact, target)
         ui.ok(f"Installed {args.artifact} at {target}")
     else:
         ui.fail(f"Unknown target: {args.artifact}")

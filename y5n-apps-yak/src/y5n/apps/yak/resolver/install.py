@@ -67,3 +67,22 @@ def _install_one(artifact, python: Path) -> bool:
 
 def resolve_external_dependencies(target_root: Path | None = None) -> bool:
     return True
+
+
+def write_installation_marker(name: str, target_root: Path) -> None:
+    """Write .yak/installation.yml to mark this as a Yakoon installation."""
+    yak_dir = target_root / ".yak"
+    yak_dir.mkdir(parents=True, exist_ok=True)
+
+    from datetime import datetime, timezone
+
+    manifest = f"""\
+version: 1
+distribution: {name}
+created: {datetime.now(timezone.utc).isoformat()}
+artifacts:
+  - {name}
+hosts:
+  - python
+"""
+    (yak_dir / "installation.yml").write_text(manifest)

@@ -12,28 +12,26 @@ VERSION = "0.1.0"
 
 
 def _show_banner() -> None:
-    print(
-        f"""Yakoon Platform Manager {VERSION}
+    print(f"""Yakoon Platform Manager {VERSION}
 
 Usage:
     yak <command> [options]
 
 Commands:
-    install  <name> [dir]   Install an artifact or distribution
-    update        [dir]     Update an installation
-    status        [dir]     Show installation status
-    doctor        [dir]     Check installation health
-    runtime <act> [dir]     Manage the runtime service
-    web     <act> [dir]     Manage the web service
-    shell         [dir]     Open an interactive Yakoon shell
+    install <name>  [dir]   Install an artifact or distribution
+    update          [dir]   Update an installation
+    status          [dir]   Show installation status
+    doctor          [dir]   Check installation health
+    runtime <act>   [dir]   Manage the runtime service
+    web     <act>   [dir]   Manage the web service
+    shell           [dir]   Open an interactive Yakoon shell
     bootstrap               Prepare this repository for development
     build                   Build an artifact from the current project
     workspace create <name> Create a new workspace
     resolve  <name>         Show resolved pack list
 
 Use 'yak <command> --help' for detailed options.
-"""
-    )
+""")
 
 
 def _build_manager() -> InstallationManager:
