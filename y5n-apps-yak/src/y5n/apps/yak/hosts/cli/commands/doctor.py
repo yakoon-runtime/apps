@@ -27,4 +27,4 @@ def run(args, mgr) -> None:
     if errors:
         print(f"\n  {len(errors)} issue(s) found")
     else:
-        print("\n  All checks passed")
+        print("\n  ✓ Context is consistent")
