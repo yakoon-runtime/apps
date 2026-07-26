@@ -17,10 +17,17 @@ def find_installation_from_cwd() -> str | None:
     return None
 
 
-def find_installation_path() -> Path | None:
-    """Return the root path of the installation containing CWD."""
+def find_context_root() -> Path | None:
+    """Walk up from CWD looking for a Yak context marker."""
     cwd = Path.cwd()
     for parent in [cwd, *cwd.parents]:
         if (parent / ".yak" / "state.toml").exists():
             return parent
+        if (parent / ".yak" / "context.toml").exists():
+            return parent
     return None
+
+
+def find_installation_path() -> Path | None:
+    return find_context_root()
+

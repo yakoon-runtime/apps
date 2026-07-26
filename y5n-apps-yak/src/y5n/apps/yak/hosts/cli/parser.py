@@ -13,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import bootstrap as _bootstrap
     from y5n.apps.yak.hosts.cli.commands import build as _build
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
+    from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
     from y5n.apps.yak.hosts.cli.commands import install as _install
     from y5n.apps.yak.hosts.cli.commands import resolve as _resolve
     from y5n.apps.yak.hosts.cli.commands import runtime as _runtime
@@ -29,24 +30,25 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "\n"
-            "  Installation\n"
+            "  Getting started\n"
+            "    init         [dir]     Create a Yak context in current or given directory\n"
+            "\n"
+            "  Development\n"
+            "    build                  Build artifacts from the current project\n"
+            "    bootstrap              Prepare this repository for development\n"
+            "    workspace create <n>   Create a new workspace\n"
+            "    resolve  <name>        Show resolved artifacts\n"
+            "\n"
+            "  Management\n"
             "    install <name> [dir]   Install a distribution\n"
+            "    update                 Update an installation\n"
+            "    status                 Show installation status\n"
+            "    doctor                 Check installation health\n"
             "\n"
             "  Services\n"
             "    runtime <act>          Manage the runtime service\n"
             "    web     <act>          Manage the web service\n"
             "    shell                  Open the Yakoon shell\n"
-            "\n"
-            "  Management\n"
-            "    update                 Update an installation\n"
-            "    status                 Show installation status\n"
-            "    doctor                 Check installation health\n"
-            "\n"
-            "  Development\n"
-            "    bootstrap              Prepare this repository for development\n"
-            "    build                  Build artifacts from the current project\n"
-            "    workspace create <n>   Create a new workspace\n"
-            "    resolve  <name>        Show resolved artifacts\n"
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
@@ -54,6 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("resolve", help="Show resolved artifacts")
     p.add_argument("name")
     p.set_defaults(func=_resolve.run)
+
+    p = sub.add_parser("init", help="Create a Yak context")
+    p.add_argument("target", nargs="?", default=".", help="Target directory (default: .)")
+    p.set_defaults(func=_init.run)
 
     p = sub.add_parser("install", help="Install an artifact or distribution")
     p.add_argument("artifact")

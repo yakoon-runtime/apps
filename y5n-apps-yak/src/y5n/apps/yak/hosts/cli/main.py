@@ -17,24 +17,25 @@ def _show_banner() -> None:
 Usage:
     yak <command> [options]
 
-  Installation
-    install <name> [dir]    Install a distribution
+  Getting started
+    init          [dir]     Create a Yak context in current or given directory
+
+  Development
+    build                   Build artifacts from the current project
+    bootstrap               Prepare this repository for development
+    workspace create <name> Create a new workspace
+    resolve  <name>         Show resolved artifacts
+
+  Management
+    install <name>  [dir]   Install a distribution
+    update                  Update an installation
+    status                  Show installation status
+    doctor                  Check installation health
 
   Services
     runtime <act>           Manage the runtime service
     web     <act>           Manage the web service
     shell                   Open the Yakoon shell
-
-  Management
-    update                  Update an installation
-    status                  Show installation status
-    doctor                  Check installation health
-
-  Development
-    bootstrap               Prepare this repository for development
-    build                   Build artifacts from the current project
-    workspace create <name> Create a new workspace
-    resolve <name>          Show resolved artifacts
 
 Use 'yak <command> --help' for detailed options.
 """)
