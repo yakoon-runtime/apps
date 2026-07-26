@@ -31,6 +31,7 @@ Usage:
     update                  Update an installation
     status                  Show installation status
     doctor                  Check installation health
+    logs         [name]     Show logs for the current context
 
   Services
     runtime <act>           Manage the runtime service

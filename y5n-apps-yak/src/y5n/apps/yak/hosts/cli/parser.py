@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
             "    update                 Update an installation\n"
             "    status                 Show installation status\n"
             "    doctor                 Check installation health\n"
+            "    logs         [name]    Show logs for the current context\n"
             "\n"
             "  Services\n"
             "    runtime <act>          Manage the runtime service\n"
