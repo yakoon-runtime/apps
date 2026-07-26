@@ -12,6 +12,8 @@ dependencies:
   - y5n-apps-runtime
   - y5n-apps-shell
   - y5n-apps-web
+  - y5n-packs-root
+  - y5n-packs-system
 workspace:
   packs: [root, boot, system]
   mounts:
