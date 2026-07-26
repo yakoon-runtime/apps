@@ -25,9 +25,6 @@ Usage:
   Getting started
     init                   Create a Yak context
 
-  Typical workflow
-    create → build → install → sync → shell
-
   Development
     create pack            Create a new pack
     create command         Add a command to the current pack
