@@ -51,6 +51,10 @@ def _start(path: Path) -> None:
         except Exception:
             pass
 
+    log_dir = path / ".yak" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "runtime.log"
+
     wrapper = path / ".venv" / "bin" / "yakoon-runtime"
     wrapper.write_text(
         "#!/usr/bin/env python3\n"
@@ -62,9 +66,13 @@ def _start(path: Path) -> None:
     )
     wrapper.chmod(0o755)
 
-    proc = subprocess.Popen([str(wrapper)], cwd=path)
+    with open(log_file, "a") as lf:
+        proc = subprocess.Popen(
+            [str(wrapper)], cwd=path, stdout=lf, stderr=lf
+        )
     pid_file.write_text(str(proc.pid))
     print(f"Runtime started (pid {proc.pid})")
+    print(f"Logs     : {log_file}")
 
 
 def _stop(path: Path) -> None:

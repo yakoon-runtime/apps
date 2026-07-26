@@ -15,5 +15,13 @@ def run(args, mgr) -> None:
         print("Run 'yak install' first or cd into one.")
         return
 
+    log_dir = path / ".yak" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "shell.log"
+
     python = path / ".venv" / "bin" / "python"
-    subprocess.run([str(python), "-m", "y5n.apps.shell"], cwd=path)
+    with open(log_file, "a") as lf:
+        subprocess.run(
+            [str(python), "-m", "y5n.apps.shell"],
+            cwd=path, stderr=lf,
+        )
