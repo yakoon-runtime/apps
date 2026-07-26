@@ -40,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
             "    resolve  <name>        Show resolved artifacts\n"
             "\n"
             "  Management\n"
-            "    install <name> [dir]   Install a distribution\n"
+            "    install <name>          Install a distribution\n"
             "    update                 Update an installation\n"
             "    status                 Show installation status\n"
             "    doctor                 Check installation health\n"
@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("install", help="Install an artifact or distribution")
     p.add_argument("artifact")
-    p.add_argument("target", nargs="?", default=".", help="Target directory (default: .)")
+    p.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_install.run)
 

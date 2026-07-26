@@ -27,7 +27,7 @@ Usage:
     resolve  <name>         Show resolved artifacts
 
   Management
-    install <name>  [dir]   Install a distribution
+    install <name>          Install a distribution
     update                  Update an installation
     status                  Show installation status
     doctor                  Check installation health
