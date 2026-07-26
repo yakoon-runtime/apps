@@ -87,6 +87,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
     p.add_argument("--verbose", "-v", action="store_true")
+    p.add_argument(
+        "--upgrade", "-u", action="store_true", help="Upgrade to latest version"
+    )
     p.set_defaults(func=_install.run)
 
     p = sub.add_parser("status", help="Show installation status")
