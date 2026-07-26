@@ -31,16 +31,28 @@ def _artifact_install(args, mgr, ui) -> None:
 
 
 def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
-    """Materialize the default development workspace (root, boot, system)."""
+    """Materialize workspace from the artifact's manifest, if configured."""
     from y5n.apps.yak.distribution.models import Mount, PackName
+    from y5n.apps.yak.resolver.install import _collect_roots
+    from y5n.apps.yak.resolver.artifact import DirectorySource
 
-    packs = [PackName("root"), PackName("boot"), PackName("system")]
-    mounts = [
-        Mount(pack=PackName("root"), target="/"),
-        Mount(pack=PackName("boot"), target="/boot"),
-        Mount(pack=PackName("system"), target="/usr/bin"),
-    ]
-    mgr._materializer.materialize(root, name, packs, mounts=mounts)
+    for artifact_root in _collect_roots(None):
+        source = DirectorySource(artifact_root)
+        art = source.resolve(name)
+        if art and art.kind == "meta" and art.path:
+            manifest = art.path / "artifact.yml"
+            if manifest.exists():
+                import yaml
+                data = yaml.safe_load(manifest.read_text())
+                ws = data.get("workspace")
+                if ws:
+                    packs = [PackName(p) for p in ws.get("packs", [])]
+                    mounts = [
+                        Mount(pack=PackName(m["pack"]), target=m["target"])
+                        for m in ws.get("mounts", [])
+                    ]
+                    mgr._materializer.materialize(root, name, packs, mounts=mounts)
+                    return
 
 
 def _write_artifact_state(name: str, root: Path) -> None:
