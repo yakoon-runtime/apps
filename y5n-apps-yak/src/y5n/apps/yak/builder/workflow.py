@@ -43,7 +43,8 @@ def build(project_dir: Path | None = None, output_dir: Path | None = None) -> bo
     else:
         project_dir = _find_project_root()
     if project_dir is None:
-        print("Error: no buildable project found. Specify a path or cd into one.")
+        print("Error: no buildable project found.")
+        print("Usage: yak build <source-path>  (e.g. yak build ../runtime/y5n-runtime-engine)")
         return False
 
     builder = _select_builder(project_dir)
