@@ -13,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import bootstrap as _bootstrap
     from y5n.apps.yak.hosts.cli.commands import build as _build
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
+    from y5n.apps.yak.hosts.cli.commands import artifacts as _artifacts
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
     from y5n.apps.yak.hosts.cli.commands import install as _install
     from y5n.apps.yak.hosts.cli.commands import logs as _logs
@@ -79,6 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("doctor", help="Check installation health")
     p.set_defaults(func=_doctor.run)
+
+    p = sub.add_parser("artifacts", help="List available artifacts")
+    p.set_defaults(func=_artifacts.run)
 
     p = sub.add_parser("logs", help="Show installation logs")
     p.add_argument("target", nargs="?", help="Log name (e.g. 'runtime', 'shell')")
