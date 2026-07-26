@@ -15,11 +15,25 @@ def run(args, mgr) -> None:
 
 
 def _list_artifacts() -> None:
-    roots = _collect_roots(None)
+    from pathlib import Path
+
     seen: set[str] = set()
     names: list[str] = []
 
-    for root in roots:
+    # Bundled artifacts (dev.yml, desktop.yml, ...)
+    bundle_dir = Path(__file__).resolve().parents[7] / "artifacts"
+    if bundle_dir.is_dir():
+        for f in sorted(bundle_dir.iterdir()):
+            if f.suffix == ".yml":
+                meta = _parse_manifest(f)
+                if meta.get("kind") == "meta":
+                    name = meta.get("name", "")
+                    if name and name not in seen:
+                        seen.add(name)
+                        names.append(name)
+
+    # Cached artifacts
+    for root in _collect_roots(None):
         if not root.is_dir():
             continue
         for entry in sorted(root.iterdir()):
@@ -29,6 +43,8 @@ def _list_artifacts() -> None:
             if not manifest.exists():
                 continue
             meta = _parse_manifest(manifest)
+            if meta.get("kind") != "meta":
+                continue
             name = meta.get("name", "")
             if name and name not in seen:
                 seen.add(name)

@@ -31,8 +31,8 @@ Usage:
     update                  Update an installation
     status                  Show installation status
     doctor                  Check installation health
-    artifacts    [name]     List artifacts or show details
-    logs         [name]     Show logs for the current context
+    artifacts [name]        List artifacts or show details
+    logs      [name]        Show logs for the current context
 
   Services
     runtime <act>           Manage the runtime service
@@ -47,11 +47,11 @@ def _build_manager() -> InstallationManager:
     repo_root = Path(__file__).resolve().parents[8]
     packs = repo_root / "packs"
     runtime = repo_root / "runtime"
-    dists = repo_root / "apps" / "y5n-apps-yak" / "dists"
+    artifact_dir = repo_root / "apps" / "y5n-apps-yak" / "artifacts"
 
     apps = repo_root / "apps"
     sdk = repo_root / "sdk" / "y5n-sdk-python"
-    repo = FileRepository(packs, runtime, sdk, builtin_dists=dists)
+    repo = FileRepository(packs, runtime, sdk, builtin_artifacts=artifact_dir)
     artifacts = DirectoryArtifactStore(packs, runtime, apps, sdk)
     mgr = InstallationManager(repo, artifacts)
     mgr._sdk_path = sdk

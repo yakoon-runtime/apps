@@ -1,0 +1,13 @@
+name: crm
+kind: meta
+extends: desktop
+dependencies:
+  - y5n-packs-ident
+  - y5n-packs-crm
+workspace:
+  packs: [root, boot, system, ident, crm]
+  mounts:
+    - pack: ident
+      target: /usr/sbin/ident
+    - pack: crm
+      target: /opt/crm

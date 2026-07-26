@@ -1,0 +1,23 @@
+name: desktop
+kind: meta
+dependencies:
+  - y5n-runtime-engine
+  - y5n-runtime-api
+  - y5n-runtime-boot
+  - y5n-apps-runtime
+  - y5n-apps-shell
+  - y5n-packs-root
+  - y5n-packs-system
+workspace:
+  packs: [root, boot, system]
+  mounts:
+    - pack: root
+      target: /
+    - pack: boot
+      target: /boot
+    - pack: system
+      target: /usr/bin
+tools:
+  - runtime
+  - shell
+  - web

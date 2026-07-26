@@ -13,16 +13,16 @@ from y5n.apps.yak.distribution.models import (
 
 
 class FileRepository:
-    def __init__(self, *roots: Path, builtin_dists: Path | None = None) -> None:
+    def __init__(self, *roots: Path, builtin_artifacts: Path | None = None) -> None:
         self._roots = list(roots)
-        self._builtin = builtin_dists
+        self._artifacts_dir = builtin_artifacts
 
     def resolve_distribution(self, name: str) -> Distribution | None:
-        # 1. Builtin distributions (e.g. "desktop" → yak/dists/desktop.toml)
-        if self._builtin is not None:
-            builtin = self._builtin / f"{name}.toml"
-            if builtin.exists():
-                return self._parse(builtin)
+        # 1. Bundled artifacts (apps/y5n-apps-yak/artifacts/<name>.yml)
+        if self._artifacts_dir is not None:
+            yml = self._artifacts_dir / f"{name}.yml"
+            if yml.exists():
+                return self._parse_artifact_yml(yml)
 
         # 2. Pack manifests across all roots
         for root in self._roots:
@@ -61,11 +61,57 @@ class FileRepository:
             tools=[self._tool(t) for t in data.get("tools", data.get("tool", []))],
         )
 
+    def _parse_artifact_yml(self, path: Path) -> Distribution | None:
+        import yaml
+
+        try:
+            data = yaml.safe_load(path.read_text())
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+
+        name = data.get("name", "")
+
+        # Resolve extends
+        extends = data.get("extends")
+        if extends:
+            parent = self._resolve_extends(extends)
+            if parent is None:
+                return None
+            mounts = [self._mount(m) for m in data.get("workspace", {}).get("mounts", [])]
+            parent_mounts = [m for m in parent.mounts if m.pack not in {mo.pack for mo in mounts}]
+            all_mounts = parent_mounts + mounts
+
+            tools = [self._tool(t) for t in data.get("tools", [])]
+            parent_tools = parent.tools
+            all_tools = parent_tools + tools
+
+            return Distribution(
+                name=name,
+                version=data.get("version", "0.1"),
+                mounts=all_mounts,
+                tools=all_tools,
+            )
+
+        mounts = [self._mount(m) for m in data.get("workspace", {}).get("mounts", [])]
+        tools = [self._tool(t) for t in data.get("tools", [])]
+        return Distribution(
+            name=name,
+            version=data.get("version", "0.1"),
+            mounts=mounts,
+            tools=tools,
+        )
+
+    def _resolve_extends(self, name: str) -> Distribution | None:
+        return self.resolve_distribution(name)
+
     @staticmethod
     def _tool(raw: dict | str) -> ToolReference:
         if isinstance(raw, str):
-            return ToolReference(name=raw)
-        return ToolReference(name=raw.get("name", ""))
+            ot = ToolReference(name=raw)
+            return ot
+        return ToolReference(name=raw.get("name", ""), optional=raw.get("optional", False))
 
     @staticmethod
     def _mount(raw: dict) -> Mount:
