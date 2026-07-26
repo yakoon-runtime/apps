@@ -14,7 +14,7 @@ dependencies:
   - y5n-packs-root
   - y5n-packs-system
 workspace:
-  path: workspace
+  path: workspace/structure
   packs: [root, boot, system]
   mounts:
     - pack: root
