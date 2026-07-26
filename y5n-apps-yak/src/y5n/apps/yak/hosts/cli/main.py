@@ -29,11 +29,11 @@ Usage:
     resolve  <name>         Show resolved artifacts
 
   Management
-    install        [name]   Install an environment or list available
-    update                  Update an installation
+    install       [name]    Install an environment or list available
+    sync                    Sync environment with workspace
     status                  Show installation status
     doctor                  Check installation health
-    logs           [name]   Show logs for the current context
+    logs          [name]    Show logs for the current context
 
   Services
     runtime <act>           Manage the runtime service

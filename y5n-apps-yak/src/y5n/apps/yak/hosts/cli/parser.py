@@ -23,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import runtime as _runtime
     from y5n.apps.yak.hosts.cli.commands import shell as _shell
     from y5n.apps.yak.hosts.cli.commands import status as _status
-    from y5n.apps.yak.hosts.cli.commands import update as _update
+    from y5n.apps.yak.hosts.cli.commands import sync as _sync
     from y5n.apps.yak.hosts.cli.commands import web as _web
     from y5n.apps.yak.hosts.cli.commands import workspace as _workspace
 
@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
             "\n"
             "  Management\n"
             "    install       [name]   Install an environment or list available\n"
-            "    update                 Update an installation\n"
+            "    sync                   Sync environment with workspace\n"
             "    status                 Show installation status\n"
             "    doctor                 Check installation health\n"
             "    logs          [name]   Show logs for the current context\n"
@@ -83,7 +83,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("status", help="Show installation status")
     p.set_defaults(func=_status.run)
 
-    p = sub.add_parser("update", help="Update an installation")
+    p = sub.add_parser(
+        "sync",
+        help="Sync environment: install wheels + sync env + materialize workspace",
+    )
     p.add_argument(
         "--force",
         "-f",
@@ -91,7 +94,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force reinstall even if version is unchanged",
     )
     p.add_argument("--verbose", "-v", action="store_true")
-    p.set_defaults(func=_update.run)
+    p.set_defaults(func=_sync.run)
+
+    # Hidden alias for backward compatibility
+    p = sub.add_parser("update")
+    p.add_argument("--force", "-f", action="store_true")
+    p.add_argument("--verbose", "-v", action="store_true")
+    p.set_defaults(func=_sync.run)
 
     p = sub.add_parser("doctor", help="Check installation health")
     p.set_defaults(func=_doctor.run)
