@@ -1,21 +1,29 @@
-"""yak artifacts — list available artifacts."""
+"""yak artifacts — list and inspect available artifacts."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from y5n.apps.yak.resolver.install import _collect_roots
-from y5n.apps.yak.resolver.artifact import _parse_manifest
+from y5n.apps.yak.resolver.artifact import _parse_manifest, DirectorySource
 
 
 def run(args, mgr) -> None:
-    roots = _collect_roots(None)
-    if not roots:
-        print("No artifact sources found.")
-        return
+    action = getattr(args, "action", "list")
+    if action == "list":
+        _list_artifacts()
+    elif action == "info":
+        name = getattr(args, "name", "")
+        if not name:
+            print("Usage: yak artifacts info <name>")
+            return
+        _show_info(name)
 
+
+def _list_artifacts() -> None:
+    roots = _collect_roots(None)
     seen: set[str] = set()
-    categories: dict[str, list[tuple[str, str]]] = {}
+    names: list[str] = []
 
     for root in roots:
         if not root.is_dir():
@@ -28,33 +36,26 @@ def run(args, mgr) -> None:
                 continue
             meta = _parse_manifest(manifest)
             name = meta.get("name", "")
-            if not name or name in seen:
-                continue
-            seen.add(name)
-            kind = meta.get("kind", "package")
-            desc = meta.get("description", "")
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
 
-            # Simple category mapping
-            if kind == "meta":
-                cat = "Meta"
-            elif name.startswith("y5n-apps-"):
-                cat = "Apps"
-            elif name.startswith("y5n-packs-"):
-                cat = "Packs"
-            elif name.startswith("y5n-sdk-"):
-                cat = "SDK"
-            elif name.startswith("y5n-runtime-"):
-                cat = "Runtime"
-            else:
-                cat = "Other"
+    if names:
+        print("  " + "\n  ".join(names))
+    else:
+        print("No artifacts found.")
 
-            categories.setdefault(cat, []).append((name, desc))
 
-    for cat in ["Meta", "Apps", "Runtime", "SDK", "Packs", "Other"]:
-        items = categories.get(cat)
-        if not items:
-            continue
-        print(f"\n  {cat}")
-        for name, desc in items:
-            desc_str = f"  — {desc}" if desc else ""
-            print(f"    {name}{desc_str}")
+def _show_info(name: str) -> None:
+    roots = _collect_roots(None)
+
+    for root in roots:
+        source = DirectorySource(root)
+        art = source.resolve(name)
+        if art and art.path:
+            manifest = art.path / "artifact.yml"
+            if manifest.exists():
+                print(manifest.read_text().strip())
+                return
+
+    print(f"Artifact not found: {name}")

@@ -81,8 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="Check installation health")
     p.set_defaults(func=_doctor.run)
 
-    p = sub.add_parser("artifacts", help="List available artifacts")
-    p.set_defaults(func=_artifacts.run)
+    p = sub.add_parser("artifacts", help="List and inspect artifacts")
+    art_sub = p.add_subparsers(dest="action", required=True)
+    p_list = art_sub.add_parser("list", help="List all available artifact names")
+    p_list.set_defaults(func=_artifacts.run)
+    p_info = art_sub.add_parser("info", help="Show artifact details")
+    p_info.add_argument("name", help="Artifact name")
+    p_info.set_defaults(func=_artifacts.run)
 
     p = sub.add_parser("logs", help="Show installation logs")
     p.add_argument("target", nargs="?", help="Log name (e.g. 'runtime', 'shell')")
