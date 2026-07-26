@@ -40,9 +40,11 @@ class PythonBuildProvider:
             return None
 
         artifact_dir = output_dir / info.filename
-        artifact_dir.mkdir(exist_ok=True)
+        artifact_dir.mkdir(parents=True, exist_ok=True)
 
-        wheel.rename(artifact_dir / wheel.name)
+        import shutil
+        shutil.copy2(str(wheel), str(artifact_dir / wheel.name))
+        wheel.unlink()
         (artifact_dir / "artifact.yml").write_text(info.to_yml())
         return info
 
