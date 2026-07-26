@@ -133,12 +133,18 @@ def _install_one(artifact, python: Path) -> bool:
     if wheel is None or not wheel.exists():
         return False
 
-    cmd = [str(python), "-m", "pip", "install"]
+    cmd = [str(python), "-m", "pip", "install", "--no-deps"]
     if _FORCE:
         cmd.append("--force-reinstall")
     cmd.append(str(wheel))
 
     result = subprocess.run(cmd, capture_output=True, text=True)
+
+    # Install deps normally (pip resolves PyPI packages)
+    if result.returncode == 0:
+        dep_cmd = [str(python), "-m", "pip", "install", str(wheel)]
+        subprocess.run(dep_cmd, capture_output=True, text=True)
+
     return result.returncode == 0
 
 
