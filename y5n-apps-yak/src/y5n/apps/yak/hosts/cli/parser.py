@@ -13,6 +13,8 @@ def _add_action(sub, name: str, actions: list[str], func):
 def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import bootstrap as _bootstrap
     from y5n.apps.yak.hosts.cli.commands import build as _build
+    from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
+    from y5n.apps.yak.hosts.cli.commands import create_pack as _create_pack
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
     from y5n.apps.yak.hosts.cli.commands import install as _install
@@ -36,6 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
             "    init         [dir]     Create a Yak context\n"
             "\n"
             "  Development\n"
+            "    create pack <name>     Scaffold a new pack\n"
+            "    create command <name>  Add a command to the current pack\n"
             "    build         [src]    Build artifacts into the current context\n"
             "    bootstrap              Prepare this repository for development\n"
             "    workspace create <n>   Create a new workspace\n"
@@ -61,11 +65,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_resolve.run)
 
     p = sub.add_parser("init", help="Create a Yak context")
-    p.add_argument("target", nargs="?", default=".", help="Target directory (default: .)")
+    p.add_argument(
+        "target", nargs="?", default=".", help="Target directory (default: .)"
+    )
     p.set_defaults(func=_init.run)
 
-    p = sub.add_parser("install", help="Install an environment (list available when run without args)")
-    p.add_argument("artifact", nargs="?", help="Environment name (dev, desktop, crm, ...)")
+    p = sub.add_parser(
+        "install", help="Install an environment (list available when run without args)"
+    )
+    p.add_argument(
+        "artifact", nargs="?", help="Environment name (dev, desktop, crm, ...)"
+    )
     p.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_install.run)
@@ -74,7 +84,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_status.run)
 
     p = sub.add_parser("update", help="Update an installation")
-    p.add_argument("--force", "-f", action="store_true", help="Force reinstall even if version is unchanged")
+    p.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force reinstall even if version is unchanged",
+    )
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_update.run)
 
@@ -91,14 +106,39 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
 
-    p = sub.add_parser("build", help="Build artifacts from source into the current context")
-    p.add_argument("source", nargs="?", help="Source project path (default: current directory)")
+    p = sub.add_parser(
+        "build", help="Build artifacts from source into the current context"
+    )
+    p.add_argument(
+        "source", nargs="?", help="Source project path (default: current directory)"
+    )
     p.set_defaults(func=_build.run)
 
     p = sub.add_parser("bootstrap", help="Prepare this repository for development")
-    p.add_argument("--force", "-f", action="store_true", help="Recreate everything from scratch")
+    p.add_argument(
+        "--force", "-f", action="store_true", help="Recreate everything from scratch"
+    )
     p.add_argument("--check", action="store_true", help="Only verify, don't modify")
     p.set_defaults(func=_bootstrap.run)
+
+    p = sub.add_parser("create", help="Scaffold new Yakoon projects")
+    create_sub = p.add_subparsers(dest="create_action", required=True)
+    p_pack = create_sub.add_parser("pack", help="Create a new pack (container)")
+    p_pack.add_argument("name", help="Pack name (e.g. hello)")
+    p_pack.add_argument("--target", help="Target directory (default: CWD)")
+    p_pack.add_argument(
+        "--force", "-f", action="store_true", help="Overwrite existing directory"
+    )
+    p_pack.set_defaults(func=_create_pack.run)
+    p_cmd = create_sub.add_parser(
+        "command", help="Create a new command in the current pack"
+    )
+    p_cmd.add_argument("name", help="Command name (e.g. greet)")
+    p_cmd.add_argument("--pack", help="Pack name (auto-detected from CWD if omitted)")
+    p_cmd.add_argument(
+        "--force", "-f", action="store_true", help="Overwrite existing files"
+    )
+    p_cmd.set_defaults(func=_create_command.run)
 
     p = sub.add_parser("workspace", help="Manage Yakoon workspaces")
     ws_sub = p.add_subparsers(dest="ws_action", required=True)

@@ -9,27 +9,36 @@ from y5n.apps.yak.builder.python import PythonBuildProvider
 
 
 def _find_buildable_projects(root: Path) -> list[Path]:
-    """Recursively find all projects with a buildable pyproject.toml."""
+    """Recursively find all buildable projects under root."""
     projects: list[Path] = []
 
-    # Root may itself be a project
-    pyproj = (root / "pyproject.toml") if root.is_dir() else root
-    if not pyproj.parents:
-        pyproj = root.parent / "pyproject.toml"
+    if not root.is_dir():
+        return projects
 
-    if pyproj.is_file():
-        text = pyproj.read_text()
-        if "[build-system]" in text and "build-backend" in text:
-            projects.append(pyproj.parent)
+    # Pack erkannt an pack.toml (Primärerkennung)
+    if (root / "pack.toml").exists():
+        projects.append(root)
+    else:
+        # Fallback: pyproject.toml mit build-system (apps, runtime, sdk)
+        pyproj = root / "pyproject.toml"
+        if pyproj.exists() and _is_buildable_pyproject(pyproj):
+            projects.append(root)
 
     # Recurse into subdirectories
-    if root.is_dir():
-        for child in sorted(root.iterdir()):
-            if child == pyproj.parent or not child.is_dir():
-                continue
-            projects.extend(_find_buildable_projects(child))
+    for child in sorted(root.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        projects.extend(_find_buildable_projects(child))
 
     return projects
+
+
+def _is_buildable_pyproject(path: Path) -> bool:
+    try:
+        text = path.read_text()
+        return "[build-system]" in text and "build-backend" in text
+    except Exception:
+        return False
 
 
 def _select_builder(project_dir: Path) -> Builder | None:
@@ -47,7 +56,9 @@ def build(project_dir: Path | None = None, output_dir: Path | None = None) -> bo
         output_dir = default_artifact_dir()
         if output_dir is None:
             print("Error: no Yak context found.")
-            print("Run 'yak init' first, then 'yak build <source>' from within the context.")
+            print(
+                "Run 'yak init' first, then 'yak build <source>' from within the context."
+            )
             return False
 
     if project_dir is None:
@@ -72,7 +83,9 @@ def build(project_dir: Path | None = None, output_dir: Path | None = None) -> bo
             all_ok = False
             continue
 
-        print(f"  Building {p.relative_to(source.parent) if source.parent else p.name} ...")
+        print(
+            f"  Building {p.relative_to(source.parent) if source.parent else p.name} ..."
+        )
         info = builder.build(p, output_dir)
         if info is None:
             print(f"  ✘ {p.name}")

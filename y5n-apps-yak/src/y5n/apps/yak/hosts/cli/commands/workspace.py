@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -32,7 +32,7 @@ def _create(args) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "packs").mkdir(exist_ok=True)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     manifest = f"""\
 [workspace]
 name = "{name}"
@@ -44,8 +44,8 @@ created = "{now}"
     print(f"Workspace '{name}' created at {root}")
     print()
     print(f"  cd {name}")
-    print(f"  yak create <pack> --python")
-    print(f"  yak shell")
+    print("  yak create pack <name>")
+    print("  yak shell")
 
 
 def _find_workspace_parent(path: Path) -> Path | None:

@@ -21,6 +21,8 @@ Usage:
     init          [dir]     Create a Yak context
 
   Development
+    create pack <name>      Scaffold a new pack (container)
+    create command <name>   Add a command to the current pack
     build         [src]     Build artifacts into the current context
     bootstrap               Prepare this repository for development
     workspace create <n>    Create a new workspace
