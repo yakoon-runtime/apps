@@ -34,7 +34,8 @@ def build(project_dir: Path | None = None, output_dir: Path | None = None) -> bo
     if output_dir is None:
         output_dir = default_artifact_dir()
         if output_dir is None:
-            print("Error: no default artifact directory found")
+            print("Error: no Yak context found.")
+            print("Run 'yak init' first, or use 'yak build <source>' from within a context.")
             return False
 
     if project_dir is not None:

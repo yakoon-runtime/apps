@@ -12,7 +12,6 @@ _INSTALLED: list[str] = []
 
 
 def _collect_roots(artifact_root: Path | None) -> list[Path]:
-    """Collect artifact roots to search — context-local first, then global."""
     if artifact_root is not None:
         return [artifact_root]
 
@@ -20,17 +19,15 @@ def _collect_roots(artifact_root: Path | None) -> list[Path]:
 
     roots: list[Path] = []
 
-    # Context-local artifacts
     ctx = find_context_root()
     if ctx is not None:
         local = ctx / ".yak" / "artifacts"
         local.mkdir(parents=True, exist_ok=True)
         roots.append(local)
 
-    # Global artifact cache (always available)
-    for d in [Path.home() / ".yak" / "artifacts", Path.home() / ".yak" / "cache" / "artifacts"]:
-        d.mkdir(parents=True, exist_ok=True)
-        if d not in roots:
+    # Shared read-only fallback for pre-built meta packages
+    for d in [Path.home() / ".yak" / "cache" / "artifacts", Path.home() / ".yak" / "artifacts"]:
+        if d.is_dir() and d not in roots:
             roots.append(d)
 
     return roots
