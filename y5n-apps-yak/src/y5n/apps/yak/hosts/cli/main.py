@@ -25,9 +25,13 @@ Usage:
   Getting started
     init                   Create a Yak context
 
-  Build
+    create → build → install → sync → shell
+
+  Development
     create pack            Scaffold a new pack
     create command         Add a command to the current pack
+
+  Build
     build                  Build artifacts
     bootstrap              Prepare this repository for development
 
@@ -36,16 +40,15 @@ Usage:
     sync                   Sync environment with workspace
 
   Run
-    runtime                Manage the runtime service
     shell                  Open the Yakoon shell
+    runtime                Manage the runtime service
     web                    Manage the web service
 
   Tools
     status                 Show installation status
-    doctor                 Check installation health
-    logs                   Show logs
     resolve                Show resolved artifacts
-    workspace create       Create a new workspace
+    logs                   Show logs
+    doctor                 Check installation health
 
 Use 'yak <command> --help' for detailed options.
 """)
