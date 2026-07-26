@@ -30,7 +30,12 @@ def _select_builder(project_dir: Path) -> Builder | None:
 
 def build(output_dir: Path | None = None) -> bool:
     if output_dir is None:
-        output_dir = Path.home() / ".yak" / "cache" / "artifacts"
+        from y5n.apps.yak.hosts.cli.cwd import default_artifact_dir
+
+        output_dir = default_artifact_dir()
+        if output_dir is None:
+            print("Error: no Yak context found. Run 'yak init' first.")
+            return False
 
     project_dir = _find_project_root()
     if project_dir is None:

@@ -84,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_shell.run)
 
     p = sub.add_parser("build", help="Build artifacts from the current project")
-    p.add_argument("target", nargs="?", help="Output directory (default: ~/.yak/cache/artifacts)")
+    p.add_argument("target", nargs="?", help="Output directory (default: context artifacts)")
     p.set_defaults(func=_build.run)
 
     p = sub.add_parser("bootstrap", help="Prepare this repository for development")

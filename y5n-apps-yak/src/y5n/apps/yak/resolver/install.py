@@ -11,14 +11,37 @@ from y5n.apps.yak.resolver.artifact import DirectorySource
 _INSTALLED: list[str] = []
 
 
+def _collect_roots(artifact_root: Path | None) -> list[Path]:
+    """Collect artifact roots to search — context-local first, then global."""
+    if artifact_root is not None:
+        return [artifact_root]
+
+    from y5n.apps.yak.hosts.cli.cwd import find_context_root
+
+    roots: list[Path] = []
+
+    # Context-local artifacts
+    ctx = find_context_root()
+    if ctx is not None:
+        local = ctx / ".yak" / "artifacts"
+        local.mkdir(parents=True, exist_ok=True)
+        roots.append(local)
+
+    # Global artifact cache (always available)
+    for d in [Path.home() / ".yak" / "artifacts", Path.home() / ".yak" / "cache" / "artifacts"]:
+        d.mkdir(parents=True, exist_ok=True)
+        if d not in roots:
+            roots.append(d)
+
+    return roots
+
+
 def install_artifact(
     name: str,
     target_root: Path | None = None,
     artifact_root: Path | None = None,
     _seen: set[str] | None = None,
 ) -> bool:
-    if artifact_root is None:
-        artifact_root = Path.home() / ".yak" / "cache" / "artifacts"
     if _seen is None:
         _seen = set()
 
@@ -26,8 +49,17 @@ def install_artifact(
         return True
     _seen.add(name)
 
-    source = DirectorySource(artifact_root)
-    artifact = source.resolve(name)
+    roots = _collect_roots(artifact_root)
+
+    # Search all roots for the artifact
+    artifact = None
+    for root in roots:
+        source = DirectorySource(root)
+        candidate = source.resolve(name)
+        if candidate is not None:
+            artifact = candidate
+            break
+
     if artifact is None:
         return False
 
