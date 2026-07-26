@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from y5n.apps.yak.distribution.models import Mount, PackName
 from y5n.apps.yak.environment.io import env_path, from_template, load, save
 from y5n.apps.yak.environment.models import Environment
@@ -80,7 +79,10 @@ workspace:
 """)
             env = from_template(template)
             assert env.name == "dev"
-            assert env.dependencies == [PackName("y5n-packs-root"), PackName("y5n-packs-system")]
+            assert env.dependencies == [
+                PackName("y5n-packs-root"),
+                PackName("y5n-packs-system"),
+            ]
             assert len(env.mounts) == 2
             assert env.mounts[0].pack == "root" and env.mounts[0].target == "/"
             assert env.workspace_path == "workspace/structure"

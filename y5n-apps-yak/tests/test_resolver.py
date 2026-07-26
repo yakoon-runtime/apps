@@ -1,4 +1,9 @@
-from y5n.apps.yak.distribution.models import Distribution, Mount, PackName, PackReference
+from y5n.apps.yak.distribution.models import (
+    Distribution,
+    Mount,
+    PackName,
+    PackReference,
+)
 
 # PackReference is still used for sub-distribution references
 from y5n.apps.yak.resolver.resolver import Resolver

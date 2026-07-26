@@ -22,12 +22,10 @@ def _make_app(root: Path, name: str, buildable: bool = True) -> Path:
     p.mkdir()
     if buildable:
         (p / "pyproject.toml").write_text(
-            "[build-system]\nrequires = [\"setuptools\"]\nbuild-backend = \"setuptools.build_meta\"\n"
+            '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n'
         )
     else:
-        (p / "pyproject.toml").write_text(
-            "[project]\nname = \"unbuildable\"\n"
-        )
+        (p / "pyproject.toml").write_text('[project]\nname = "unbuildable"\n')
     return p
 
 
@@ -97,7 +95,7 @@ class TestFindBuildableProjects:
         with tempfile.TemporaryDirectory() as tmp:
             hidden = Path(tmp) / ".hidden"
             hidden.mkdir()
-            (hidden / "pack.toml").write_text("name = \"hidden\"\n")
+            (hidden / "pack.toml").write_text('name = "hidden"\n')
             _make_pack(Path(tmp), "visible")
             result = _find_buildable_projects(Path(tmp))
             assert len(result) == 1

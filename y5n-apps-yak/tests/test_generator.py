@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from y5n.apps.yak.generator.command import _find_pack_root, create_command
 from y5n.apps.yak.generator.pack import create_pack
 

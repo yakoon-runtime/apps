@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from y5n.apps.yak.hosts.cli.cwd import find_context_root, find_installation_path
 
 
@@ -20,12 +19,12 @@ def _preserve_cwd():
 
 def _init(root: Path) -> None:
     (root / ".yak").mkdir(parents=True, exist_ok=True)
-    (root / ".yak" / "context.toml").write_text("[context]\nname = \"test\"\n")
+    (root / ".yak" / "context.toml").write_text('[context]\nname = "test"\n')
 
 
 def _install(root: Path) -> None:
     (root / ".yak").mkdir(parents=True, exist_ok=True)
-    (root / ".yak" / "state.toml").write_text("[installation]\nname = \"test\"\n")
+    (root / ".yak" / "state.toml").write_text('[installation]\nname = "test"\n')
 
 
 class TestFindContextRoot:
