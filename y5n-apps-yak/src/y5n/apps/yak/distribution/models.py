@@ -24,7 +24,7 @@ class PackReference:
 
 @dataclass(frozen=True)
 class Mount:
-    pack: PackName
+    source: str
     target: str
 
 
@@ -34,4 +34,5 @@ class Distribution:
     version: str
     mounts: list[Mount] = field(default_factory=list)
     distributions: list[PackReference] = field(default_factory=list)
+    packs: list[PackName] = field(default_factory=list)
     tools: list[ToolReference] = field(default_factory=list)

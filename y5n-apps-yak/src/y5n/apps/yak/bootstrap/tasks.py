@@ -86,58 +86,35 @@ class InstallProjectsTask:
 
 
 class MaterializeWorkspaceTask:
-    """Materialize the development workspace from an environment file."""
+    """Materialize the development workspace from .yak/environment.yml."""
 
-    def __init__(
-        self, root: Path, env_file: Path | None = None, force: bool = False
-    ) -> None:
+    def __init__(self, root: Path, force: bool = False) -> None:
         self._root = root
-        self._env_file = env_file
         self._force = force
 
     def run(self) -> bool:
-        if self._env_file is None or not self._env_file.exists():
+        from y5n.apps.yak.environment.io import load
+        from y5n.apps.yak.workspace.materializer import Materializer
+
+        env = load(self._root)
+        if env is None:
             return False
 
-        import shutil
-
-        import yaml
-
-        data = yaml.safe_load(self._env_file.read_text())
-        ws = data.get("workspace", {})
-        ws_path = ws.get("path", "workspace")
-        packs_raw = ws.get("packs", [])
-        mounts_raw = ws.get("mounts", [])
-
+        ws_path = env.workspace_path
         workspace = self._root / ws_path
         if workspace.exists():
             if not self._force:
+                print("  Workspace already exists (use --force to recreate)")
                 return True
+            import shutil
+
             shutil.rmtree(workspace)
 
         workspace.mkdir(parents=True, exist_ok=True)
 
-        from y5n.apps.yak.distribution.models import Mount, PackName
-        from y5n.apps.yak.repository.artifact import DirectoryArtifactStore as Store
-        from y5n.apps.yak.workspace.materializer import Materializer
-
-        materializer = Materializer(
-            Store(
-                self._root / "packs",
-                self._root / "runtime",
-                self._root / "apps",
-                self._root / "sdk" / "y5n-sdk-python",
-            )
-        )
-
-        materializer.materialize(
-            workspace,
-            "dev",
-            [PackName(p) for p in packs_raw],
-            mounts=[
-                Mount(pack=PackName(m["pack"]), target=m["target"]) for m in mounts_raw
-            ],
-        )
+        materializer = Materializer()
+        structure_dir = self._root / env.workspace_path
+        materializer.materialize(structure_dir, "dev", mounts=list(env.mounts))
 
         return True
 

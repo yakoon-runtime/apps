@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from y5n.apps.yak.distribution.models import Mount, PackName
 
@@ -12,3 +13,5 @@ class Environment:
     dependencies: list[PackName] = field(default_factory=list)
     mounts: list[Mount] = field(default_factory=list)
     workspace_path: str = "structure"
+    created: datetime | None = None
+    updated: datetime | None = None

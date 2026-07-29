@@ -45,7 +45,7 @@ Usage:
 
   Tools
     status                 Show installation status
-    resolve                Show resolved artifacts
+    mount                  Manage workspace mounts
     logs                   Show logs
     doctor                 Check installation health
 

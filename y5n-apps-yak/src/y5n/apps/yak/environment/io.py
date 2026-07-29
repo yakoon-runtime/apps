@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -23,11 +24,12 @@ def load(context_root: Path) -> Environment | None:
     try:
         data = yaml.safe_load(path.read_text()) or {}
         mounts = [
-            Mount(pack=PackName(m["pack"]), target=m["target"])
+            Mount(source=m.get("source") or m.get("pack", ""), target=m["target"])
             for m in data.get("mounts", [])
         ]
         deps = [PackName(d) for d in data.get("dependencies", [])]
         ws = data.get("workspace", {})
+        inst = data.get("installation", {})
         return Environment(
             name=data.get("name", ""),
             schema=data.get("schema", "1"),
@@ -36,15 +38,26 @@ def load(context_root: Path) -> Environment | None:
             workspace_path=(
                 ws.get("path", "structure") if isinstance(ws, dict) else "structure"
             ),
+            created=_parse_dt(inst.get("created")) if isinstance(inst, dict) else None,
+            updated=_parse_dt(inst.get("updated")) if isinstance(inst, dict) else None,
         )
     except Exception:
         return None
 
 
+def _parse_dt(raw: str | None) -> datetime | None:
+    if raw:
+        try:
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            pass
+    return None
+
+
 def save(env: Environment, context_root: Path) -> None:
     path = env_path(context_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    mounts_yaml = [{"pack": m.pack, "target": m.target} for m in env.mounts]
+    mounts_yaml = [{"source": m.source, "target": m.target} for m in env.mounts]
     data = {
         "schema": env.schema,
         "name": env.name,
@@ -52,6 +65,13 @@ def save(env: Environment, context_root: Path) -> None:
         "workspace": {"path": env.workspace_path},
         "mounts": mounts_yaml,
     }
+    if env.created or env.updated:
+        inst = {}
+        if env.created:
+            inst["created"] = env.created.isoformat()
+        if env.updated:
+            inst["updated"] = env.updated.isoformat()
+        data["installation"] = inst
     path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
 
 
@@ -62,7 +82,7 @@ def from_template(template_path: Path) -> Environment:
     data = yaml.safe_load(template_path.read_text()) or {}
     ws = data.get("workspace", {})
     mounts = [
-        Mount(pack=PackName(m["pack"]), target=m["target"])
+        Mount(source=m.get("source") or m.get("pack", ""), target=m["target"])
         for m in ws.get("mounts", [])
     ]
     deps = [PackName(d) for d in data.get("dependencies", [])]

@@ -5,7 +5,7 @@ import signal
 import subprocess
 from pathlib import Path
 
-from y5n.apps.yak.hosts.cli.cwd import find_installation_path
+from y5n.apps.yak.hosts.cli.cwd import find_context_root
 
 
 def run(args, mgr) -> None:
@@ -13,10 +13,10 @@ def run(args, mgr) -> None:
     if env_file:
         path = Path(env_file).resolve().parent
     else:
-        path = find_installation_path()
+        path = find_context_root()
         if path is None:
-            print("Not inside a Yak installation.")
-            print("Run 'yak install' first or cd into one.")
+            print("Not inside a Yak context.")
+            print("Run 'yak init' first or cd into one.")
             return
 
     match args.action:

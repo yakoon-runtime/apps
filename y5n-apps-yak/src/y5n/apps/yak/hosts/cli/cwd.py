@@ -70,19 +70,6 @@ def default_sources() -> list[Path]:
     return [root / d for d in ("packs", "runtime", "apps", "sdk", root)]
 
 
-def find_installation_from_cwd() -> str | None:
-    cwd = Path.cwd()
-    for parent in [cwd, *cwd.parents]:
-        state = parent / ".yak" / "state.toml"
-        if state.exists():
-            import tomllib
-
-            with open(state, "rb") as f:
-                data = tomllib.load(f)
-            return data.get("installation", {}).get("name")
-    return None
-
-
 def find_context_root() -> Path | None:
     cwd = Path.cwd()
     found: Path | None = None
@@ -90,14 +77,6 @@ def find_context_root() -> Path | None:
         if (parent / ".yak" / "context.toml").exists():
             found = parent
     return found
-
-
-def find_installation_path() -> Path | None:
-    cwd = Path.cwd()
-    for parent in [cwd, *cwd.parents]:
-        if (parent / ".yak" / "state.toml").exists():
-            return parent
-    return find_context_root()
 
 
 def default_artifact_dir() -> Path | None:

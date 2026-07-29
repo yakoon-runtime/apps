@@ -19,8 +19,9 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
     from y5n.apps.yak.hosts.cli.commands import install as _install
     from y5n.apps.yak.hosts.cli.commands import logs as _logs
+    from y5n.apps.yak.hosts.cli.commands import mount as _mount
     from y5n.apps.yak.hosts.cli.commands import publish as _publish
-    from y5n.apps.yak.hosts.cli.commands import resolve as _resolve
+
     from y5n.apps.yak.hosts.cli.commands import runtime as _runtime
     from y5n.apps.yak.hosts.cli.commands import shell as _shell
     from y5n.apps.yak.hosts.cli.commands import status as _status
@@ -62,16 +63,11 @@ def build_parser() -> argparse.ArgumentParser:
             "  Tools\n"
             "    status                 Show installation status\n"
             "    publish                Publish an artifact\n"
-            "    resolve                Show resolved artifacts\n"
             "    logs                   Show logs\n"
             "    doctor                 Check installation health\n"
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
-
-    p = sub.add_parser("resolve", help="Show resolved artifacts")
-    p.add_argument("name")
-    p.set_defaults(func=_resolve.run)
 
     p = sub.add_parser("init", help="Create a Yak context")
     p.add_argument(
@@ -109,11 +105,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_sync.run)
 
-    # Hidden alias for backward compatibility
-    p = sub.add_parser("update")
-    p.add_argument("--force", "-f", action="store_true")
-    p.add_argument("--verbose", "-v", action="store_true")
-    p.set_defaults(func=_sync.run)
+    p = sub.add_parser("mount", help="Manage workspace mounts")
+    mount_sub = p.add_subparsers(dest="mount_action", required=True)
+    p_add = mount_sub.add_parser("add", help="Add a mount")
+    p_add.add_argument("source", help="Source directory path")
+    p_add.add_argument(
+        "--target", "-t", help="Target path in workspace (default: /<dirname>)"
+    )
+    p_add.set_defaults(func=_mount.run_add)
+    p_rm = mount_sub.add_parser("remove", help="Remove a mount")
+    p_rm.add_argument("target", help="Target path to remove")
+    p_rm.set_defaults(func=_mount.run_remove)
+    p_ls = mount_sub.add_parser("list", help="List mounts")
+    p_ls.set_defaults(func=_mount.run_list)
 
     p = sub.add_parser("doctor", help="Check installation health")
     p.set_defaults(func=_doctor.run)

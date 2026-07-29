@@ -57,15 +57,15 @@ class Installer:
                 if pkg is not None:
                     projects.extend(self._find_projects(pkg))
 
+        if projects:
+            self._pip_install_all(python, projects)
+
     def _find_tool(self, name: str) -> Path | None:
         pkg = _TOOL_PACKAGES.get(name)
         if pkg is None or self._apps_root is None:
             return None
         tool_dir = self._apps_root / pkg
         return tool_dir if tool_dir.is_dir() else None
-
-        if projects:
-            self._pip_install_all(python, projects)
 
     def _ensure_venv(self, path: Path) -> Path:
         if not (path / "bin" / "python").exists():

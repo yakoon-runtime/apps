@@ -17,9 +17,9 @@ workspace:
   path: workspace/structure
   packs: [root, boot, system]
   mounts:
-    - pack: root
+    - source: packs/y5n-packs-root/structure
       target: /
-    - pack: boot
+    - source: runtime/y5n-runtime-boot/structure
       target: /boot
-    - pack: system
+    - source: packs/y5n-packs-system/structure
       target: /usr/bin

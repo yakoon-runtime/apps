@@ -1,24 +1,29 @@
-"""yak status — show installation status."""
+"""yak status — show context status."""
 
 from __future__ import annotations
 
-from y5n.apps.yak.hosts.cli.cwd import find_installation_path
-from y5n.apps.yak.hosts.cli.ui import TerminalUI
+from pathlib import Path
+
+from y5n.apps.yak.environment.io import load as load_env
+from y5n.apps.yak.hosts.cli.cwd import find_context_root
 
 
 def run(args, mgr) -> None:
-    path = find_installation_path()
-    if path is None:
-        print("Not inside a Yak installation.")
-        print("Run 'yak install' first or cd into one.")
+    ctx = find_context_root()
+    if ctx is None:
+        print("Not inside a Yak context.")
         return
 
-    inst = mgr.load(path)
-    if inst is None:
-        print("Not a valid Yak installation.")
+    print(f"  Context: {ctx.name} ({ctx})")
+
+    env = load_env(ctx)
+    if env is None:
+        print("  Environment: none")
+        print("  Run 'yak sync' to discover mounts")
         return
 
-    print(f"  {inst.name}")
-    print(f"    distribution: {inst.distribution}")
-    print(f"    status: {inst.status.value}")
-    print(f"    packs: {', '.join(inst.packs)}")
+    print(f"  Environment: {env.name}")
+    print(f"  Workspace:   {ctx / env.workspace_path}")
+    print(f"  Mounts:      {len(env.mounts)}")
+    for m in env.mounts:
+        print(f"    {m.target} ← {m.source}")
