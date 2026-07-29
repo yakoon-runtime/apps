@@ -17,6 +17,7 @@ class Context:
     name: str = ""
     schema: str = "1"
     source_dirs: list[Path] = field(default_factory=list)
+    repository_sources: list[str] = field(default_factory=list)
 
     def resolve_sources(self) -> list[Path]:
         paths = list(self.source_dirs)
@@ -50,11 +51,16 @@ def _load_context(root: Path) -> Context:
     raw_dirs = sources_section.get("dirs", [])
     source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
 
+    repos_section = data.get("repositories", {})
+    raw_repos = repos_section.get("sources", [])
+    repository_sources = list(raw_repos) if isinstance(raw_repos, list) else []
+
     return Context(
         path=root,
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
         source_dirs=source_dirs,
+        repository_sources=repository_sources,
     )
 
 
