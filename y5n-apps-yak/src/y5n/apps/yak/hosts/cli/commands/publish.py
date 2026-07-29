@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from y5n.apps.yak.publisher.publish import publish_artifact
 
 
@@ -21,6 +23,6 @@ def run(args, mgr) -> None:
     if result is True:
         print(f"  Published {name} to {repository}")
         print(f"  Install with: yak install {name} --repository {repository}")
-    elif isinstance(result, Path):
+    else:
         print(f"  Published {name} to {result}")
         print(f"  Install anywhere with: yak install {name}")

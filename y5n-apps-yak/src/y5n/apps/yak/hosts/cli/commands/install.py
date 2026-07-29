@@ -65,7 +65,7 @@ def _artifact_install(args, mgr, ui) -> None:
     repositories = [repositories] if repositories else None
 
     # Resolve artifact to show version info
-    artifact = find_artifact(args.artifact, sources=sources)
+    artifact = find_artifact(args.artifact, sources=repositories)
     if artifact is None:
         ui.fail(f"Unknown target: {args.artifact}")
         return
@@ -86,7 +86,7 @@ def _artifact_install(args, mgr, ui) -> None:
             args.artifact,
             target_root=target,
             force=force,
-            sources=sources,
+            sources=repositories,
         ),
     )
     if ok:

@@ -71,22 +71,53 @@ def publish_github(name: str, repo: str, draft: bool = True) -> bool:
         suffix = src.name.replace(f"{name}-", "")
         version_part = suffix.rsplit(".", 2)[0]  # remove .python.artifact
         tag = f"{name}-v{version_part}"
-        release_data = {
-            "tag_name": tag,
-            "name": f"{name} {tag.removeprefix(name + '-')}",
-            "draft": draft,
-        }
-        req = Request(
-            f"https://api.github.com/repos/{repo}/releases",
-            data=json.dumps(release_data).encode(),
+
+        # Check if a release with this tag already exists (e.g. draft from previous run)
+        release = None
+        get_req = Request(
+            f"https://api.github.com/repos/{repo}/releases/tags/{tag}",
             headers=headers,
-            method="POST",
+            method="GET",
         )
+        try:
+            with urlopen(get_req) as resp:
+                release = json.loads(resp.read().decode())
+        except Exception:
+            pass
+
+        if release:
+            # Update existing release
+            release_id = release["id"]
+            release_data = {
+                "tag_name": tag,
+                "name": f"{name} {tag.removeprefix(name + '-')}",
+                "draft": draft,
+            }
+            req = Request(
+                f"https://api.github.com/repos/{repo}/releases/{release_id}",
+                data=json.dumps(release_data).encode(),
+                headers=headers,
+                method="PATCH",
+            )
+        else:
+            # Create new release
+            release_data = {
+                "tag_name": tag,
+                "name": f"{name} {tag.removeprefix(name + '-')}",
+                "draft": draft,
+            }
+            req = Request(
+                f"https://api.github.com/repos/{repo}/releases",
+                data=json.dumps(release_data).encode(),
+                headers=headers,
+                method="POST",
+            )
+
         try:
             with urlopen(req) as resp:
                 release = json.loads(resp.read().decode())
         except Exception as e:
-            print(f"  Failed to create release: {e}")
+            print(f"  Failed to create/update release: {e}")
             return False
 
         release_id = release.get("id")
