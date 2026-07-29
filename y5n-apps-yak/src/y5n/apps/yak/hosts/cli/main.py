@@ -54,10 +54,10 @@ Use 'yak <command> --help' for detailed options.
 
 
 def _build_manager() -> InstallationManager:
-    from y5n.apps.yak.hosts.cli.cwd import Context, default_roots
+    from y5n.apps.yak.hosts.cli.cwd import Context, default_sources
 
     ctx = Context.current()
-    roots = ctx.resolve_roots() if ctx else default_roots()
+    roots = ctx.resolve_sources() if ctx else default_sources()
 
     artifact_dir = (
         Path(__file__).resolve().parents[8] / "apps" / "y5n-apps-yak" / "artifacts"

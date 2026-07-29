@@ -179,13 +179,15 @@ yak shell                   #  → interactive shell
 - All other commands find the context via `find_context_root()`.
 - No global state — each context is self‑contained.
 
-## Context roots
+## Context sources
 
-The `.yak/context.toml` created by `yak init` can declare **roots** —
-directories where `yak` searches for packs, runtime, apps, and SDK
-components. Roots can point to any directory layout.
+The `.yak/context.toml` created by `yak init` can declare **sources** —
+directories where `yak` looks for packs, runtime, apps, and SDK source
+code during development.
 
 > **The repository layout is a development concern, not a platform concern.**
+> Yakoon distinguishes between *source repositories* (where code lives)
+> and *artifact repositories* (where published artifacts are consumed).
 
 ### Monorepo (default)
 
@@ -193,25 +195,23 @@ components. Roots can point to any directory layout.
 [context]
 name = "yakoon"
 
-[roots]
+[sources]
 dirs = ["packs", "runtime", "apps", "sdk"]
 ```
 
 `yak init` detects these directories automatically.
 
-### Standalone pack repository
-
-A product in its own repository:
+### Standalone product repository
 
 ```toml
 [context]
 name = "crm"
 
-[roots]
+[sources]
 dirs = ["."]
 ```
 
-Packages are discovered directly in the repository root.
+Packs are discovered directly in the repository root.
 
 ### Workspace with multiple repositories
 
@@ -219,7 +219,7 @@ Packages are discovered directly in the repository root.
 [context]
 name = "workspace"
 
-[roots]
+[sources]
 dirs = [
     "../yakoon/runtime",
     "../yakoon/sdk",
@@ -228,16 +228,22 @@ dirs = [
 ]
 ```
 
-Roots are resolved relative to the context directory. Any directory
-containing a `pack.toml`, `pyproject.toml`, or known structure will
-be discovered automatically.
+Source dirs are resolved relative to the context directory.
 
-> **Yakoon distinguishes between source repositories and artifact repositories.**
-> Source code may live anywhere — in a monorepo, in product-specific repos,
-> or in a workspace combining multiple repos. The platform only consumes
-> published artifacts. The repository layout is invisible to the runtime.
+### Artifact repositories (prepared for future use)
 
-### How roots are used
+```toml
+[repositories]
+sources = [
+    "github:yakoon-runtime/apps",
+    "gitlab:company/internal",
+]
+```
+
+This section is parsed by the context model but not yet active.
+It will describe where to find published artifacts for `install` and `sync`.
+
+### How sources are used
 
 ```
 CLI
@@ -246,12 +252,12 @@ CLI
 Context.current()
  │
  ▼
-context.resolve_roots()    → [./packs, ./runtime, ./apps, ...]
+context.resolve_sources()  → [./packs, ./runtime, ./apps, ...]
  │
  ▼
-FileRepository(*roots)     → finds pack.toml, resolves distributions
-DirectoryArtifactStore(*roots) → finds artifacts, resolves mounts
+FileRepository(*sources)     → finds pack.toml, resolves distributions
+DirectoryArtifactStore(*sources) → finds artifacts, resolves mounts
 ```
 
 There is no architectural difference between "core" and "product"
-components. The only difference is which roots the context provides.
+components. The only difference is which sources the context provides.

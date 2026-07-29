@@ -6,20 +6,20 @@ from pathlib import Path
 
 @dataclass
 class Context:
-    """A YakContext — the root of a development environment.
+    """A YakContext — describes a development environment.
 
-    Loaded from .yak/context.toml. Provides roots for resolving
-    packs, runtime, apps, and other components.
+    Loaded from .yak/context.toml. Provides two independent concerns:
+    - Sources: where source code is developed (build, create)
+    - Repositories: where published artifacts are consumed (install, sync)
     """
 
     path: Path
     name: str = ""
     schema: str = "1"
-    root_paths: list[Path] = field(default_factory=list)
+    source_dirs: list[Path] = field(default_factory=list)
 
-    def resolve_roots(self) -> list[Path]:
-        paths = list(self.root_paths)
-        # Always include the context path itself
+    def resolve_sources(self) -> list[Path]:
+        paths = list(self.source_dirs)
         if self.path not in paths:
             paths.append(self.path)
         return [(self.path / r).resolve() if not r.is_absolute() else r for r in paths]
@@ -46,19 +46,19 @@ def _load_context(root: Path) -> Context:
         data = tomllib.load(f)
 
     ctx_data = data.get("context", {})
-    roots_section = data.get("roots", {})
-    raw_roots = roots_section.get("dirs", [])
-    root_paths = [Path(r) for r in raw_roots] if isinstance(raw_roots, list) else []
+    sources_section = data.get("sources", {})
+    raw_dirs = sources_section.get("dirs", [])
+    source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
 
     return Context(
         path=root,
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
-        root_paths=root_paths,
+        source_dirs=source_dirs,
     )
 
 
-def default_roots() -> list[Path]:
+def default_sources() -> list[Path]:
     """Fallback: monorepo paths relative to this source file."""
     root = Path(__file__).resolve().parents[8]
     return [root / d for d in ("packs", "runtime", "apps", "sdk", root)]
