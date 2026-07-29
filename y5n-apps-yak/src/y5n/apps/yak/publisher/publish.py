@@ -46,7 +46,7 @@ def publish_github(name: str, repo: str, draft: bool = True) -> bool:
     repo format: "owner/repo" or "github:owner/repo"
     """
     repo = repo.removeprefix("github:")
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if not token:
         print("  GITHUB_TOKEN not set")
         return False
