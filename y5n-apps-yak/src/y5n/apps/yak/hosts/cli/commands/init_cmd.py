@@ -32,7 +32,9 @@ def _init(root: Path) -> None:
         f'schema = "1"',
     ]
     if roots:
-        ctx_lines.append(f'roots = [{", ".join(repr(r) for r in roots)}]')
+        ctx_lines.append("")
+        ctx_lines.append("[roots]")
+        ctx_lines.append(f'dirs = [{", ".join(repr(r) for r in roots)}]')
     ctx_lines.extend(["", "[logs]", 'path = ".yak/logs"', ""])
 
     (yak_dir / "context.toml").write_text("\n".join(ctx_lines))

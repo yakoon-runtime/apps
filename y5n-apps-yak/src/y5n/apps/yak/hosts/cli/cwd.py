@@ -46,7 +46,8 @@ def _load_context(root: Path) -> Context:
         data = tomllib.load(f)
 
     ctx_data = data.get("context", {})
-    raw_roots = ctx_data.get("roots", [])
+    roots_section = data.get("roots", {})
+    raw_roots = roots_section.get("dirs", [])
     root_paths = [Path(r) for r in raw_roots] if isinstance(raw_roots, list) else []
 
     return Context(

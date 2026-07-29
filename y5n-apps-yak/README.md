@@ -185,12 +185,16 @@ The `.yak/context.toml` created by `yak init` can declare **roots** —
 directories where `yak` searches for packs, runtime, apps, and SDK
 components. Roots can point to any directory layout.
 
+> **The repository layout is a development concern, not a platform concern.**
+
 ### Monorepo (default)
 
 ```toml
 [context]
 name = "yakoon"
-roots = ["packs", "runtime", "apps", "sdk"]
+
+[roots]
+dirs = ["packs", "runtime", "apps", "sdk"]
 ```
 
 `yak init` detects these directories automatically.
@@ -202,7 +206,9 @@ A product in its own repository:
 ```toml
 [context]
 name = "crm"
-roots = ["."]
+
+[roots]
+dirs = ["."]
 ```
 
 Packages are discovered directly in the repository root.
@@ -212,7 +218,9 @@ Packages are discovered directly in the repository root.
 ```toml
 [context]
 name = "workspace"
-roots = [
+
+[roots]
+dirs = [
     "../yakoon/runtime",
     "../yakoon/sdk",
     "../crm",
@@ -223,6 +231,11 @@ roots = [
 Roots are resolved relative to the context directory. Any directory
 containing a `pack.toml`, `pyproject.toml`, or known structure will
 be discovered automatically.
+
+> **Yakoon distinguishes between source repositories and artifact repositories.**
+> Source code may live anywhere — in a monorepo, in product-specific repos,
+> or in a workspace combining multiple repos. The platform only consumes
+> published artifacts. The repository layout is invisible to the runtime.
 
 ### How roots are used
 
