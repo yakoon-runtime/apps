@@ -28,6 +28,21 @@ yak shell                   # Open the interactive shell
 
 ### Share via GitHub Releases
 
+Before publishing, create a fine-grained personal access token:
+
+1. Go to https://github.com/settings/personal-access-tokens
+2. Create a new token:
+   - Repository access: `yakoon-runtime/apps`
+   - Permissions: Contents → **Read & Write**
+3. Set it in your environment:
+
+```bash
+export YAK_GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxx
+# Add to ~/.bashrc or ~/.zshrc for persistence
+```
+
+Then publish:
+
 ```bash
 # Publisher:
 yak build hello

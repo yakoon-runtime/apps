@@ -67,7 +67,10 @@ def publish_github(name: str, repo: str, draft: bool = True) -> bool:
             "Accept": "application/vnd.github.v3+json",
         }
 
-        tag = f"{name}-v{src.name.split('-')[-1].split('.')[0] or '0.1.0'}"
+        # Extract version from dir name "y5n-apps-yak-0.1.0.python.artifact" → "0.1.0"
+        suffix = src.name.replace(f"{name}-", "")
+        version_part = suffix.rsplit(".", 2)[0]  # remove .python.artifact
+        tag = f"{name}-v{version_part}"
         release_data = {
             "tag_name": tag,
             "name": f"{name} {tag.removeprefix(name + '-')}",
