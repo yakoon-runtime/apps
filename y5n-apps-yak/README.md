@@ -28,18 +28,31 @@ yak shell                   # Open the interactive shell
 
 ### Share via GitHub Releases
 
+Before publishing, create a fine-grained personal access token:
+
+1. Go to https://github.com/settings/personal-access-tokens
+2. Create a new token:
+   - Repository access: `yakoon-runtime/apps`
+   - Permissions: Contents → **Read & Write**
+3. Set it in your environment:
+
+```bash
+export YAK_GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxx
+# Add to ~/.bashrc or ~/.zshrc for persistence
+```
+
+Then publish:
+
 ```bash
 # Publisher:
 yak build hello
-yak publish y5n-packs-hello --repository github:yakoon-runtime/packs
-# → creates a draft release (reviewable on GitHub)
-yak publish y5n-packs-hello --repository github:yakoon-runtime/packs --release
-# → publishes immediately (for CI/CD)
+yak publish y5n-packs-hello --repository github:yakoon-runtime/apps --release
+# → published at https://github.com/yakoon-runtime/apps/releases
 
 # Consumer:
 mkdir other && cd other
 yak init
-yak install y5n-packs-hello --repository github:yakoon-runtime/packs
+yak install y5n-packs-hello --repository github:yakoon-runtime/apps
 yak sync
 yak shell
 ```

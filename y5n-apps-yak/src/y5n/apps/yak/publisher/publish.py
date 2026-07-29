@@ -46,7 +46,7 @@ def publish_github(name: str, repo: str, draft: bool = True) -> bool:
     repo format: "owner/repo" or "github:owner/repo"
     """
     repo = repo.removeprefix("github:")
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if not token:
         print("  GITHUB_TOKEN not set")
         return False
@@ -67,10 +67,13 @@ def publish_github(name: str, repo: str, draft: bool = True) -> bool:
             "Accept": "application/vnd.github.v3+json",
         }
 
-        tag = f"{name}-v{src.name.split('-')[-1].split('.')[0] or '0.1.0'}"
+        # Create tag and release
+        # Extract "0.1.0" from "y5n-apps-yak-0.1.0.python.artifact"
+        version_part = src.name.replace(f"{name}-", "").rsplit(".", 2)[0]
+        tag = f"{name}-v{version_part}"
         release_data = {
             "tag_name": tag,
-            "name": f"{name} {tag.removeprefix(name + '-')}",
+            "name": f"{name} {version_part}",
             "draft": draft,
         }
         req = Request(
@@ -83,7 +86,10 @@ def publish_github(name: str, repo: str, draft: bool = True) -> bool:
             with urlopen(req) as resp:
                 release = json.loads(resp.read().decode())
         except Exception as e:
-            print(f"  Failed to create release: {e}")
+            body = e.read().decode() if hasattr(e, "read") else ""
+            print(f"  GitHub API error: {e}")
+            if body:
+                print(f"  {body}")
             return False
 
         release_id = release.get("id")
@@ -112,11 +118,11 @@ def publish_github(name: str, repo: str, draft: bool = True) -> bool:
             return False
 
 
-def publish_artifact(name: str, target: str | None = None) -> Path | bool | None:
+def publish_artifact(
+    name: str, target: str | None = None, release: bool = False
+) -> Path | bool | None:
     """Publish artifact. target can be a path or 'github:owner/repo'."""
     if target and target.startswith("github:"):
-        draft = "?release" not in target
-        repo = target.split("?")[0]
-        ok = publish_github(name, repo, draft=draft)
+        ok = publish_github(name, target, draft=not release)
         return ok
     return publish_local(name)
