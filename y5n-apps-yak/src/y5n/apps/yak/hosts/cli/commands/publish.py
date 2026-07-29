@@ -11,17 +11,17 @@ def run(args, mgr) -> None:
     name = args.name
     repository = getattr(args, "repository", None)
     release = getattr(args, "release", False)
-    if release:
-        repository = f"{repository}?release" if repository else None
+    target = repository
 
-    result = publish_artifact(name, target=repository)
+    result = publish_artifact(name, target=target, release=release)
     if result is None:
         print(f"  Artifact '{name}' not found in context")
         print("  Run 'yak build <source>' first to build it.")
         return
 
     if result is True:
-        print(f"  Published {name} to {repository}")
+        repo_display = repository or "~/.yak/artifacts/"
+        print(f"  Published {name} to {repo_display}")
         print(f"  Install with: yak install {name} --repository {repository}")
     else:
         print(f"  Published {name} to {result}")

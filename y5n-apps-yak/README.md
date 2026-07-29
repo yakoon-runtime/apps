@@ -46,10 +46,8 @@ Then publish:
 ```bash
 # Publisher:
 yak build hello
-yak publish y5n-packs-hello --repository github:yakoon-runtime/apps
-# → creates a draft release at https://github.com/yakoon-runtime/apps/releases
 yak publish y5n-packs-hello --repository github:yakoon-runtime/apps --release
-# → publishes immediately (for CI/CD)
+# → published at https://github.com/yakoon-runtime/apps/releases
 
 # Consumer:
 mkdir other && cd other
