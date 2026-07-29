@@ -61,10 +61,21 @@ def _artifact_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
     upgrade = getattr(args, "upgrade", False)
     force = getattr(args, "force", False) or upgrade
-    repositories = getattr(args, "repository", None)
-    repositories = [repositories] if repositories else None
 
-    # Resolve artifact to show version info
+    # Repositories: CLI --repository overrides, otherwise use context
+    from y5n.apps.yak.hosts.cli.cwd import Context
+
+    repositories = []
+    cli_repo = getattr(args, "repository", None)
+    if cli_repo:
+        repositories.append(cli_repo)
+    else:
+        ctx = Context.current()
+        if ctx:
+            repositories = list(ctx.repository_sources)
+
+    repositories = repositories or None
+
     artifact = find_artifact(args.artifact, sources=repositories)
     if artifact is None:
         ui.fail(f"Unknown target: {args.artifact}")
