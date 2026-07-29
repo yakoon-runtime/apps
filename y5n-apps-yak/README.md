@@ -178,3 +178,67 @@ yak shell                   #  → interactive shell
 - `init` and `install` create context markers.
 - All other commands find the context via `find_context_root()`.
 - No global state — each context is self‑contained.
+
+## Context roots
+
+The `.yak/context.toml` created by `yak init` can declare **roots** —
+directories where `yak` searches for packs, runtime, apps, and SDK
+components. Roots can point to any directory layout.
+
+### Monorepo (default)
+
+```toml
+[context]
+name = "yakoon"
+roots = ["packs", "runtime", "apps", "sdk"]
+```
+
+`yak init` detects these directories automatically.
+
+### Standalone pack repository
+
+A product in its own repository:
+
+```toml
+[context]
+name = "crm"
+roots = ["."]
+```
+
+Packages are discovered directly in the repository root.
+
+### Workspace with multiple repositories
+
+```toml
+[context]
+name = "workspace"
+roots = [
+    "../yakoon/runtime",
+    "../yakoon/sdk",
+    "../crm",
+    "../luma",
+]
+```
+
+Roots are resolved relative to the context directory. Any directory
+containing a `pack.toml`, `pyproject.toml`, or known structure will
+be discovered automatically.
+
+### How roots are used
+
+```
+CLI
+ │
+ ▼
+Context.current()
+ │
+ ▼
+context.resolve_roots()    → [./packs, ./runtime, ./apps, ...]
+ │
+ ▼
+FileRepository(*roots)     → finds pack.toml, resolves distributions
+DirectoryArtifactStore(*roots) → finds artifacts, resolves mounts
+```
+
+There is no architectural difference between "core" and "product"
+components. The only difference is which roots the context provides.
