@@ -1,10 +1,69 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
+@dataclass
+class Context:
+    """A YakContext — the root of a development environment.
+
+    Loaded from .yak/context.toml. Provides roots for resolving
+    packs, runtime, apps, and other components.
+    """
+
+    path: Path
+    name: str = ""
+    schema: str = "1"
+    root_paths: list[Path] = field(default_factory=list)
+
+    def resolve_roots(self) -> list[Path]:
+        paths = list(self.root_paths)
+        # Always include the context path itself
+        if self.path not in paths:
+            paths.append(self.path)
+        return [(self.path / r).resolve() if not r.is_absolute() else r for r in paths]
+
+    @staticmethod
+    def current() -> Context | None:
+        root = find_context_root()
+        if root is None:
+            return None
+        return _load_context(root)
+
+    def __repr__(self) -> str:
+        return f"Context({self.name or self.path.name})"
+
+
+def _load_context(root: Path) -> Context:
+    ctx_file = root / ".yak" / "context.toml"
+    if not ctx_file.exists():
+        return Context(path=root, name=root.name)
+
+    import tomllib
+
+    with open(ctx_file, "rb") as f:
+        data = tomllib.load(f)
+
+    ctx_data = data.get("context", {})
+    raw_roots = ctx_data.get("roots", [])
+    root_paths = [Path(r) for r in raw_roots] if isinstance(raw_roots, list) else []
+
+    return Context(
+        path=root,
+        name=ctx_data.get("name", root.name),
+        schema=ctx_data.get("schema", "1"),
+        root_paths=root_paths,
+    )
+
+
+def default_roots() -> list[Path]:
+    """Fallback: monorepo paths relative to this source file."""
+    root = Path(__file__).resolve().parents[8]
+    return [root / d for d in ("packs", "runtime", "apps", "sdk", root)]
+
+
 def find_installation_from_cwd() -> str | None:
-    """Detect installation name from current or parent directory."""
     cwd = Path.cwd()
     for parent in [cwd, *cwd.parents]:
         state = parent / ".yak" / "state.toml"
@@ -18,11 +77,6 @@ def find_installation_from_cwd() -> str | None:
 
 
 def find_context_root() -> Path | None:
-    """Walk up from CWD looking for the outermost context marker.
-
-    context.toml (created by 'yak init') defines the context boundary.
-    Used by shell, logs, runtime to find the dev environment.
-    """
     cwd = Path.cwd()
     found: Path | None = None
     for parent in [cwd, *cwd.parents]:
@@ -32,10 +86,6 @@ def find_context_root() -> Path | None:
 
 
 def find_installation_path() -> Path | None:
-    """Walk up from CWD looking for a .yak/state.toml.
-
-    Used by update, status, doctor to find the nearest installation.
-    """
     cwd = Path.cwd()
     for parent in [cwd, *cwd.parents]:
         if (parent / ".yak" / "state.toml").exists():
@@ -44,7 +94,6 @@ def find_installation_path() -> Path | None:
 
 
 def default_artifact_dir() -> Path | None:
-    """Return the default artifact directory for the current context."""
     ctx = find_context_root()
     if ctx is None:
         return None

@@ -21,15 +21,21 @@ def _init(root: Path) -> None:
     now = datetime.now(UTC).isoformat()
     (yak_dir / "logs").mkdir(exist_ok=True)
 
-    ctx = f"""\
-[context]
-name = "{root.name}"
-created = "{now}"
+    # Detect known subdirectories for roots
+    known_dirs = ("packs", "runtime", "apps", "sdk")
+    roots = [d for d in known_dirs if (root / d).is_dir()]
 
-[logs]
-path = ".yak/logs"
-"""
-    (yak_dir / "context.toml").write_text(ctx)
+    ctx_lines = [
+        f"[context]",
+        f'name = "{root.name}"',
+        f'created = "{now}"',
+        f'schema = "1"',
+    ]
+    if roots:
+        ctx_lines.append(f'roots = [{", ".join(repr(r) for r in roots)}]')
+    ctx_lines.extend(["", "[logs]", 'path = ".yak/logs"', ""])
+
+    (yak_dir / "context.toml").write_text("\n".join(ctx_lines))
 
     if already:
         print(f"Reinitialized existing Yak context in {yak_dir}")
