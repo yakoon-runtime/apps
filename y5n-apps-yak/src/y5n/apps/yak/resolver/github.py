@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tarfile
 import tempfile
 from pathlib import Path
@@ -14,37 +15,47 @@ from y5n.apps.yak.resolver.artifact import Artifact, _parse_manifest
 class GithubReleaseRepository:
     """Resolve artifacts from a GitHub repository's releases.
 
-    Cache: ~/.yak/cache/github/<owner>/<repo>/<fingerprint>/
+    Cache: ~/.yak/cache/github/<owner>/<repo>/<fingerprint>/<artifact_name>/
     """
 
     def __init__(self, repo: str) -> None:
-        # "owner/repo" or "github:owner/repo"
         self._repo = repo.removeprefix("github:")
         self._cache_root = Path.home() / ".yak" / "cache" / "github" / self._repo
+
+    def _find_artifact_dir(self, parent: Path, name: str) -> Path | None:
+        """Find the artifact subdirectory containing artifact.yml for `name`."""
+        for child in parent.iterdir():
+            if not child.is_dir():
+                continue
+            manifest = child / "artifact.yml"
+            if manifest.exists():
+                meta = _parse_manifest(manifest)
+                if meta is not None and meta.get("name") == name:
+                    return child
+        return None
 
     def resolve(self, name: str) -> Artifact | None:
         # Check cache first
         if self._cache_root.is_dir():
-            for entry in self._cache_root.iterdir():
-                if not entry.is_dir():
+            for fp_dir in self._cache_root.iterdir():
+                if not fp_dir.is_dir():
                     continue
-                manifest = entry / "artifact.yml"
-                if manifest.exists():
-                    meta = _parse_manifest(manifest)
-                    if meta is not None and meta.get("name") == name:
-                        fp = meta.get("fingerprint", "")
-                        if fp.startswith("sha256:"):
-                            fp = fp[7:]
-                        return Artifact(
-                            name=meta["name"],
-                            version=meta.get("version", "0"),
-                            kind=meta.get("kind", "package"),
-                            host=meta.get("host", "python"),
-                            builder=meta.get("builder", "python"),
-                            dependencies=meta.get("dependencies", []),
-                            fingerprint=fp,
-                            path=entry,
-                        )
+                artifact_dir = self._find_artifact_dir(fp_dir, name)
+                if artifact_dir is not None:
+                    meta = _parse_manifest(artifact_dir / "artifact.yml")
+                    fp = meta.get("fingerprint", "")
+                    if fp.startswith("sha256:"):
+                        fp = fp[7:]
+                    return Artifact(
+                        name=meta["name"],
+                        version=meta.get("version", "0"),
+                        kind=meta.get("kind", "package"),
+                        host=meta.get("host", "python"),
+                        builder=meta.get("builder", "python"),
+                        dependencies=meta.get("dependencies", []),
+                        fingerprint=fp,
+                        path=artifact_dir,
+                    )
 
         # Fetch latest release from GitHub API
         url = f"https://api.github.com/repos/{self._repo}/releases/latest"
@@ -66,50 +77,44 @@ class GithubReleaseRepository:
         if asset_url is None:
             return None
 
-        # Download and extract to cache
+        # Download asset
         try:
             with urlopen(asset_url) as resp:
                 data = resp.read()
         except Exception:
             return None
 
-        # Extract to temp dir, then read artifact.yml to get fingerprint
+        # Extract and cache
         with tempfile.TemporaryDirectory() as tmp:
             tarpath = Path(tmp) / "artifact.tar.gz"
             tarpath.write_bytes(data)
             with tarfile.open(tarpath, "r:gz") as tar:
                 tar.extractall(path=tmp)
 
-            # Find artifact.yml in extracted files
-            extract_root = Path(tmp)
-            for f in extract_root.rglob("artifact.yml"):
-                meta = _parse_manifest(f)
-                if meta is not None and meta.get("name") == name:
-                    fp = meta.get("fingerprint", "")
-                    if fp.startswith("sha256:"):
-                        fp = fp[7:]
-                    # Copy to cache by fingerprint
-                    cache_dir = self._cache_root / (fp or name)
-                    if not cache_dir.exists():
-                        cache_dir.mkdir(parents=True)
-                        for src in extract_root.iterdir():
-                            dst = cache_dir / src.name
-                            if src.is_dir():
-                                import shutil
+            # Find the artifact dir (contains artifact.yml)
+            artifact_dir = self._find_artifact_dir(Path(tmp), name)
+            if artifact_dir is None:
+                return None
 
-                                shutil.copytree(src, dst, dirs_exist_ok=True)
-                            else:
-                                dst.write_bytes(src.read_bytes())
+            meta = _parse_manifest(artifact_dir / "artifact.yml")
+            fp = meta.get("fingerprint", "")
+            if fp.startswith("sha256:"):
+                fp = fp[7:]
 
-                    return Artifact(
-                        name=meta["name"],
-                        version=meta.get("version", "0"),
-                        kind=meta.get("kind", "package"),
-                        host=meta.get("host", "python"),
-                        builder=meta.get("builder", "python"),
-                        dependencies=meta.get("dependencies", []),
-                        fingerprint=fp,
-                        path=cache_dir,
-                    )
+            # Cache by fingerprint
+            cache_fp_dir = self._cache_root / (fp or name)
+            cache_fp_dir.mkdir(parents=True, exist_ok=True)
+            cached = cache_fp_dir / artifact_dir.name
+            if not cached.exists():
+                shutil.copytree(artifact_dir, cached)
 
-        return None
+            return Artifact(
+                name=meta["name"],
+                version=meta.get("version", "0"),
+                kind=meta.get("kind", "package"),
+                host=meta.get("host", "python"),
+                builder=meta.get("builder", "python"),
+                dependencies=meta.get("dependencies", []),
+                fingerprint=fp,
+                path=cached,
+            )
