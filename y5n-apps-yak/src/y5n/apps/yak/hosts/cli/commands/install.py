@@ -101,12 +101,30 @@ def _artifact_install(args, mgr, ui) -> None:
         ),
     )
     if ok:
-        _write_artifact_state(args.artifact, target)
+        _mark_installed(args.artifact, target)
         _materialize_dev_workspace(args.artifact, target, mgr)
         _write_environment(target, args.artifact)
         ui.ok(f"{label} installed at {target}")
     else:
         ui.fail(f"{label} install failed")
+
+
+def _resolve_mount_sources(root: Path, mounts: list, mgr) -> list:
+    """Convert pack-name mounts to source-path mounts using artifact store."""
+    from y5n.apps.yak.distribution.models import Mount, PackName
+
+    resolved = []
+    for m in mounts:
+        pack_name = m.source if hasattr(m, "source") else getattr(m, "pack", "")
+        artifact = mgr._artifacts.get_artifact(PackName(pack_name))
+        if artifact and (artifact / "structure").is_dir():
+            resolved.append(
+                Mount(
+                    source=str((artifact / "structure").resolve()),
+                    target=m.target,
+                )
+            )
+    return resolved
 
 
 def _write_environment(root: Path, env_name: str) -> None:
@@ -135,14 +153,20 @@ def _write_environment(root: Path, env_name: str) -> None:
                 if ws:
                     deps = [PackName(p) for p in data.get("dependencies", [])]
                     mounts = [
-                        Mount(pack=PackName(m["pack"]), target=m["target"])
+                        Mount(
+                            source=str(
+                                (source_dir / m["pack"] / "structure").resolve()
+                            ),
+                            target=m["target"],
+                        )
                         for m in ws.get("mounts", [])
+                        for source_dir in _collect_roots(None)
+                        if (source_dir / m["pack"] / "structure").is_dir()
                     ]
                     env = Environment(
                         name=env_name,
                         dependencies=deps,
                         mounts=mounts,
-                        workspace_path=ws.get("path", "structure"),
                     )
                     save(env, root)
                     return
@@ -153,7 +177,6 @@ def _write_environment(root: Path, env_name: str) -> None:
 
 def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
     """Materialize workspace from the artifact's manifest, if configured."""
-    from y5n.apps.yak.distribution.models import Mount, PackName
     from y5n.apps.yak.resolver.artifact import DirectorySource
 
     for artifact_root in _collect_roots(None):
@@ -167,30 +190,36 @@ def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
                 data = yaml.safe_load(manifest.read_text())
                 ws = data.get("workspace")
                 if ws:
-                    packs = [PackName(p) for p in ws.get("packs", [])]
-                    mounts = [
-                        Mount(pack=PackName(m["pack"]), target=m["target"])
+                    raw_mounts = [
+                        {"pack": m["pack"], "target": m["target"]}
                         for m in ws.get("mounts", [])
                     ]
-                    mgr._materializer.materialize(root, name, packs, mounts=mounts)
+                    resolved = _resolve_mount_sources(root, raw_mounts, mgr)
+                    mgr._materializer.materialize(
+                        root / "structure", name, mounts=resolved
+                    )
                     return
 
 
-def _write_artifact_state(name: str, root: Path) -> None:
-    """Write .yak/state.toml to mark this as a Yakoon installation."""
-    yak_dir = root / ".yak"
-    yak_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(UTC).isoformat()
-    state = f"""\
-[installation]
-name = "{name}"
-distribution = "{name}"
-status = "created"
-packs = []
-created = "{now}"
-updated = "{now}"
-"""
-    (yak_dir / "state.toml").write_text(state)
+def _mark_installed(name: str, root: Path, packs: list | None = None) -> None:
+    """Write installation metadata to .yak/environment.yml."""
+    from datetime import UTC, datetime
+
+    from y5n.apps.yak.environment.io import load, save
+
+    env = load(root)
+    if env is None:
+        from y5n.apps.yak.environment.models import Environment
+
+        env = Environment(name=name)
+    now = datetime.now(UTC)
+    env.created = env.created or now
+    env.updated = now
+    if packs:
+        from y5n.apps.yak.distribution.models import PackName
+
+        env.dependencies = [PackName(p) for p in packs]
+    save(env, root)
 
 
 def _distribution_install(args, mgr, ui) -> None:
@@ -198,7 +227,7 @@ def _distribution_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
     root = target / artifact
 
-    existing = root if (root / ".yak" / "state.toml").exists() else None
+    existing = root if (root / ".yak" / "environment.yml").exists() else None
 
     if existing is not None:
         _add_to_existing(args, mgr, ui, existing)
@@ -218,47 +247,42 @@ def _create_new(args, mgr, ui, name, root):
             dist = mgr._repo.resolve_distribution(name)
 
         with ui.step("Packs"):
-            packs, mounts, tools = mgr._resolver.resolve(dist)
+            packs, tools = mgr._resolver.resolve(dist)
             ui.detail(", ".join(packs))
 
         with ui.step("Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            mgr._materializer.materialize(root, dist.name, packs, mounts=mounts)
+            resolved = _resolve_mount_sources(root, dist.mounts, mgr)
+            mgr._materializer.materialize(
+                root / "structure", dist.name, mounts=resolved
+            )
 
         with ui.step("Mounts"):
-            for m in mounts:
-                ui.detail(f"{m.pack} → {m.target}")
+            for m in resolved:
+                ui.detail(f"{m.target} ← {m.source}")
 
-        with ui.step("Environment"):
-            from datetime import UTC, datetime
-
-            from y5n.apps.yak.environment.io import save
+        with ui.step("Installing"):
             from y5n.apps.yak.installation.models import (
                 Installation,
                 InstallationStatus,
             )
 
-            now = datetime.now(UTC)
             inst = Installation(
                 name=name,
                 distribution=dist.name,
                 root=root,
                 packs=packs,
                 status=InstallationStatus.MATERIALIZED,
-                created=now,
-                updated=now,
             )
-            mgr._write_state(inst)
             mgr._installer.install(inst, tools=tools, sdk_path=mgr._sdk_path)
-            inst.status = InstallationStatus.CREATED
-            inst.updated = datetime.now(UTC)
-            mgr._write_state(inst)
 
-            # Write .yak/environment.yml from packs + mounts
+        with ui.step("Environment"):
+            from y5n.apps.yak.environment.io import save
             from y5n.apps.yak.environment.models import Environment
 
-            env = Environment(name=name, dependencies=list(packs), mounts=list(mounts))
+            env = Environment(name=name, dependencies=list(packs), mounts=resolved)
             save(env, root)
+            _mark_installed(name, root, packs)
 
         ui.ok(f"{name} ready at {root}")
 
@@ -272,46 +296,67 @@ def _add_to_existing(args, mgr, ui, existing):
 
     try:
         with ui.step("Resolving"):
-            inst = mgr.load(existing)
-            if inst is None:
-                raise RuntimeError("Installation not found")
+            from y5n.apps.yak.environment.io import load as load_env
+
+            env = load_env(existing)
+            if env is None:
+                raise RuntimeError("No environment found")
+            existing_packs = list(env.dependencies)
+
             dist = mgr._repo.resolve_distribution(name)
             if dist is None:
                 raise ValueError(f"Unknown pack: {name}")
             ui.detail(name)
 
         with ui.step("Packs"):
-            new_packs, new_mounts, new_tools = mgr._resolver.resolve(dist)
-            if not new_packs:
-                from y5n.apps.yak.distribution.models import Mount, PackName
+            new_packs, new_tools = mgr._resolver.resolve(dist)
+            from y5n.apps.yak.distribution.models import PackName
 
+            if not new_packs:
                 new_packs = [PackName(name)]
-                new_mounts = [Mount(pack=PackName(name), target=f"/{name}")]
-            added = [p for p in new_packs if p not in inst.packs]
+            added = [p for p in new_packs if p not in existing_packs]
             if not added:
                 ui.ok("Already installed")
                 return
-            all_packs = inst.packs + added
+            all_packs = existing_packs + added
             ui.detail(", ".join(added))
 
         with ui.step("Workspace"):
+            resolved = _resolve_mount_sources(existing, dist.mounts, mgr)
+            if not resolved:
+                from y5n.apps.yak.distribution.models import Mount
+
+                artifact = mgr._artifacts.get_artifact(PackName(name))
+                if artifact and (artifact / "structure").is_dir():
+                    resolved = [
+                        Mount(
+                            source=str((artifact / "structure").resolve()),
+                            target=f"/{name}",
+                        )
+                    ]
             mgr._materializer.materialize(
-                existing, inst.distribution, all_packs, mounts=new_mounts
+                existing / "structure", env.name, mounts=resolved
             )
 
         with ui.step("Mounts"):
-            for m in new_mounts:
-                ui.detail(f"{m.pack} → {m.target}")
+            for m in resolved:
+                ui.detail(f"{m.target} ← {m.source}")
 
         with ui.step("Environment"):
-            from datetime import UTC, datetime
+            from y5n.apps.yak.installation.models import (
+                Installation,
+                InstallationStatus,
+            )
 
-            inst.packs = all_packs
-            inst.updated = datetime.now(UTC)
-            mgr._write_state(inst)
+            inst = Installation(
+                name=name,
+                distribution=dist.name,
+                root=existing,
+                packs=all_packs,
+                status=InstallationStatus.MATERIALIZED,
+            )
             mgr._installer.install(inst, sdk_path=mgr._sdk_path)
-            inst.updated = datetime.now(UTC)
-            mgr._write_state(inst)
+            _mark_installed(name, existing, all_packs)
 
         ui.ok(f"Added {name}")
 

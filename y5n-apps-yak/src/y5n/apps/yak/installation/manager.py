@@ -24,7 +24,7 @@ class InstallationManager:
         self._repo = repository
         self._artifacts = artifact_store
         self._resolver = Resolver(lambda name: repository.resolve_distribution(name))
-        self._materializer = Materializer(artifact_store)
+        self._materializer = Materializer()
         self._installer = Installer(artifact_store, apps_root=None)
         self._sdk_path = None
 
@@ -35,11 +35,12 @@ class InstallationManager:
         if dist is None:
             raise ValueError(f"Unknown target: {target}")
 
-        packs, mounts, tools = self._resolver.resolve(dist)
+        packs, tools = self._resolver.resolve(dist)
+        mounts = self._resolve_mount_sources(dist.mounts)
         now = datetime.now(UTC)
         root = path.resolve()
         root.mkdir(parents=True, exist_ok=True)
-        self._materializer.materialize(root, dist.name, packs, mounts=mounts)
+        self._materializer.materialize(root / "structure", dist.name, mounts=mounts)
 
         inst = Installation(
             name=target,
@@ -66,15 +67,16 @@ class InstallationManager:
             raise ValueError(f"Installation not found: {path}")
 
         if inst.status == InstallationStatus.RUNNING:
-            raise RuntimeError(f"Cannot update running installation: {name}")
+            raise RuntimeError(f"Cannot update running installation: {inst.name}")
 
         dist = self._repo.resolve_distribution(inst.distribution)
         if dist is None:
             raise ValueError(f"Distribution not found: {inst.distribution}")
 
-        packs, mounts, tools = self._resolver.resolve(dist)
+        packs, tools = self._resolver.resolve(dist)
+        mounts = self._resolve_mount_sources(dist.mounts)
         now = datetime.now(UTC)
-        self._materializer.materialize(inst.root, dist.name, packs, mounts=mounts)
+        self._materializer.materialize(inst.root / "structure", dist.name, mounts=mounts)
 
         inst.packs = packs
         inst.status = InstallationStatus.MATERIALIZED
@@ -130,17 +132,13 @@ class InstallationManager:
         # Mount resolution
         if env:
             for mount in env.mounts:
-                artifact = self._artifacts.get_artifact(mount.pack)
-                if artifact is None:
+                source = Path(mount.source)
+                if not source.exists():
                     issues.append(
-                        f"✘ Mount         {mount.pack} → {mount.target}: not found"
+                        f"✘ Mount         {mount.source} → {mount.target}: not found"
                     )
                 else:
-                    struct = artifact / "structure"
-                    if struct.is_dir():
-                        issues.append(f"✓ Mount         {mount.pack} → {mount.target}")
-                    else:
-                        issues.append(f"✘ Mount         {mount.pack}: no structure/")
+                    issues.append(f"✓ Mount         {mount.target} ← {mount.source}")
 
         # Workspace
         ws_path = root / "structure"
@@ -241,6 +239,27 @@ class InstallationManager:
         if not state_file.exists():
             return None
         return self._read_state(state_file)
+
+    # ── Mount resolution ──
+
+    def _resolve_mount_sources(self, mounts: list) -> list:
+        """Convert pack-name mounts to source-path mounts using artifact store."""
+        from y5n.apps.yak.distribution.models import Mount, PackName
+
+        resolved = []
+        for m in mounts:
+            pack_name = m.source if hasattr(m, "source") else getattr(m, "pack", "")
+            if not pack_name:
+                continue
+            artifact = self._artifacts.get_artifact(PackName(pack_name))
+            if artifact and (artifact / "structure").is_dir():
+                resolved.append(
+                    Mount(
+                        source=str((artifact / "structure").resolve()),
+                        target=m.target,
+                    )
+                )
+        return resolved
 
     # ── Internals ──
 

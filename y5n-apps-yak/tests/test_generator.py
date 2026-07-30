@@ -26,9 +26,9 @@ class TestCreatePack:
             assert (root / "pyproject.toml").exists()
             assert (root / "README.md").exists()
             assert (root / "src" / "y5n" / "packs" / "hello" / "__init__.py").exists()
-            assert (root / "structure" / "_yak" / "yak.yml").exists()
+            assert (root / "structure" / ".yak" / "yak.yml").exists()
 
-            yml = (root / "structure" / "_yak" / "yak.yml").read_text()
+            yml = (root / "structure" / ".yak" / "yak.yml").read_text()
             assert "resolvable: false" in yml
             assert "navigable: true" in yml
 
@@ -96,7 +96,7 @@ class TestCreateCommand:
             assert structure_dir.parent.name == "structure"
             assert structure_dir.name == "greet"
 
-            assert (structure_dir / "_yak" / "yak.yml").exists()
+            assert (structure_dir / ".yak" / "yak.yml").exists()
             assert (structure_dir / "resources" / "default.ydf").exists()
             assert (structure_dir / "resources" / "man.ydf").exists()
 
@@ -104,7 +104,7 @@ class TestCreateCommand:
             assert entry.exists()
             assert "async def main():" in entry.read_text()
 
-            yml = (structure_dir / "_yak" / "yak.yml").read_text()
+            yml = (structure_dir / ".yak" / "yak.yml").read_text()
             assert "pack:y5n.packs.demo.greet:main" in yml
 
     def test_create_command_auto_detects_pack(self):

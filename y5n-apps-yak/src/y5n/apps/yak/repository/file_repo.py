@@ -87,7 +87,7 @@ class FileRepository:
                 self._mount(m) for m in data.get("workspace", {}).get("mounts", [])
             ]
             parent_mounts = [
-                m for m in parent.mounts if m.pack not in {mo.pack for mo in mounts}
+                m for m in parent.mounts if m.source not in {mo.source for mo in mounts}
             ]
             all_mounts = parent_mounts + mounts
 
@@ -126,7 +126,7 @@ class FileRepository:
     @staticmethod
     def _mount(raw: dict) -> Mount:
         return Mount(
-            pack=PackName(raw.get("pack", "")),
+            source=raw.get("source") or raw.get("pack", ""),
             target=raw.get("target", ""),
         )
 

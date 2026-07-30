@@ -22,14 +22,14 @@ def test_resolve_single_distribution():
         name="crm",
         version="1.0",
         mounts=[
-            Mount(pack=PackName("runtime"), target="/"),
-            Mount(pack=PackName("system"), target="/"),
-            Mount(pack=PackName("ident"), target="/"),
-            Mount(pack=PackName("crm"), target="/"),
+            Mount(source="runtime", target="/"),
+            Mount(source="system", target="/"),
+            Mount(source="ident", target="/"),
+            Mount(source="crm", target="/"),
         ],
     )
     resolver = Resolver(lookup({"crm": dist}))
-    packs, mounts, tools = resolver.resolve(dist)
+    packs, tools = resolver.resolve(dist)
 
     assert packs == [
         PackName("runtime"),
@@ -44,8 +44,8 @@ def test_resolve_nested_distributions():
         name="base",
         version="1.0",
         mounts=[
-            Mount(pack=PackName("runtime"), target="/"),
-            Mount(pack=PackName("system"), target="/"),
+            Mount(source="runtime", target="/"),
+            Mount(source="system", target="/"),
         ],
     )
     crm = Distribution(
@@ -53,12 +53,12 @@ def test_resolve_nested_distributions():
         version="1.0",
         distributions=[PackReference(name=PackName("base"))],
         mounts=[
-            Mount(pack=PackName("ident"), target="/"),
-            Mount(pack=PackName("crm"), target="/"),
+            Mount(source="ident", target="/"),
+            Mount(source="crm", target="/"),
         ],
     )
     resolver = Resolver(lookup({"base": base, "crm": crm}))
-    packs, mounts, tools = resolver.resolve(crm)
+    packs, tools = resolver.resolve(crm)
 
     assert packs == [
         PackName("runtime"),
@@ -73,16 +73,16 @@ def test_resolve_deduplicates():
         name="a",
         version="1.0",
         mounts=[
-            Mount(pack=PackName("shared"), target="/"),
-            Mount(pack=PackName("a-only"), target="/"),
+            Mount(source="shared", target="/"),
+            Mount(source="a-only", target="/"),
         ],
     )
     b = Distribution(
         name="b",
         version="1.0",
         mounts=[
-            Mount(pack=PackName("shared"), target="/"),
-            Mount(pack=PackName("b-only"), target="/"),
+            Mount(source="shared", target="/"),
+            Mount(source="b-only", target="/"),
         ],
     )
     combined = Distribution(
@@ -94,27 +94,6 @@ def test_resolve_deduplicates():
         ],
     )
     resolver = Resolver(lookup({"a": a, "b": b, "combined": combined}))
-    packs, mounts, tools = resolver.resolve(combined)
+    packs, tools = resolver.resolve(combined)
 
     assert packs == [PackName("shared"), PackName("a-only"), PackName("b-only")]
-
-
-def test_resolve_collects_mounts():
-    base = Distribution(
-        name="base",
-        version="1.0",
-        mounts=[Mount(pack=PackName("system"), target="/usr/bin")],
-    )
-    crm = Distribution(
-        name="crm",
-        version="1.0",
-        distributions=[PackReference(name=PackName("base"))],
-        mounts=[Mount(pack=PackName("crm"), target="/opt/crm")],
-    )
-    resolver = Resolver(lookup({"base": base, "crm": crm}))
-    packs, mounts, tools = resolver.resolve(crm)
-
-    assert packs == [PackName("system"), PackName("crm")]
-    assert len(mounts) == 2
-    assert Mount(pack=PackName("system"), target="/usr/bin") in mounts
-    assert Mount(pack=PackName("crm"), target="/opt/crm") in mounts

@@ -99,8 +99,8 @@ def create_command(
     res_dir = structure_dir / "resources"
     res_dir.mkdir(exist_ok=True)
 
-    (structure_dir / "_yak" / "yak.yml").parent.mkdir(parents=True, exist_ok=True)
-    (structure_dir / "_yak" / "yak.yml").write_text(
+    (structure_dir / ".yak" / "yak.yml").parent.mkdir(parents=True, exist_ok=True)
+    (structure_dir / ".yak" / "yak.yml").write_text(
         YAK_YML.format(title=title, packname=pack_name, name=name)
     )
     (res_dir / "default.ydf").write_text(DEFAULT_YDF)

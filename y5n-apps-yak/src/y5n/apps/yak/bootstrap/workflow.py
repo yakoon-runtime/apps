@@ -47,16 +47,25 @@ def bootstrap(
         print(f"Error: bootstrap environment '{env_name}' not found at {env_file}")
         return False
 
-    # Write .yak/environment.yml from template
+    # Write .yak/environment.yml from template (resolve relative paths)
+    from y5n.apps.yak.distribution.models import Mount
     from y5n.apps.yak.environment.io import from_template, save
 
     env = from_template(env_file)
+    resolved = []
+    for m in env.mounts:
+        src = Path(m.source)
+        if not src.is_absolute():
+            src = (root / m.source).resolve()
+        if src.is_dir():
+            resolved.append(Mount(source=str(src), target=m.target))
+    env.mounts = resolved
     save(env, root)
 
     tasks = [
         ("Virtual environment", CreateVenvTask(root, force=force)),
         ("Install projects", InstallProjectsTask(root, venv_python, force=force)),
-        ("Workspace", MaterializeWorkspaceTask(root, env_file=env_file, force=force)),
+        ("Workspace", MaterializeWorkspaceTask(root, force=force)),
     ]
 
     if not check:

@@ -58,7 +58,7 @@ def create_pack(name: str, target: Path | None = None, force: bool = False) -> P
     (src_dir / "__init__.py").write_text("")
 
     structure_dir = root / "structure"
-    (structure_dir / "_yak").mkdir(parents=True, exist_ok=True)
-    (structure_dir / "_yak" / "yak.yml").write_text(YAK_YML.format(title=title))
+    (structure_dir / ".yak").mkdir(parents=True, exist_ok=True)
+    (structure_dir / ".yak" / "yak.yml").write_text(YAK_YML.format(title=title))
 
     return root

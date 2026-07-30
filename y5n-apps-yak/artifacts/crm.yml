@@ -8,7 +8,7 @@ workspace:
   path: structure
   packs: [root, boot, system, ident, crm]
   mounts:
-    - pack: ident
+    - source: packs/y5n-packs-ident/structure
       target: /usr/sbin/ident
-    - pack: crm
+    - source: packs/y5n-packs-crm/structure
       target: /opt/crm
