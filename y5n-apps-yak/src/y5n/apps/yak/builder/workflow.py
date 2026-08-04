@@ -19,7 +19,7 @@ def _find_buildable_projects(root: Path) -> list[Path]:
     if (root / "pack.toml").exists():
         projects.append(root)
     else:
-        # Fallback: pyproject.toml mit build-system (apps, runtime, sdk)
+        # Fallback: pyproject.toml with build-system (apps, runtime, sdk)
         pyproj = root / "pyproject.toml"
         if pyproj.exists() and _is_buildable_pyproject(pyproj):
             projects.append(root)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from rich.text import Text
-from y5n.runtime.api.document.model.inline import (
+from y5n.sdk.models import (
     Inline,
     InlineArg,
     InlineBreak,
@@ -15,13 +17,14 @@ from y5n.runtime.api.document.model.inline import (
     InlineStrong,
     InlineText,
     InlineUnderline,
+    inline_from_dict,
 )
 
 
-def render(inlines: list[Inline]) -> Text:
+def render(inlines: list[dict]) -> Text:
     result = Text()
     for node in inlines:
-        _render_inline(result, node)
+        _render_inline(result, inline_from_dict(node))
     return result
 
 
@@ -55,7 +58,7 @@ def _render_inline(result: Text, node: Inline) -> None:
             result.append(f"<?{type(node).__name__}>")
 
 
-def _children(children: list[Inline] | None) -> Text:
+def _children(children: Sequence[Inline] | None) -> Text:
     result = Text()
     if children:
         for child in children:
@@ -63,7 +66,7 @@ def _children(children: list[Inline] | None) -> Text:
     return result
 
 
-def _stylize(children: list[Inline] | None, style: str) -> Text:
+def _stylize(children: Sequence[Inline] | None, style: str) -> Text:
     text = _children(children)
     text.stylize(style)
     return text
