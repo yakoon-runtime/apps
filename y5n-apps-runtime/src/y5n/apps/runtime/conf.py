@@ -5,6 +5,7 @@ from importlib.resources import files
 from pathlib import Path
 
 import yaml
+from y5n.runtime.store.event.settings import Backend
 
 CONFIG_FILENAME = "yakoon-runtime.yml"
 
@@ -16,11 +17,18 @@ class ListenConfig:
 
 
 @dataclass
+class StoreConfig:
+    backend: Backend = "memory"
+    dsn: str = ""
+
+
+@dataclass
 class RuntimeConfig:
     name: str = ""
     listen: ListenConfig = field(default_factory=ListenConfig)
     known: dict[str, str] = field(default_factory=dict)
     workspace_path: str = ""
+    stores: dict[str, StoreConfig] = field(default_factory=dict)
 
 
 def _search_paths() -> list[Path]:
@@ -37,6 +45,12 @@ def _search_paths() -> list[Path]:
 
 def _from_dict(data: dict) -> RuntimeConfig:
     listen_raw = data.get("listen")
+    stores_raw = data.get("stores")
+    stores = {
+        name: StoreConfig(**cfg)
+        for name, cfg in (stores_raw or {}).items()
+        if isinstance(cfg, dict)
+    }
     return RuntimeConfig(
         name=data.get("name", ""),
         listen=(
@@ -46,6 +60,7 @@ def _from_dict(data: dict) -> RuntimeConfig:
         ),
         known=data.get("known", {}),
         workspace_path=data.get("workspace_path", ""),
+        stores=stores,
     )
 
 

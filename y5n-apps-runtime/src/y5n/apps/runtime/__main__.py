@@ -15,6 +15,7 @@ from pathlib import Path
 from websockets.asyncio.server import serve
 from y5n.runtime.engine.settings import RuntimeSettings, Settings
 from y5n.runtime.engine.wire.runtime import build_runtime
+from y5n.runtime.store.event.settings import StorageSettings
 from y5n.runtime.transport.server import WebSocketServerTransport
 
 from .conf import load_config
@@ -64,7 +65,15 @@ def main(args: list[str] | None = None) -> None:
         runtime=RuntimeSettings(
             known=cfg.known,
             workspace_path=workspace_path,
-        )
+        ),
+        storage=StorageSettings(
+            backend="memory",
+            dsn="",
+        ),
+        stores={
+            name: StorageSettings(backend=store.backend, dsn=store.dsn)
+            for name, store in cfg.stores.items()
+        },
     )
 
     async def _run():
