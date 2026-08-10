@@ -41,6 +41,7 @@ class InstallationManager:
         root = path.resolve()
         root.mkdir(parents=True, exist_ok=True)
         self._materializer.materialize(root / "structure", dist.name, mounts=mounts)
+        self._assemble(root / "structure", root / ".yak" / "installation")
 
         inst = Installation(
             name=target,
@@ -76,7 +77,9 @@ class InstallationManager:
         packs, tools = self._resolver.resolve(dist)
         mounts = self._resolve_mount_sources(dist.mounts)
         now = datetime.now(UTC)
-        self._materializer.materialize(inst.root / "structure", dist.name, mounts=mounts)
+        self._materializer.materialize(
+            inst.root / "structure", dist.name, mounts=mounts
+        )
 
         inst.packs = packs
         inst.status = InstallationStatus.MATERIALIZED
@@ -260,6 +263,37 @@ class InstallationManager:
                     )
                 )
         return resolved
+
+    # ── Assembly (ADR-19) ──
+
+    def _assemble(self, structure_dir: Path, installation_dir: Path) -> None:
+        """Materialize the deployment mapping from the declared stores.
+
+        Each declared store gets its own deployment entry with the default
+        backend. The installation is written to
+        `.yak/installation/deployment.yml` — machine-specific, not
+        versioned, owned by `yak`.
+        """
+        from y5n.apps.yak.installation.assemble import collect_declared_stores
+        from y5n.runtime.engine.installation import (
+            Deployment,
+            Installation,
+            StoreMapping,
+            to_dict,
+        )
+
+        stores = collect_declared_stores(structure_dir)
+        installations = Installation(
+            stores={name: StoreMapping(store=name, deployment=name) for name in stores},
+            deployments={
+                name: Deployment(name=name, backend="memory") for name in stores
+            },
+        )
+        installation_dir.mkdir(parents=True, exist_ok=True)
+        import yaml
+
+        with open(installation_dir / "deployment.yml", "w") as f:
+            yaml.safe_dump(to_dict(installations), f, sort_keys=False)
 
     # ── Internals ──
 
