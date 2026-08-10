@@ -64,6 +64,9 @@ def main(args: list[str] | None = None) -> None:
         runtime=RuntimeSettings(
             known=cfg.known,
             workspace_path=workspace_path,
+            installation_path=str(
+                Path(workspace_path).parent / ".yak" / "installation" / "deployment.yml"
+            ),
         )
     )
 
