@@ -24,6 +24,7 @@ def run(args, mgr) -> None:
     )
     if check.returncode != 0:
         print("Yakoon shell is not installed in this context.")
+        print("Run 'yak add shell' to install it.")
         return
 
     subprocess.run([str(python), "-m", "y5n.apps.shell"], cwd=path)

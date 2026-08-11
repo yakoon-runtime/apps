@@ -17,7 +17,7 @@ from y5n.apps.yak.installation.assemble import (
 )
 from y5n.apps.yak.installation.models import Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer
-from y5n.apps.yak.pack.models import Mount, Pack, PackName
+from y5n.apps.yak.pack.models import Mount, Pack, PackName, ToolReference
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import Artifact
@@ -28,12 +28,13 @@ from y5n.runtime.engine.installation import load_installation, to_dict
 
 @dataclass(frozen=True)
 class _Component:
-    """A resolved installable: a pack or an artifact."""
+    """A resolved installable: a pack, an artifact or a tool (host app)."""
 
     kind: str
     name: str
     pack: Pack | None = None
     artifact: Artifact | None = None
+    tool: ToolReference | None = None
 
 
 class InstallationManager:
@@ -177,12 +178,17 @@ class InstallationManager:
     def _resolve_component(
         self, target: str, *, sources: list[str] | None = None
     ) -> _Component | None:
-        """Resolve a name to a pack or a built artifact."""
+        """Resolve a name to a pack, a built artifact or a tool (host app)."""
         pack = self._repo.resolve_pack(target)
         if pack is not None:
             return _Component(kind="pack", name=pack.name, pack=pack)
 
+        from y5n.apps.yak.installer.installer import resolve_tool
         from y5n.apps.yak.resolver.install import find_artifact
+
+        tool = resolve_tool(target)
+        if tool is not None:
+            return _Component(kind="tool", name=target, tool=tool)
 
         artifact = find_artifact(target, sources=sources)
         if artifact is not None:
@@ -204,9 +210,31 @@ class InstallationManager:
         """
         if component.kind == "pack":
             return self._make_pack_available(component, target, path, existing_packs)
+        if component.kind == "tool":
+            return self._make_tool_available(component, path, existing_packs)
         return self._make_artifact_available(
             component, target, path, existing_packs, force, sources
         )
+
+    def _make_tool_available(
+        self,
+        component: _Component,
+        path: Path,
+        existing_packs: list,
+    ) -> tuple[list, list] | None:
+        """Install a host app (shell, web, ...) into the installation's venv."""
+        tool = component.tool
+        assert tool is not None
+        if PackName(tool.name) in existing_packs:
+            return None
+
+        inst = Installation(
+            name=tool.name,
+            root=path.resolve(),
+            packs=existing_packs + [PackName(tool.name)],
+        )
+        self._installer.install(inst, tools=[tool], sdk_path=self._sdk_path)
+        return existing_packs + [PackName(tool.name)], []
 
     def _make_pack_available(
         self,

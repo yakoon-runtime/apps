@@ -21,6 +21,13 @@ _TOOL_PACKAGES: dict[str, str] = {
 PLATFORM_TOOLS = [ToolReference("runtime"), ToolReference("yak")]
 
 
+def resolve_tool(name: str) -> ToolReference | None:
+    """Resolve a tool (host app) name like ``shell`` or ``web``."""
+    if name in _TOOL_PACKAGES:
+        return ToolReference(name)
+    return None
+
+
 def _has_project_file(directory: Path) -> bool:
     return (
         (directory / "pyproject.toml").exists()
