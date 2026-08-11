@@ -28,7 +28,7 @@ def _write_memory_installation(structure_dir: Path, target: Path) -> None:
 async def create_runtime() -> RuntimeManager:
 
     structure_dir = Path.cwd() / "structure"
-    installation_path = Path.cwd() / ".yak" / "installation" / "deployment.yml"
+    installation_path = Path.cwd() / ".yak" / "deployment.yml"
 
     # Respect an existing installation (ADR-19: owned by `yak`, machine
     # specific). Only a workspace without one gets the developer memory

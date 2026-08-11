@@ -3,7 +3,7 @@ materializes the deployment mapping.
 
 The scanner walks the materialized structure (packs are symlinked into
 `structure/`) and reads the `stores:` declarations; the installation
-writes `.yak/installation/deployment.yml` — the machine-specific mapping
+writes `.yak/deployment.yml` — the machine-specific mapping
 owned by `yak`.
 """
 

@@ -47,7 +47,7 @@ class InstallationManager:
         root = path.resolve()
         root.mkdir(parents=True, exist_ok=True)
         self._materializer.materialize(root / "structure", dist.name, mounts=mounts)
-        self._assemble(root / "structure", root / ".yak" / "installation")
+        self._assemble(root / "structure", root / ".yak")
 
         inst = Installation(
             name=target,
@@ -274,7 +274,7 @@ class InstallationManager:
 
         The installation binds the runtime's own `runtime` store plus
         every store the installed packs declare, each to its StoreFactory
-        and config. It is written to `.yak/installation/deployment.yml` —
+        and config. It is written to `.yak/deployment.yml` —
         machine-specific, not versioned, owned by `yak`.
         """
         stores = collect_declared_stores(structure_dir)
