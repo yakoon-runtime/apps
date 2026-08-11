@@ -13,49 +13,24 @@ from y5n.apps.yak.distribution.models import (
 
 
 class FileRepository:
-    def __init__(self, *roots: Path, builtin_artifacts: Path | None = None) -> None:
+    def __init__(self, *roots: Path) -> None:
         self._roots = list(roots)
-        self._artifacts_dir = builtin_artifacts
 
     def roots(self) -> list[Path]:
         return list(self._roots)
 
     def resolve_distribution(self, name: str) -> Distribution | None:
-        resolved = self._resolve_distribution(name)
+        """Resolve a pack's distribution from its pack.toml."""
+        resolved = self._resolve_pack(name)
         if resolved is not None:
             return resolved
         # Accept fully-qualified names ("y5n-packs-luma" → "luma").
         for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
             if name.startswith(prefix):
-                return self._resolve_distribution(name[len(prefix) :])
+                return self._resolve_pack(name[len(prefix) :])
         return None
 
-    def resolve_pack_distribution(self, name: str) -> Distribution | None:
-        """Resolve a pack (pack.toml) — not a bundled product template."""
-        resolved = self._resolve_pack_distribution(name)
-        if resolved is not None:
-            return resolved
-        for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
-            if name.startswith(prefix):
-                return self._resolve_pack_distribution(name[len(prefix) :])
-        return None
-
-    def _resolve_pack_distribution(self, name: str) -> Distribution | None:
-        for root in self._roots:
-            for prefix in ("y5n-packs-", "y5n-runtime-"):
-                dist_path = root / f"{prefix}{name}" / "pack.toml"
-                if dist_path.exists():
-                    return self._parse(dist_path)
-        return None
-
-    def _resolve_distribution(self, name: str) -> Distribution | None:
-        # 1. Bundled artifacts (apps/y5n-apps-yak/artifacts/<name>.yml)
-        if self._artifacts_dir is not None:
-            yml = self._artifacts_dir / f"{name}.yml"
-            if yml.exists():
-                return self._parse_artifact_yml(yml)
-
-        # 2. Pack manifests across all roots
+    def _resolve_pack(self, name: str) -> Distribution | None:
         for root in self._roots:
             for prefix in ("y5n-packs-", "y5n-runtime-"):
                 dist_path = root / f"{prefix}{name}" / "pack.toml"
@@ -96,66 +71,11 @@ class FileRepository:
             tools=[self._tool(t) for t in data.get("tools", data.get("tool", []))],
         )
 
-    def _parse_artifact_yml(self, path: Path) -> Distribution | None:
-        import yaml
-
-        try:
-            data = yaml.safe_load(path.read_text())
-        except Exception:
-            return None
-        if not isinstance(data, dict):
-            return None
-
-        name = data.get("name", "")
-        development = data.get("kind") == "development"
-
-        # Resolve extends
-        extends = data.get("extends")
-        if extends:
-            parent = self._resolve_extends(extends)
-            if parent is None:
-                return None
-            mounts = [
-                self._mount(m) for m in data.get("workspace", {}).get("mounts", [])
-            ]
-            parent_mounts = [
-                m for m in parent.mounts if m.source not in {mo.source for mo in mounts}
-            ]
-            all_mounts = parent_mounts + mounts
-
-            tools = [self._tool(t) for t in data.get("tools", [])]
-            parent_tools = parent.tools
-            all_tools = parent_tools + tools
-
-            return Distribution(
-                name=name,
-                version=data.get("version", "0.1"),
-                development=development,
-                mounts=all_mounts,
-                tools=all_tools,
-            )
-
-        mounts = [self._mount(m) for m in data.get("workspace", {}).get("mounts", [])]
-        tools = [self._tool(t) for t in data.get("tools", [])]
-        return Distribution(
-            name=name,
-            version=data.get("version", "0.1"),
-            development=development,
-            mounts=mounts,
-            tools=tools,
-        )
-
-    def _resolve_extends(self, name: str) -> Distribution | None:
-        return self.resolve_distribution(name)
-
     @staticmethod
     def _tool(raw: dict | str) -> ToolReference:
         if isinstance(raw, str):
-            ot = ToolReference(name=raw)
-            return ot
-        return ToolReference(
-            name=raw.get("name", ""), optional=raw.get("optional", False)
-        )
+            return ToolReference(name=raw)
+        return ToolReference(name=raw.get("name", ""))
 
     @staticmethod
     def _mount(raw: dict) -> Mount:

@@ -16,9 +16,8 @@ def test_sharp_install():
         repo_root = Path(__file__).resolve().parents[3]
         packs = repo_root / "packs"
         runtime = repo_root / "runtime"
-        artifacts_dir = repo_root / "apps" / "y5n-apps-yak" / "artifacts"
 
-        repo = FileRepository(packs, runtime, builtin_artifacts=artifacts_dir)
+        repo = FileRepository(packs, runtime)
         artifacts = DirectoryArtifactStore(packs, runtime)
         mgr = InstallationManager(repo, artifacts)
 

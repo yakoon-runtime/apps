@@ -76,28 +76,6 @@ def test_add_unknown_component_raises():
             mgr.add("nonexistent", inst_path)
 
 
-def test_add_rejects_development_templates():
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        repos = _make_env(root)
-        artifacts_dir = root / "artifacts"
-        artifacts_dir.mkdir()
-        (artifacts_dir / "dev.yml").write_text(
-            "name: dev\nkind: development\ndependencies: []\nworkspace:\n  mounts: []\n"
-        )
-        repo = FileRepository(repos, builtin_artifacts=artifacts_dir)
-        artifacts = DirectoryArtifactStore(repos)
-        mgr = InstallationManager(repo, artifacts)
-
-        inst_path = root / "inst"
-        mgr.install(inst_path)
-
-        import pytest
-
-        with pytest.raises(ValueError, match="development environment"):
-            mgr.add("dev", inst_path)
-
-
 def test_load_from_path():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

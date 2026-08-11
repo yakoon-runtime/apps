@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
-import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -184,20 +183,10 @@ class InstallationManager:
     def _resolve_component(
         self, target: str, *, sources: list[str] | None = None
     ) -> _Component | None:
-        """Resolve a name to a pack distribution or a built artifact.
-
-        Product bundles (crm.yml, desktop.yml) are not components — they
-        are recipes, composed of packs, and are not add-able.
-        """
-        dist = self._repo.resolve_pack_distribution(target)
+        """Resolve a name to a pack distribution or a built artifact."""
+        dist = self._repo.resolve_distribution(target)
         if dist is not None:
             return _Component(kind="distribution", name=dist.name, dist=dist)
-
-        product = self._repo.resolve_distribution(target)
-        if product is not None and product.development:
-            raise ValueError(
-                f"'{target}' is a development environment — use 'yak bootstrap'"
-            )
 
         from y5n.apps.yak.resolver.install import find_artifact
 

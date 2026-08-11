@@ -28,14 +28,10 @@ def _build_manager() -> InstallationManager:
     ctx = Context.current()
     roots = ctx.resolve_sources() if ctx else default_sources()
 
-    artifact_dir = (
-        Path(__file__).resolve().parents[8] / "apps" / "y5n-apps-yak" / "artifacts"
-    )
-
-    # Old monorepo-specific paths for backwards compat
+    # Monorepo paths for the installer (source projects it installs from).
     repo_root = Path(__file__).resolve().parents[8]
 
-    repo = FileRepository(*roots, builtin_artifacts=artifact_dir)
+    repo = FileRepository(*roots)
     artifacts = DirectoryArtifactStore(*roots)
     return InstallationManager(
         repo,
