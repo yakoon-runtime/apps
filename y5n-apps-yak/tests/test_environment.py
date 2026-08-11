@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from y5n.apps.yak.environment.io import env_path, from_template, load, save
+from y5n.apps.yak.environment.io import env_path, load, save
 from y5n.apps.yak.environment.models import Environment
 from y5n.apps.yak.environment.sync import add_mount
 from y5n.apps.yak.pack.models import Mount, PackName
@@ -57,41 +57,6 @@ class TestEnvironmentIO:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             assert env_path(root) == root / ".yak" / "environment.yml"
-
-    def test_from_template(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            template = Path(tmp) / "dev.yml"
-            template.write_text("""\
-name: dev
-dependencies:
-  - y5n-packs-root
-  - y5n-packs-system
-workspace:
-  path: workspace/structure
-  mounts:
-    - pack: root
-      target: /
-    - pack: system
-      target: /usr/bin
-""")
-            env = from_template(template)
-            assert env.name == "dev"
-            assert env.dependencies == [
-                PackName("y5n-packs-root"),
-                PackName("y5n-packs-system"),
-            ]
-            assert len(env.mounts) == 2
-            assert env.mounts[0].source == "root"
-            assert env.mounts[0].target == "/"
-
-    def test_from_template_minimal(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            template = Path(tmp) / "minimal.yml"
-            template.write_text("name: minimal\n")
-            env = from_template(template)
-            assert env.name == "minimal"
-            assert env.dependencies == []
-            assert env.mounts == []
 
 
 class TestEnvironmentSync:

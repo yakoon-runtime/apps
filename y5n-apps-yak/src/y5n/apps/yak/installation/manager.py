@@ -74,14 +74,13 @@ class InstallationManager:
         name = root.name or "yakoon"
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            self._materializer.materialize(root / "structure", name, mounts=[])
+            self._materializer.materialize(root / "structure", mounts=[])
 
         with self._step(ui, "Deployment"):
             self._assemble(root / "structure", root / ".yak", asker=asker)
 
         inst = Installation(
             name=name,
-            distribution="yakoon",
             root=root,
             packs=[],
             status=InstallationStatus.MATERIALIZED,
@@ -115,12 +114,12 @@ class InstallationManager:
         sources: list[str] | None = None,
         force: bool = False,
     ) -> Installation | None:
-        """Add a component (distribution or artifact) to an installation.
+        """Add a component (a pack or an artifact) to an installation.
 
         Both share one reconciliation: resolve → make available →
         materialize → discover requirements → reconcile deployment →
-        persist. Only "make available" differs — a distribution is built
-        from its source packs, an artifact installs its payload. Returns
+        persist. Only "make available" differs — a pack is built
+        from its source, an artifact installs its payload. Returns
         None when the component is already part of the installation.
         """
         with self._step(ui, "Resolving"):
@@ -146,7 +145,7 @@ class InstallationManager:
         structure_dir = path / env.workspace_path
 
         with self._step(ui, "Materializing"):
-            self._materializer.materialize(structure_dir, env.name, mounts=mounts)
+            self._materializer.materialize(structure_dir, mounts=mounts)
 
         self._report_mounts(ui, mounts)
 
@@ -158,9 +157,6 @@ class InstallationManager:
         now = datetime.now(UTC)
         inst = Installation(
             name=existing_inst.name if existing_inst else target,
-            distribution=(
-                existing_inst.distribution if existing_inst else component.name
-            ),
             root=path.resolve(),
             packs=all_packs,
             status=InstallationStatus.MATERIALIZED,
@@ -243,7 +239,6 @@ class InstallationManager:
 
         inst = Installation(
             name=target,
-            distribution=pack.name,
             root=path.resolve(),
             packs=all_packs,
         )
@@ -310,9 +305,7 @@ class InstallationManager:
         now = datetime.now(UTC)
         structure_dir = path / env.workspace_path
         with self._step(ui, "Workspace"):
-            self._materializer.materialize(
-                structure_dir, env.name, mounts=list(env.mounts)
-            )
+            self._materializer.materialize(structure_dir, mounts=list(env.mounts))
 
         with self._step(ui, "Deployment"):
             # Preserve the operator's bindings; only newly declared stores
@@ -612,7 +605,6 @@ class InstallationManager:
         manifest = f"""\
 [installation]
 name = "{inst.name}"
-distribution = "{inst.distribution}"
 status = "{inst.status.value}"
 packs = [{", ".join(f'"{p}"' for p in inst.packs)}]
 created = "{inst.created.isoformat() if inst.created else ""}"
@@ -630,7 +622,6 @@ updated = "{inst.updated.isoformat() if inst.updated else ""}"
             return None
         return Installation(
             name=inst_data.get("name", ""),
-            distribution=inst_data.get("distribution", ""),
             root=path.parent.parent,
             packs=[PackName(p) for p in inst_data.get("packs", [])],
             status=InstallationStatus(inst_data.get("status", "created")),

@@ -58,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "add",
-        help="Add a distribution or artifact to the installation",
+        help="Add a pack or artifact to the installation",
     )
     p.add_argument("name", help="Component name (e.g. crm, y5n-packs-hello)")
     p.add_argument(

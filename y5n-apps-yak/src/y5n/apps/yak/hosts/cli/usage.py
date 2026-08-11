@@ -21,7 +21,7 @@ Usage:
 
   Installation
     install                Create the minimal Yakoon platform
-    add                    Add a distribution or artifact
+    add                    Add a pack or artifact
     update                 Update the installation
     sync                   Reconcile the workspace
 

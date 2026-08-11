@@ -1,4 +1,4 @@
-"""yak add <component> [<target>] — add a distribution or artifact to an installation."""
+"""yak add <component> [<target>] — add a pack or artifact to an installation."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def run(args, mgr) -> None:
 
     root = _resolve_root(args)
     if root is None:
-        ui.fail("No installation found — run 'yak install <environment>' first")
+        ui.fail("No installation found — run 'yak install' first")
         return
 
     from y5n.apps.yak.installation.ask import TerminalStoreAsker

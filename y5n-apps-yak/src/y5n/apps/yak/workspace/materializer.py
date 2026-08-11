@@ -8,13 +8,9 @@ from y5n.apps.yak.workspace.models import Workspace
 
 
 class Materializer:
-    def __init__(self) -> None:
-        pass
-
     def materialize(
         self,
         structure_dir: Path,
-        distribution: str,
         mounts: list[Mount] | None = None,
     ) -> Workspace:
         structure_dir.mkdir(parents=True, exist_ok=True)
@@ -41,24 +37,13 @@ class Materializer:
         now = datetime.now(timezone.utc)
 
         workspace_root = structure_dir.parent
-        self._write_manifest(workspace_root, distribution, now)
+        self._write_manifest(workspace_root, now)
 
-        return Workspace(
-            path=workspace_root,
-            distribution=distribution,
-            created=now,
-            updated=now,
-        )
+        return Workspace(path=workspace_root, created=now, updated=now)
 
-    def _write_manifest(
-        self,
-        root: Path,
-        distribution: str,
-        now: datetime,
-    ) -> None:
+    def _write_manifest(self, root: Path, now: datetime) -> None:
         manifest = f"""\
 [workspace]
-distribution = "{distribution}"
 version = "1"
 created = "{now.isoformat()}"
 updated = "{now.isoformat()}"

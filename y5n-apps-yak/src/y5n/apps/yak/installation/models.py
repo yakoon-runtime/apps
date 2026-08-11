@@ -19,7 +19,6 @@ class InstallationStatus(Enum):
 @dataclass
 class Installation:
     name: str
-    distribution: str
     root: Path
     packs: list[PackName] = field(default_factory=list)
     status: InstallationStatus = InstallationStatus.CREATED

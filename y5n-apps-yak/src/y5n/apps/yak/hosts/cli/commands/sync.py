@@ -35,7 +35,7 @@ def run(args, mgr) -> None:
     # Materialize workspace from mounts
     materializer = Materializer()
     structure_dir = ctx / env.workspace_path
-    materializer.materialize(structure_dir, env.name, mounts=list(env.mounts))
+    materializer.materialize(structure_dir, mounts=list(env.mounts))
 
     print(f"  Synced {len(env.mounts)} mount(s) → {structure_dir}")
 

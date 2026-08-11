@@ -31,7 +31,6 @@ def test_install_creates_platform_installation():
         inst = mgr.install(inst_path)
 
         assert inst.name == "inst"
-        assert inst.distribution == "yakoon"
         assert inst.packs == []
         assert inst.root == inst_path
         assert (inst.root / "workspace.toml").exists()

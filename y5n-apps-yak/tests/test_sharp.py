@@ -10,7 +10,7 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 
 def test_sharp_install():
-    """Install the minimal platform, then add the crm distribution."""
+    """Install the minimal platform, then add the crm pack."""
     root = Path(tempfile.mkdtemp(prefix="yak-sharp-"))
     try:
         repo_root = Path(__file__).resolve().parents[3]
@@ -29,7 +29,6 @@ def test_sharp_install():
         assert "crm" in added.packs
 
         print(f"Name:         {inst.name}")
-        print(f"Distribution: {inst.distribution}")
         print(f"Status:       {inst.status.value}")
         print(f"Packs:        {', '.join(added.packs)}")
         print(f"Root:         {inst.root}")

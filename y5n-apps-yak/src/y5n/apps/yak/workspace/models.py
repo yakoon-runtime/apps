@@ -8,6 +8,5 @@ from pathlib import Path
 @dataclass
 class Workspace:
     path: Path
-    distribution: str
     created: datetime | None = None
     updated: datetime | None = None

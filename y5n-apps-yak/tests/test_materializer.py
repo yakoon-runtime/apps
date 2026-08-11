@@ -14,10 +14,9 @@ def test_materialize_with_mounts():
         structure_dir = Path(tmp) / "workspace" / "structure"
         mat = Materializer()
         mounts = [Mount(source=str(source_dir.resolve()), target="/opt/app")]
-        ws = mat.materialize(structure_dir, "test", mounts=mounts)
+        ws = mat.materialize(structure_dir, mounts=mounts)
 
         assert ws.path == structure_dir.parent
-        assert ws.distribution == "test"
         assert ws.created is not None
         assert ws.updated is not None
 
@@ -37,7 +36,7 @@ def test_materialize_at_root():
         structure_dir = Path(tmp) / "workspace" / "structure"
         mat = Materializer()
         mounts = [Mount(source=str(source_dir.resolve()), target="/")]
-        ws = mat.materialize(structure_dir, "test", mounts=mounts)
+        ws = mat.materialize(structure_dir, mounts=mounts)
 
         link = structure_dir / ".yak"
         assert link.is_symlink()

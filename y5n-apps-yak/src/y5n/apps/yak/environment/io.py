@@ -97,24 +97,3 @@ def save(env: Environment, context_root: Path) -> None:
             inst["updated"] = env.updated.isoformat()
         data["installation"] = inst
     path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
-
-
-def from_template(template_path: Path) -> Environment:
-    """Read a template artifacts/*.yml and convert to Environment."""
-    from y5n.apps.yak.pack.models import Mount, PackName
-
-    data = yaml.safe_load(template_path.read_text()) or {}
-    ws = data.get("workspace", {})
-    mounts = [
-        Mount(source=m.get("source") or m.get("pack", ""), target=m["target"])
-        for m in ws.get("mounts", [])
-    ]
-    deps = [PackName(d) for d in data.get("dependencies", [])]
-    return Environment(
-        name=data.get("name", "dev"),
-        dependencies=deps,
-        mounts=mounts,
-        workspace_path=(
-            ws.get("path", "structure") if isinstance(ws, dict) else "structure"
-        ),
-    )

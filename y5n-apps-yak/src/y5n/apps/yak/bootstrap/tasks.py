@@ -99,7 +99,7 @@ class MaterializeWorkspaceTask:
 
         materializer = Materializer()
         structure_dir = self._root / env.workspace_path
-        materializer.materialize(structure_dir, "dev", mounts=list(env.mounts))
+        materializer.materialize(structure_dir, mounts=list(env.mounts))
 
         return True
 

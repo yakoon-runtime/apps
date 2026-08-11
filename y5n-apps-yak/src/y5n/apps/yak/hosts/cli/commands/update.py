@@ -15,7 +15,7 @@ def run(args, mgr) -> None:
     if not (target / ".yak" / "state.toml").exists():
         found = find_runtime_root()
         if found is None:
-            ui.fail("No installation found — run 'yak install <environment>' first")
+            ui.fail("No installation found — run 'yak install' first")
             return
         target = found
 
