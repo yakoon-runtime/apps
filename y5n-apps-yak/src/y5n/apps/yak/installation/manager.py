@@ -46,6 +46,7 @@ class InstallationManager:
         sdk_path: Path | None = None,
         apps_root: Path | None = None,
         runtime_root: Path | None = None,
+        packs_root: Path | None = None,
     ) -> None:
         self._repo = repository
         self._artifacts = artifact_store
@@ -54,6 +55,8 @@ class InstallationManager:
             artifact_store, apps_root=apps_root, runtime_root=runtime_root
         )
         self._sdk_path = sdk_path
+        self._packs_root = packs_root
+        self._runtime_root = runtime_root
 
     # ── Install ──
 
@@ -75,7 +78,8 @@ class InstallationManager:
         name = root.name or "yakoon"
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            self._materializer.materialize(root / "structure", mounts=[])
+            mounts = self._platform_mounts()
+            self._materializer.materialize(root / "structure", mounts=mounts)
 
         with self._step(ui, "Deployment"):
             self._assemble(root / "structure", root / ".yak", asker=asker)
@@ -96,7 +100,7 @@ class InstallationManager:
             self._installer.install(inst, tools=PLATFORM_TOOLS, sdk_path=self._sdk_path)
 
         with self._step(ui, "Environment"):
-            touch(root, name=name, dependencies=[], mounts=[])
+            touch(root, name=name, dependencies=[], mounts=mounts)
 
         inst.status = InstallationStatus.CREATED
         inst.updated = datetime.now(UTC)
@@ -258,10 +262,11 @@ class InstallationManager:
         if not mounts:
             artifact = self._artifacts.get_artifact(PackName(target))
             if artifact and (artifact / "structure").is_dir():
+                target_path = pack.mount or f"/{target}"
                 mounts = [
                     Mount(
                         source=str((artifact / "structure").resolve()),
-                        target=f"/{target}",
+                        target=target_path,
                     )
                 ]
 
@@ -535,6 +540,29 @@ class InstallationManager:
         return self._read_state(state_file)
 
     # ── Mount resolution ──
+
+    def _platform_mounts(self) -> list:
+        """The platform's structure namespaces: root at / and boot at /boot.
+
+        Neither provides commands — root defines the tree root and its
+        ``.yak/path`` command paths; boot is the Python host namespace.
+        """
+        from y5n.apps.yak.pack.models import Mount
+
+        mounts: list = []
+        if self._packs_root is not None:
+            root_pack = self._packs_root / "y5n-packs-root"
+            if (root_pack / "structure").is_dir():
+                mounts.append(
+                    Mount(source=str((root_pack / "structure").resolve()), target="/")
+                )
+        if self._runtime_root is not None:
+            boot = self._runtime_root / "y5n-runtime-boot"
+            if (boot / "structure").is_dir():
+                mounts.append(
+                    Mount(source=str((boot / "structure").resolve()), target="/boot")
+                )
+        return mounts
 
     def resolve_mount_sources(self, mounts: list) -> list:
         """Convert pack-name or repo-relative mounts to source-path mounts.

@@ -55,7 +55,8 @@ class FileRepository:
         return Pack(
             name=data["name"],
             version=data.get("version", "0.1"),
-            mounts=[self._mount(m) for m in data.get("mounts", data.get("mount", []))],
+            mount=data.get("mount"),
+            mounts=[self._mount(m) for m in data.get("mounts", [])],
             tools=[self._tool(t) for t in data.get("tools", data.get("tool", []))],
         )
 

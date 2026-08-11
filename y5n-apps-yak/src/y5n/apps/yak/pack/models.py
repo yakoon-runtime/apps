@@ -21,12 +21,14 @@ class Mount:
 class Pack:
     """A resolved pack unit — what ``yak add`` installs from a pack.toml.
 
-    ``mounts`` declare other structures this pack's tree includes; the
-    mount sources are the packs it depends on. ``tools`` name host apps
-    the pack needs.
+    ``mount`` is the tree path the pack's structure is mounted into
+    (e.g. ``/usr/bin`` for the system pack). ``mounts`` declare other
+    structures this pack's tree includes; ``tools`` name host apps the
+    pack needs.
     """
 
     name: str
     version: str
+    mount: str | None = None
     mounts: list[Mount] = field(default_factory=list)
     tools: list[ToolReference] = field(default_factory=list)

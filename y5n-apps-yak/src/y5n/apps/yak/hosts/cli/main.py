@@ -43,6 +43,7 @@ def _build_manager() -> InstallationManager:
         sdk_path=repo_root / "sdk" / "y5n-sdk-python",
         apps_root=repo_root / "apps",
         runtime_root=repo_root / "runtime",
+        packs_root=repo_root / "packs",
     )
 
 
