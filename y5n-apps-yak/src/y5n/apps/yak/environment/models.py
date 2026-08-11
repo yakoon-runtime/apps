@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from y5n.apps.yak.distribution.models import Mount, PackName
+from y5n.apps.yak.pack.models import Mount, PackName
 
 
 @dataclass

@@ -2,14 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from y5n.apps.yak.distribution.models import (
-    Distribution,
-    Mount,
-    PackName,
-    PackReference,
-    ToolReference,
-    VersionConstraint,
-)
+from y5n.apps.yak.pack.models import Mount, Pack, PackName, ToolReference
 
 
 class FileRepository:
@@ -19,8 +12,8 @@ class FileRepository:
     def roots(self) -> list[Path]:
         return list(self._roots)
 
-    def resolve_distribution(self, name: str) -> Distribution | None:
-        """Resolve a pack's distribution from its pack.toml."""
+    def resolve_pack(self, name: str) -> Pack | None:
+        """Resolve a pack's unit from its pack.toml."""
         resolved = self._resolve_pack(name)
         if resolved is not None:
             return resolved
@@ -30,7 +23,7 @@ class FileRepository:
                 return self._resolve_pack(name[len(prefix) :])
         return None
 
-    def _resolve_pack(self, name: str) -> Distribution | None:
+    def _resolve_pack(self, name: str) -> Pack | None:
         for root in self._roots:
             for prefix in ("y5n-packs-", "y5n-runtime-"):
                 dist_path = root / f"{prefix}{name}" / "pack.toml"
@@ -38,35 +31,14 @@ class FileRepository:
                     return self._parse(dist_path)
         return None
 
-    def resolve_pack(self, name: PackName) -> bool:
-        for root in self._roots:
-            if self._find_manifest(root, name):
-                return True
-        return False
-
-    def _find_manifest(self, root: Path, name: PackName) -> Path | None:
-        for candidate in (
-            root / name,
-            root / f"y5n-packs-{name}",
-            root / f"y5n-runtime-{name}",
-        ):
-            manifest = candidate / "pack.toml"
-            if manifest.exists():
-                return manifest
-        return None
-
-    def _parse(self, path: Path) -> Distribution:
+    def _parse(self, path: Path) -> Pack:
         import tomllib
 
         with open(path, "rb") as f:
             data = tomllib.load(f)
-        return Distribution(
+        return Pack(
             name=data["name"],
             version=data.get("version", "0.1"),
-            distributions=[
-                self._pack_ref(p)
-                for p in data.get("distributions", data.get("distribution", []))
-            ],
             mounts=[self._mount(m) for m in data.get("mounts", data.get("mount", []))],
             tools=[self._tool(t) for t in data.get("tools", data.get("tool", []))],
         )
@@ -82,15 +54,4 @@ class FileRepository:
         return Mount(
             source=raw.get("source") or raw.get("pack", ""),
             target=raw.get("target", ""),
-        )
-
-    @staticmethod
-    def _pack_ref(raw: str | dict) -> PackReference:
-        if isinstance(raw, str):
-            return PackReference(name=PackName(raw))
-        name = raw.get("name", "")
-        version = raw.get("version")
-        return PackReference(
-            name=PackName(name),
-            version=VersionConstraint(version) if version else None,
         )

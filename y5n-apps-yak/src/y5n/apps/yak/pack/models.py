@@ -12,27 +12,21 @@ class ToolReference:
 
 
 @dataclass(frozen=True)
-class VersionConstraint:
-    specifier: str
-
-
-@dataclass(frozen=True)
-class PackReference:
-    name: PackName
-    version: VersionConstraint | None = None
-
-
-@dataclass(frozen=True)
 class Mount:
     source: str
     target: str
 
 
 @dataclass(frozen=True)
-class Distribution:
+class Pack:
+    """A resolved pack unit — what ``yak add`` installs from a pack.toml.
+
+    ``mounts`` declare other structures this pack's tree includes; the
+    mount sources are the packs it depends on. ``tools`` name host apps
+    the pack needs.
+    """
+
     name: str
     version: str
     mounts: list[Mount] = field(default_factory=list)
-    distributions: list[PackReference] = field(default_factory=list)
-    packs: list[PackName] = field(default_factory=list)
     tools: list[ToolReference] = field(default_factory=list)

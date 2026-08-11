@@ -1,7 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from y5n.apps.yak.distribution.models import Mount
+from y5n.apps.yak.pack.models import Mount
 from y5n.apps.yak.workspace.materializer import Materializer
 
 

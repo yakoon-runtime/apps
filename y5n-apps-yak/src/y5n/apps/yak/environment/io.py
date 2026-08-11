@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
-from y5n.apps.yak.distribution.models import Mount, PackName
+from y5n.apps.yak.pack.models import Mount, PackName
 
 from .models import Environment
 
@@ -101,7 +101,7 @@ def save(env: Environment, context_root: Path) -> None:
 
 def from_template(template_path: Path) -> Environment:
     """Read a template artifacts/*.yml and convert to Environment."""
-    from y5n.apps.yak.distribution.models import Mount, PackName
+    from y5n.apps.yak.pack.models import Mount, PackName
 
     data = yaml.safe_load(template_path.read_text()) or {}
     ws = data.get("workspace", {})

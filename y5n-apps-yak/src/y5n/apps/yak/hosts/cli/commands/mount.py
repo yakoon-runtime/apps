@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from y5n.apps.yak.distribution.models import Mount
 from y5n.apps.yak.environment.io import load, save
 from y5n.apps.yak.hosts.cli.cwd import find_context_root
+from y5n.apps.yak.pack.models import Mount
 from y5n.apps.yak.workspace.materializer import Materializer
 
 

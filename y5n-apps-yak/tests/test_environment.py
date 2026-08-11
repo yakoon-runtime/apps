@@ -6,10 +6,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from y5n.apps.yak.distribution.models import Mount, PackName
 from y5n.apps.yak.environment.io import env_path, from_template, load, save
 from y5n.apps.yak.environment.models import Environment
 from y5n.apps.yak.environment.sync import add_mount
+from y5n.apps.yak.pack.models import Mount, PackName
 
 
 class TestEnvironmentModels:

@@ -3,9 +3,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from y5n.apps.yak.distribution.models import ToolReference
 from y5n.apps.yak.installation.models import Installation
 from y5n.apps.yak.installer.venv import ensure_venv, upgrade_pip
+from y5n.apps.yak.pack.models import ToolReference
 from y5n.apps.yak.repository.artifact import ArtifactStore
 
 # Map tool names to app directories (package = directory under apps/)

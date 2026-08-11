@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
-from y5n.apps.yak.distribution.models import Distribution, Mount, PackName
 from y5n.apps.yak.environment.io import touch
 from y5n.apps.yak.installation.assemble import (
     StoreAsker,
@@ -18,10 +17,10 @@ from y5n.apps.yak.installation.assemble import (
 )
 from y5n.apps.yak.installation.models import Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer
+from y5n.apps.yak.pack.models import Mount, Pack, PackName
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import Artifact
-from y5n.apps.yak.resolver.resolver import Resolver
 from y5n.apps.yak.workspace.materializer import Materializer
 from y5n.runtime.engine.installation import Installation as RuntimeInstallation
 from y5n.runtime.engine.installation import load_installation, to_dict
@@ -29,11 +28,11 @@ from y5n.runtime.engine.installation import load_installation, to_dict
 
 @dataclass(frozen=True)
 class _Component:
-    """A resolved installable: a distribution or an artifact."""
+    """A resolved installable: a pack or an artifact."""
 
     kind: str
     name: str
-    dist: Distribution | None = None
+    pack: Pack | None = None
     artifact: Artifact | None = None
 
 
@@ -49,7 +48,6 @@ class InstallationManager:
     ) -> None:
         self._repo = repository
         self._artifacts = artifact_store
-        self._resolver = Resolver(lambda name: repository.resolve_distribution(name))
         self._materializer = Materializer()
         self._installer = Installer(
             artifact_store, apps_root=apps_root, runtime_root=runtime_root
@@ -183,10 +181,10 @@ class InstallationManager:
     def _resolve_component(
         self, target: str, *, sources: list[str] | None = None
     ) -> _Component | None:
-        """Resolve a name to a pack distribution or a built artifact."""
-        dist = self._repo.resolve_distribution(target)
-        if dist is not None:
-            return _Component(kind="distribution", name=dist.name, dist=dist)
+        """Resolve a name to a pack or a built artifact."""
+        pack = self._repo.resolve_pack(target)
+        if pack is not None:
+            return _Component(kind="pack", name=pack.name, pack=pack)
 
         from y5n.apps.yak.resolver.install import find_artifact
 
@@ -208,24 +206,23 @@ class InstallationManager:
 
         Returns (all_packs, mounts) or None when nothing is new.
         """
-        if component.kind == "distribution":
-            return self._make_distribution_available(
-                component, target, path, existing_packs
-            )
+        if component.kind == "pack":
+            return self._make_pack_available(component, target, path, existing_packs)
         return self._make_artifact_available(
             component, target, path, existing_packs, force, sources
         )
 
-    def _make_distribution_available(
+    def _make_pack_available(
         self,
         component: _Component,
         target: str,
         path: Path,
         existing_packs: list,
     ) -> tuple[list, list] | None:
-        dist = component.dist
-        assert dist is not None
-        packs, tools = self._resolver.resolve(dist)
+        pack = component.pack
+        assert pack is not None
+        # A pack is one unit; its mounts name the packs it depends on.
+        packs = [PackName(m.source) for m in pack.mounts]
         if not packs:
             packs = [PackName(target)]
         added = [p for p in packs if p not in existing_packs]
@@ -233,7 +230,7 @@ class InstallationManager:
             return None
         all_packs = existing_packs + added
 
-        mounts = self.resolve_mount_sources(dist.mounts)
+        mounts = self.resolve_mount_sources(pack.mounts)
         if not mounts:
             artifact = self._artifacts.get_artifact(PackName(target))
             if artifact and (artifact / "structure").is_dir():
@@ -246,11 +243,11 @@ class InstallationManager:
 
         inst = Installation(
             name=target,
-            distribution=dist.name,
+            distribution=pack.name,
             root=path.resolve(),
             packs=all_packs,
         )
-        self._installer.install(inst, tools=tools, sdk_path=self._sdk_path)
+        self._installer.install(inst, tools=pack.tools, sdk_path=self._sdk_path)
         return all_packs, mounts
 
     def _make_artifact_available(

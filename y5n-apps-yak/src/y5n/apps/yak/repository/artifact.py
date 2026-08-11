@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from y5n.apps.yak.distribution.models import PackName
+from y5n.apps.yak.pack.models import PackName
 
 
 @runtime_checkable

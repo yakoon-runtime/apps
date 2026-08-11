@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from y5n.apps.yak.distribution.models import Mount
+from y5n.apps.yak.pack.models import Mount
 from y5n.apps.yak.workspace.models import Workspace
 
 

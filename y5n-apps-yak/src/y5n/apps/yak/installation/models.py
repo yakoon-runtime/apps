@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
-from y5n.apps.yak.distribution.models import PackName
+from y5n.apps.yak.pack.models import PackName
 
 
 class InstallationStatus(Enum):
