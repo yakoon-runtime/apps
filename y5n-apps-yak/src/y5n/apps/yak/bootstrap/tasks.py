@@ -65,24 +65,9 @@ class InstallProjectsTask:
         return result.returncode == 0
 
     def _discover(self) -> list[Path]:
-        families = ["runtime", "sdk", "packs", "apps"]
-        projects: list[Path] = []
-        seen: set[Path] = set()
+        from y5n.apps.yak.installer.installer import platform_projects
 
-        for family in families:
-            family_dir = self._root / family
-            if not family_dir.is_dir():
-                continue
-            for child in sorted(family_dir.iterdir()):
-                if not child.is_dir():
-                    continue
-                if not (child / "pyproject.toml").exists():
-                    continue
-                if child in seen:
-                    continue
-                seen.add(child)
-                projects.append(child)
-        return projects
+        return platform_projects(self._root)
 
 
 class MaterializeWorkspaceTask:

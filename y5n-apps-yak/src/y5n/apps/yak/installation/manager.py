@@ -146,16 +146,16 @@ class InstallationManager:
                 return None
             all_packs, mounts = made
 
+        structure_dir = path / env.workspace_path
+
         with self._step(ui, "Materializing"):
-            self._materializer.materialize(path / "structure", env.name, mounts=mounts)
+            self._materializer.materialize(structure_dir, env.name, mounts=mounts)
 
         self._report_mounts(ui, mounts)
 
         with self._step(ui, "Deployment"):
             existing = load_installation(path / ".yak" / "deployment.yml")
-            self._assemble(
-                path / "structure", path / ".yak", existing=existing, asker=asker
-            )
+            self._assemble(structure_dir, path / ".yak", existing=existing, asker=asker)
 
         existing_inst = self.load(path)
         now = datetime.now(UTC)

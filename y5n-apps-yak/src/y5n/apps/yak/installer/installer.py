@@ -16,9 +16,47 @@ _TOOL_PACKAGES: dict[str, str] = {
     "yak": "y5n-apps-yak",
 }
 
-# The minimal platform: the SDK, every runtime project, and the host apps.
-# No packs — capabilities are added with `yak add`.
+# The minimal platform: the host apps. The runtime family and the SDK are
+# platform by family. No packs — capabilities are added with `yak add`.
 PLATFORM_TOOLS = [ToolReference("runtime"), ToolReference("yak")]
+
+
+def _has_project_file(directory: Path) -> bool:
+    return (
+        (directory / "pyproject.toml").exists()
+        or (directory / "setup.py").exists()
+        or (directory / "setup.cfg").exists()
+    )
+
+
+def platform_projects(source_root: Path) -> list[Path]:
+    """The minimal platform projects in a source tree.
+
+    The runtime family, the SDK and the host apps — no packs. ``install``
+    and ``bootstrap`` both build the platform from this set; they only
+    differ in where the projects come from.
+    """
+    projects: list[Path] = []
+    seen: set[Path] = set()
+
+    for base in (source_root / "runtime", source_root / "sdk"):
+        if not base.is_dir():
+            continue
+        for child in sorted(base.iterdir()):
+            if child.is_dir() and _has_project_file(child) and child not in seen:
+                seen.add(child)
+                projects.append(child)
+
+    for tool in PLATFORM_TOOLS:
+        pkg = _TOOL_PACKAGES.get(tool.name)
+        if pkg is None:
+            continue
+        app = source_root / "apps" / pkg
+        if app.is_dir() and app not in seen:
+            seen.add(app)
+            projects.append(app)
+
+    return projects
 
 
 class Installer:

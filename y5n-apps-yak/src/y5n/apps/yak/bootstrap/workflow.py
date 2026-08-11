@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
 from y5n.apps.yak.bootstrap.tasks import (
     CreateVenvTask,
     InstallProjectsTask,
@@ -25,46 +24,19 @@ def bootstrap(
 
     venv_python = root / ".venv" / "bin" / "python"
 
-    # Determine bootstrap environment from yak.yml
-    env_name = "dev"
-    artifacts_dir = root / "apps" / "y5n-apps-yak" / "artifacts"
+    # The minimal platform environment: no packs, no mounts. Capabilities
+    # are composed afterwards with `yak add` — the same as `yak install`.
+    from y5n.apps.yak.environment.io import save
+    from y5n.apps.yak.environment.models import Environment
 
-    for candidate in [root / "yak.yml", root / "apps" / "y5n-apps-yak" / "yak.yml"]:
-        if candidate.exists():
-            try:
-                cfg = yaml.safe_load(candidate.read_text())
-                bs = cfg.get("bootstrap", {})
-                env_name = bs.get("environment", env_name)
-                art_rel = bs.get("artifacts", "")
-                if art_rel:
-                    artifacts_dir = (root / art_rel).resolve()
-            except Exception:
-                pass
-            break
-
-    env_file = artifacts_dir / f"{env_name}.yml"
-    if not env_file.exists():
-        print(f"Error: bootstrap environment '{env_name}' not found at {env_file}")
-        return False
-
-    # Write .yak/environment.yml from template (resolve relative paths)
-    from y5n.apps.yak.distribution.models import Mount
-    from y5n.apps.yak.environment.io import from_template, save
-
-    env = from_template(env_file)
-    resolved = []
-    for m in env.mounts:
-        src = Path(m.source)
-        if not src.is_absolute():
-            src = (root / m.source).resolve()
-        if src.is_dir():
-            resolved.append(Mount(source=str(src), target=m.target))
-    env.mounts = resolved
-    save(env, root)
+    save(
+        Environment(name=root.name or "yakoon", workspace_path="workspace/structure"),
+        root,
+    )
 
     tasks = [
         ("Virtual environment", CreateVenvTask(root, force=force)),
-        ("Install projects", InstallProjectsTask(root, venv_python, force=force)),
+        ("Install platform", InstallProjectsTask(root, venv_python, force=force)),
         ("Workspace", MaterializeWorkspaceTask(root, force=force)),
     ]
 
