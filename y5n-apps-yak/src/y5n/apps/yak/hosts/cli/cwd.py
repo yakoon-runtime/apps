@@ -79,6 +79,24 @@ def find_context_root() -> Path | None:
     return found
 
 
+def find_runtime_root() -> Path | None:
+    """Find the nearest ancestor holding a runtime root.
+
+    A runtime root is a directory with a Yak context or an installation:
+    ``.yak/context.toml``, ``.yak/state.toml`` or ``.yak/environment.yml``.
+    """
+    cwd = Path.cwd()
+    for parent in [cwd, *cwd.parents]:
+        yak = parent / ".yak"
+        if (
+            (yak / "context.toml").exists()
+            or (yak / "state.toml").exists()
+            or (yak / "environment.yml").exists()
+        ):
+            return parent
+    return None
+
+
 def default_artifact_dir() -> Path | None:
     ctx = find_context_root()
     if ctx is None:

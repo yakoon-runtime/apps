@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -323,16 +324,11 @@ class InstallationManager:
                     issues.append(f"✘ Fingerprint   {pack} outdated — run 'yak sync'")
 
         # Runtime
-        pid_file = root / ".yak" / "runtime.pid"
-        if pid_file.exists():
-            pid = pid_file.read_text().strip()
-            try:
-                os.kill(int(pid), 0)
-                issues.append(f"✓ Runtime       running (pid {pid})")
-            except (OSError, ValueError):
-                issues.append(
-                    "✘ Runtime       pid file stale — run 'yak runtime restart'"
-                )
+        pid = self.runtime_status(root)
+        if pid is not None:
+            issues.append(f"✓ Runtime       running (pid {pid})")
+        elif (root / ".yak" / "runtime.pid").exists():
+            issues.append("✘ Runtime       pid file stale — run 'yak runtime restart'")
         else:
             issues.append("— Runtime       not running")
 
@@ -340,45 +336,74 @@ class InstallationManager:
 
     # ── Run / Stop ──
 
-    def run(self, path: Path) -> None:
-        inst = self.load(path)
-        if inst is None:
-            raise ValueError(f"Installation not found: {path}")
+    def run_runtime(self, path: Path) -> int | None:
+        """Start the runtime service for a root; return the new pid.
 
-        runtime_dir = self._artifacts.get_artifact(PackName("runtime"))
-        if runtime_dir is None:
-            raise RuntimeError("Runtime artifact not found")
+        The process runs in the background via a venv wrapper script; the
+        pid is recorded at ``.yak/runtime.pid``. Returns None when the
+        runtime is already running.
+        """
+        pid_file = path / ".yak" / "runtime.pid"
+        if self._read_pid(pid_file) is not None:
+            return None
 
-        main = runtime_dir / "boot" / "python" / "__main__.py"
-        if not main.exists():
-            raise RuntimeError(f"Runtime entry not found: {main}")
+        log_dir = path / ".yak" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "runtime.log"
 
-        subprocess.Popen(
-            [sys.executable, str(main)],
-            cwd=inst.root,
+        venv_python = path / ".venv" / "bin" / "python"
+        wrapper = path / ".venv" / "bin" / "yakoon-runtime"
+        wrapper.write_text(
+            f"#!{venv_python}\n"
+            "import ctypes, ctypes.util\n"
+            "libc = ctypes.CDLL(ctypes.util.find_library('c'))\n"
+            "libc.prctl(15, b'yakoon-runtime', 0, 0, 0)\n"
+            "from y5n.apps.runtime.__main__ import main\n"
+            "main()\n"
         )
+        wrapper.chmod(0o755)
 
-        inst.status = InstallationStatus.RUNNING
-        inst.updated = datetime.now(UTC)
-        self._write_state(inst)
+        with open(log_file, "a") as lf:
+            proc = subprocess.Popen([str(wrapper)], cwd=path, stdout=lf, stderr=lf)
+        pid_file.write_text(str(proc.pid))
+        self._mark_running(path, running=True)
+        return proc.pid
 
-    def stop(self, path: Path) -> None:
-        inst = self.load(path)
-        if inst is None:
-            raise ValueError(f"Installation not found: {path}")
-
-        import signal
-
-        pid_file = inst.root / ".yak" / "runtime.pid"
-        if pid_file.exists():
-            pid = int(pid_file.read_text().strip())
+    def stop_runtime(self, path: Path) -> int | None:
+        """Stop the runtime service for a root; return the stopped pid."""
+        pid_file = path / ".yak" / "runtime.pid"
+        pid = self._read_pid(pid_file)
+        if pid is not None:
             try:
                 os.kill(pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
-            pid_file.unlink(missing_ok=True)
+        pid_file.unlink(missing_ok=True)
+        self._mark_running(path, running=False)
+        return pid
 
-        inst.status = InstallationStatus.STOPPED
+    def runtime_status(self, path: Path) -> int | None:
+        """Return the running runtime pid for a root, or None."""
+        return self._read_pid(path / ".yak" / "runtime.pid")
+
+    @staticmethod
+    def _read_pid(pid_file: Path) -> int | None:
+        if not pid_file.exists():
+            return None
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, 0)
+            return pid
+        except (OSError, ValueError):
+            return None
+
+    def _mark_running(self, path: Path, *, running: bool) -> None:
+        inst = self.load(path)
+        if inst is None:
+            return
+        inst.status = (
+            InstallationStatus.RUNNING if running else InstallationStatus.STOPPED
+        )
         inst.updated = datetime.now(UTC)
         self._write_state(inst)
 

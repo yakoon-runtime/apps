@@ -17,40 +17,9 @@ except Exception:
 
 
 def _show_banner() -> None:
-    print(f"""Yakoon {VERSION}
+    from y5n.apps.yak.hosts.cli.usage import USAGE
 
-Usage:
-    yak <command> [options]
-
-  Getting started
-    init                   Create a Yak context
-
-  Development
-    create pack            Create a new pack
-    create command         Add a command to the current pack
-    bootstrap              Prepare this repository for development
-
-  Packaging
-    build                  Build artifacts
-    publish                Publish an artifact
-
-  Environment
-    install                Install a pack
-    sync                   Sync workspace with environment
-
-  Run
-    shell                  Open the Yakoon shell
-    runtime                Manage the runtime service
-    web                    Manage the web service
-
-  Tools
-    status                 Show installation status
-    mount                  Manage workspace mounts
-    logs                   Show logs
-    doctor                 Check installation health
-
-Use 'yak <command> --help' for detailed options.
-""")
+    print(f"Yakoon {VERSION}\n\n{USAGE}")
 
 
 def _build_manager() -> InstallationManager:

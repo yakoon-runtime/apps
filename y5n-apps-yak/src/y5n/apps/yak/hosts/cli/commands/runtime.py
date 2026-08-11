@@ -1,113 +1,67 @@
+"""yak runtime start|stop|status|restart — manage the runtime service."""
+
 from __future__ import annotations
 
-import os
-import signal
-import subprocess
 from pathlib import Path
 
-from y5n.apps.yak.hosts.cli.cwd import find_context_root
+from y5n.apps.yak.hosts.cli.cwd import find_runtime_root
 
 
 def run(args, mgr) -> None:
     env_file = getattr(args, "environment", None)
     if env_file:
         path = Path(env_file).resolve().parent
+        _copy_config(env_file, path)
     else:
-        path = find_context_root()
+        path = find_runtime_root()
         if path is None:
-            print("Not inside a Yak context.")
-            print("Run 'yak init' first or cd into one.")
+            print("Not inside a Yak context or installation.")
+            print("Run 'yak install <name>' or 'yak init' first.")
             return
 
     match args.action:
         case "start":
-            _start(path, env_file=env_file)
+            _start(mgr, path)
         case "stop":
-            _stop(path)
+            _stop(mgr, path)
         case "status":
-            _status(path)
+            _status(mgr, path)
         case "restart":
-            _stop(path)
-            _start(path, env_file=env_file)
+            _stop(mgr, path)
+            _start(mgr, path)
 
 
-def _start(path: Path, env_file: str | None = None) -> None:
-    pid_file = path / ".yak" / "runtime.pid"
+def _copy_config(env_file: str, path: Path) -> None:
+    import shutil
 
-    if env_file:
-        import shutil
-
-        target_config = path / "yakoon-runtime.yml"
-        shutil.copy2(env_file, target_config)
-
-    if pid_file.exists():
-        try:
-            pid = int(pid_file.read_text().strip())
-            os.kill(pid, 0)
-            print(f"Runtime already running (pid {pid})")
-            return
-        except (ProcessLookupError, ValueError):
-            pid_file.unlink(missing_ok=True)
-
-    # Determine port from config
-    port = 9100
-    config = path / "yakoon-runtime.yml"
-    if config.exists():
-        try:
-            import yaml
-
-            cfg = yaml.safe_load(config.read_text()) or {}
-            port = cfg.get("listen", {}).get("port", 9100)
-        except Exception:
-            pass
-
-    log_dir = path / ".yak" / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "runtime.log"
-
-    venv_python = path / ".venv" / "bin" / "python"
-    wrapper = path / ".venv" / "bin" / "yakoon-runtime"
-    wrapper.write_text(
-        f"#!{venv_python}\n"
-        "import ctypes, ctypes.util\n"
-        "libc = ctypes.CDLL(ctypes.util.find_library('c'))\n"
-        "libc.prctl(15, b'yakoon-runtime', 0, 0, 0)\n"
-        "from y5n.apps.runtime.__main__ import main\n"
-        "main()\n"
-    )
-    wrapper.chmod(0o755)
-
-    with open(log_file, "a") as lf:
-        proc = subprocess.Popen([str(wrapper)], cwd=path, stdout=lf, stderr=lf)
-    pid_file.write_text(str(proc.pid))
-    print(f"Runtime started (pid {proc.pid})")
-    print(f"Logs     : {log_file}")
+    shutil.copy2(env_file, path / "yakoon-runtime.yml")
 
 
-def _stop(path: Path) -> None:
-    pid_file = path / ".yak" / "runtime.pid"
-    if pid_file.exists():
-        try:
-            pid = int(pid_file.read_text().strip())
-            os.kill(pid, signal.SIGTERM)
-            print(f"Runtime stopped (pid {pid})")
-        except ProcessLookupError:
-            print("Runtime not running")
-        except ValueError:
-            print("Invalid PID file")
-        pid_file.unlink(missing_ok=True)
-    else:
+def _start(mgr, path: Path) -> None:
+    running = mgr.runtime_status(path)
+    if running is not None:
+        print(f"Runtime already running (pid {running})")
+        return
+
+    pid = mgr.run_runtime(path)
+    if pid is None:
+        print("Runtime start failed")
+        return
+    print(f"Runtime started (pid {pid})")
+    print(f"Logs     : {path / '.yak' / 'logs' / 'runtime.log'}")
+
+
+def _stop(mgr, path: Path) -> None:
+    pid = mgr.stop_runtime(path)
+    if pid is None:
         print("Runtime not running")
-
-
-def _status(path: Path) -> None:
-    pid_file = path / ".yak" / "runtime.pid"
-    if pid_file.exists():
-        try:
-            pid = int(pid_file.read_text().strip())
-            os.kill(pid, 0)
-            print(f"Runtime running (pid {pid})")
-        except (ProcessLookupError, ValueError):
-            print("Runtime not running")
     else:
+        print(f"Runtime stopped (pid {pid})")
+
+
+def _status(mgr, path: Path) -> None:
+    pid = mgr.runtime_status(path)
+    if pid is None:
         print("Runtime not running")
+    else:
+        print(f"Runtime running (pid {pid})")

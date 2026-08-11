@@ -27,44 +27,14 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import sync as _sync
     from y5n.apps.yak.hosts.cli.commands import web as _web
     from y5n.apps.yak.hosts.cli.commands import workspace as _workspace
+    from y5n.apps.yak.hosts.cli.usage import USAGE
 
     parser = argparse.ArgumentParser(
         prog="yak",
         description="Yakoon Platform Manager",
         usage="yak <command> [options]",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "\n"
-            "  Getting started\n"
-            "    init                   Create a Yak context\n"
-            "\n"
-            "  Typical workflow\n"
-            "    create → build → install → sync → shell\n"
-            "\n"
-            "  Development\n"
-            "    create pack            Create a new pack\n"
-            "    create command         Add a command to the current pack\n"
-            "    bootstrap              Prepare this repository for development\n"
-            "\n"
-            "  Packaging\n"
-            "    build                  Build artifacts\n"
-            "    publish                Publish an artifact\n"
-            "\n"
-            "  Environment\n"
-            "    install                Install a pack\n"
-            "    sync                   Sync workspace with environment\n"
-            "\n"
-            "  Run\n"
-            "    shell                  Open the Yakoon shell\n"
-            "    runtime                Manage the runtime service\n"
-            "    web                    Manage the web service\n"
-            "\n"
-            "  Tools\n"
-            "    status                 Show installation status\n"
-            "    publish                Publish an artifact\n"
-            "    logs                   Show logs\n"
-            "    doctor                 Check installation health\n"
-        ),
+        epilog=USAGE,
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
 
