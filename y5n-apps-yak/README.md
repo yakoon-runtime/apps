@@ -8,245 +8,133 @@ Yakoon starts empty.
 The runtime itself contains no packs, no commands and no product
 assumptions. Capabilities are added explicitly with `yak add`.
 
-## Runtime first
+## Install or bootstrap?
 
-A fresh Yakoon platform consists only of the runtime, SDK and host
-applications:
+Both commands create the same minimal Yakoon platform.
 
-    Yakoon Platform
-        │
-        ├── Runtime
-        ├── SDK
-        └── Hosts
-        │
-        └── 0 packs
-            0 nodes
-            1 store: runtime
+Use `install` for a regular installation:
 
-Everything else is composed afterwards:
+    mkdir my-yakoon
+    cd my-yakoon
+    yak install
 
-    yak add system
-    yak add ident
-    yak add crm
+The platform is installed from released artifacts.
 
-`system`, `ident` and `crm` are packs. None of them is implicitly part
-of Yakoon.
-
-This means that a perfectly valid Yakoon installation may consist of
-only the runtime, or of the runtime plus a company's own packs.
-
----
-
-## Bootstrap or install?
-
-There are two ways to create the same minimal Yakoon platform.
-
-### `yak bootstrap` — build the platform from source
-
-Use `bootstrap` when you are working inside a Yakoon source repository.
+Use `bootstrap` when developing Yakoon itself from a source checkout:
 
     git clone <yakoon-repository>
     cd <yakoon-repository>
-
     yak bootstrap
 
-`bootstrap` uses the platform projects from the local source tree and
-installs them editable.
+The platform is installed from the local sources (editable).
 
-It is intended for developing Yakoon itself.
+In both cases the result is a minimal platform:
 
-After bootstrap, the platform is deliberately empty:
-
+    Runtime + SDK + Hosts
     0 packs
     0 nodes
     runtime store
 
-Add whatever you need:
+The difference is only how the Yakoon platform itself is installed:
+
+    yak install     → released artifacts
+    yak bootstrap   → local sources (editable)
+
+
+## Add components
+
+Components are added with the same command in every environment:
 
     yak add system
     yak add ident
     yak add crm
 
-### `yak install` — install the platform
+`yak add` resolves a component from the sources available to the
+current context:
 
-Use `install` when you want to use or operate Yakoon without developing
-the Yakoon platform itself.
+    1. Source directories      [sources] in context.toml
+    2. Local artifact store    published artifacts
+    3. Repositories            [repositories] in context.toml
 
-    mkdir my-yakoon
-    cd my-yakoon
+The artifact store is always system-global:
 
-    yak install
+    ~/.yak/artifacts/
 
-`install` creates the same minimal platform from installable platform
-artifacts.
+`build` stages the artifact in the context-local `.yak/artifacts/`;
+`publish` lifts it into the system-global `~/.yak/artifacts/`, where
+every installation can resolve it.
 
-Afterwards, compose the installation in exactly the same way:
+This allows released and development components to be mixed in the
+same installation.
 
-    yak add system
-    yak add ident
-    yak add crm
 
-The difference is only where the platform comes from:
-
-                         Minimal Yakoon Platform
-                                  ▲
-                                  │
-                     ┌────────────┴────────────┐
-                     │                         │
-                yak bootstrap             yak install
-                     ▲                         ▲
-                     │                         │
-                local sources             artifacts
-                 (editable)
-
-Once the platform exists, both workflows are identical.
-
----
-
-## Compose your installation
-
-`yak add` determines what a Yakoon installation can do.
-
-For example:
-
-### Minimal system
-
-    yak install
-    yak add system
-
-### CRM system
+### Regular installation
 
     yak install
     yak add system
     yak add ident
-    yak add crm
 
-### Development from source
+Result:
 
-    git clone <yakoon-repository>
-    cd yakoon
+    Runtime     artifact
+    system      artifact
+    ident       artifact
+
+
+### Yakoon development
 
     yak bootstrap
     yak add system
     yak add ident
-    yak add crm
 
-A company can just as well build its own composition:
+Result:
+
+    Runtime     local source (editable)
+    system      local source
+    ident       local source
+
+
+### Develop company components against released Yakoon
+
+Start with a regular Yakoon installation:
 
     yak install
-    yak add acme-system
+    yak add system
+    yak add ident
+
+Then add the company's development directory to the context:
+
+    # .yak/context.toml
+
+    [sources]
+    dirs = ["/home/acme/dev/packs"]
+
+Now local company components can be added directly:
+
     yak add acme-erp
     yak add acme-machines
 
-Yakoon does not require the standard `system`, `ident`, `crm` or any
-other product pack.
+Result:
 
----
+    Runtime          artifact
+    system           artifact
+    ident            artifact
+    acme-erp         local source
+    acme-machines    local source
 
-## The tree is the model
+The company can therefore develop and debug its own components
+against a released Yakoon installation without publishing them first.
 
-Packs are mounted into the Yakoon tree.
+When a component is ready for release:
 
-For example:
+    yak build acme-erp
+    yak publish acme-erp
 
-    /
-    ├── system/
-    │   ├── ls
-    │   ├── cd
-    │   └── su
-    │
-    ├── ident/
-    │   ├── accounts
-    │   └── groups
-    │
-    └── crm/
-        └── contacts
+Other installations can then resolve it as an artifact.
 
-There is no global command pool and no PATH.
+## The model
 
-Commands are resolved relative to the current node or addressed by
-their path.
-
-For example:
-
-    /system/ls
-
-or, when the current node is `/system`:
-
-    ls
-
-`system` is not a privileged `/usr/bin`. It is a pack namespace like
-any other.
-
----
-
-## Typical workflows
-
-### Develop Yakoon itself
-
-    git clone <yakoon-repository>
-    cd yakoon
-
-    yak bootstrap
-    yak add system
-
-### Use Yakoon
-
-    mkdir my-yakoon
-    cd my-yakoon
-
-    yak install
-    yak add system
-    yak runtime start
-
-### Develop a pack
-
-    yak create pack hello
-    cd hello
-    yak create command greet
-
-    yak build .
-    yak publish y5n-packs-hello
-
-    # Add it to an existing Yakoon installation
-    yak add y5n-packs-hello
-
-### Operate an installation
-
-    yak add <component>
-    yak update
-
-    yak runtime start
-    yak runtime status
-    yak runtime stop
-
-    yak shell
-    yak doctor
-
----
-
-## Lifecycle
-
-Yakoon separates platform creation, composition and operation:
-
-    Platform
-        bootstrap / install
-               │
-               ▼
-    Composition
-              add
-               │
-               ▼
-    Reconciliation
-             update
-               │
-               ▼
-    Operation
-        runtime / shell / doctor
-
-Or, from a development perspective:
-
-    create → build → publish
-                       │
-                       ▼
-                 yak add
+    install/bootstrap    creates the platform
+    context              defines where components can be found
+    add                  adds a component
+    publish              makes a component available without its sources
