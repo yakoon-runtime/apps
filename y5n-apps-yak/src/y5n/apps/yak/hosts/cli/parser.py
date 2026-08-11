@@ -21,7 +21,6 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import logs as _logs
     from y5n.apps.yak.hosts.cli.commands import mount as _mount
     from y5n.apps.yak.hosts.cli.commands import publish as _publish
-
     from y5n.apps.yak.hosts.cli.commands import runtime as _runtime
     from y5n.apps.yak.hosts.cli.commands import shell as _shell
     from y5n.apps.yak.hosts.cli.commands import status as _status

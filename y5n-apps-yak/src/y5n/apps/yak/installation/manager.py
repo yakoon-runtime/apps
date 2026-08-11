@@ -6,13 +6,19 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 from y5n.apps.yak.distribution.models import PackName
+from y5n.apps.yak.installation.assemble import (
+    build_memory_installation,
+    collect_declared_stores,
+)
 from y5n.apps.yak.installation.models import Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.resolver import Resolver
 from y5n.apps.yak.workspace.materializer import Materializer
+from y5n.runtime.engine.installation import to_dict
 
 
 class InstallationManager:
@@ -178,9 +184,6 @@ class InstallationManager:
         if pid_file.exists():
             pid = pid_file.read_text().strip()
             try:
-                import os
-                import signal
-
                 os.kill(int(pid), 0)
                 issues.append(f"✓ Runtime       running (pid {pid})")
             except (OSError, ValueError):
@@ -267,27 +270,19 @@ class InstallationManager:
     # ── Assembly (ADR-19) ──
 
     def _assemble(self, structure_dir: Path, installation_dir: Path) -> None:
-        """Materialize the deployment mapping from the declared stores.
+        """Materialize the deployment from the declared stores.
 
-        Each declared store gets its own deployment entry with the default
-        backend. The installation is written to
-        `.yak/installation/deployment.yml` — machine-specific, not
-        versioned, owned by `yak`.
+        The installation binds the runtime's own `runtime` store plus
+        every store the installed packs declare, each to its StoreFactory
+        and config. It is written to `.yak/installation/deployment.yml` —
+        machine-specific, not versioned, owned by `yak`.
         """
-        from y5n.apps.yak.installation.assemble import collect_declared_stores
-        from y5n.runtime.engine.installation import Installation, StoreBinding, to_dict
-
         stores = collect_declared_stores(structure_dir)
-        installations = Installation(
-            stores={
-                name: StoreBinding(store=name, backend="memory://") for name in stores
-            },
-        )
+        installation = build_memory_installation(stores)
         installation_dir.mkdir(parents=True, exist_ok=True)
-        import yaml
 
         with open(installation_dir / "deployment.yml", "w") as f:
-            yaml.safe_dump(to_dict(installations), f, sort_keys=False)
+            yaml.safe_dump(to_dict(installation), f, sort_keys=False)
 
     # ── Internals ──
 

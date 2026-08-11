@@ -60,17 +60,16 @@ def test_installation_roundtrip(tmp_path: Path):
         "stores:\n  - telemetry\n",
     )
 
-    from y5n.apps.yak.installation.assemble import collect_declared_stores
-    from y5n.runtime.engine.installation import (
-        Installation,
-        StoreBinding,
-        to_dict,
+    from y5n.apps.yak.installation.assemble import (
+        EVENT_STORE_FACTORY,
+        MEMORY_CONFIG,
+        build_memory_installation,
+        collect_declared_stores,
     )
+    from y5n.runtime.engine.installation import RUNTIME_STORE, to_dict
 
     stores = collect_declared_stores(tmp_path)
-    installation = Installation(
-        stores={name: StoreBinding(store=name, backend="memory://") for name in stores},
-    )
+    installation = build_memory_installation(stores)
 
     deployment_file = tmp_path / "installation" / "deployment.yml"
     deployment_file.parent.mkdir(parents=True, exist_ok=True)
@@ -80,6 +79,17 @@ def test_installation_roundtrip(tmp_path: Path):
 
     loaded = load_installation(deployment_file)
     assert loaded is not None
-    assert set(loaded.stores) == {"crm", "telemetry"}
+    assert set(loaded.stores) == {RUNTIME_STORE, "crm", "telemetry"}
     assert loaded.binding_for("crm") is not None
-    assert loaded.binding_for("crm").backend == "memory://"
+    assert loaded.binding_for("crm").factory == EVENT_STORE_FACTORY
+    assert loaded.binding_for("crm").config == MEMORY_CONFIG
+    assert loaded.binding_for(RUNTIME_STORE) is not None
+
+
+def test_memory_installation_always_binds_the_runtime_store(tmp_path: Path):
+    from y5n.apps.yak.installation.assemble import build_memory_installation
+    from y5n.runtime.engine.installation import RUNTIME_STORE
+
+    installation = build_memory_installation([])
+    assert installation.binding_for(RUNTIME_STORE) is not None
+    assert set(installation.stores) == {RUNTIME_STORE}
