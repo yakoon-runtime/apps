@@ -89,7 +89,7 @@ class MaterializeWorkspaceTask:
         workspace = self._root / ws_path
         if workspace.exists():
             if not self._force:
-                print("  Workspace already exists (use --force to recreate)")
+                print("    Workspace already exists (use --force to recreate)")
                 return True
             import shutil
 
@@ -142,10 +142,10 @@ class SummaryTask:
 
         projects_found = InstallProjectsTask(self._root, self._python)._discover()
 
-        print(f"Python      : {py_version}")
-        print(f"Venv        : {self._root / '.venv'}")
-        print(f"Workspace   : {self._root / 'workspace'}")
-        print(f"Projects    : {len(projects_found)}")
+        print(f"  Python      : {py_version}")
+        print(f"  Venv        : {self._root / '.venv'}")
+        print(f"  Workspace   : {self._root / 'workspace'}")
+        print(f"  Projects    : {len(projects_found)}")
         print()
-        print("Bootstrap completed. Run 'pytest' or 'code .' to start developing.")
+        print("  Bootstrap completed. Run 'pytest' or 'code .' to start developing.")
         return True

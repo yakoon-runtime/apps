@@ -1,266 +1,252 @@
 # yak — Yakoon CLI
 
 `yak` is the command-line interface for Yakoon — a composable,
-language‑neutral runtime platform.
+language-neutral runtime platform.
 
-## Typical workflow
+Yakoon starts empty.
 
-```
-Development:   create → build → publish
-Installation:  install → add → update
-Operation:     shell / runtime / status / doctor
-```
+The runtime itself contains no packs, no commands and no product
+assumptions. Capabilities are added explicitly with `yak add`.
 
-## Quick start
+## Runtime first
 
-### Local development
+A fresh Yakoon platform consists only of the runtime, SDK and host
+applications:
 
-```bash
-mkdir demo && cd demo
-yak create pack hello       # Scaffold a new pack
-cd hello
-yak create command greet    # Add a command to the pack
-cd ..
-yak build hello             # Build the pack
-yak install                 # Create the minimal Yakoon platform (no packs)
-yak add y5n-packs-hello     # Add the built artifact to the installation
-yak shell                   # Open the interactive shell
-```
+    Yakoon Platform
+        │
+        ├── Runtime
+        ├── SDK
+        └── Hosts
+        │
+        └── 0 packs
+            0 nodes
+            1 store: runtime
 
-### Share via GitHub Releases
+Everything else is composed afterwards:
 
-Before publishing, create a fine-grained personal access token:
+    yak add system
+    yak add ident
+    yak add crm
 
-1. Go to https://github.com/settings/personal-access-tokens
-2. Create a new token:
-   - Repository access: `yakoon-runtime/apps`
-   - Permissions: Contents → **Read & Write**
-3. Set it in your environment:
+`system`, `ident` and `crm` are packs. None of them is implicitly part
+of Yakoon.
 
-```bash
-export YAK_GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxx
-# Add to ~/.bashrc or ~/.zshrc for persistence
-```
+This means that a perfectly valid Yakoon installation may consist of
+only the runtime, or of the runtime plus a company's own packs.
 
-Then publish:
+---
 
-```bash
-# Publisher:
-yak build hello
-yak publish y5n-packs-hello --repository github:yakoon-runtime/apps --release
-# → published at https://github.com/yakoon-runtime/apps/releases
+## Bootstrap or install?
 
-# Consumer:
-mkdir other && cd other
-yak install
-yak add y5n-packs-hello --repository github:yakoon-runtime/apps
-yak shell
-```
+There are two ways to create the same minimal Yakoon platform.
 
-### Share via local filesystem
+### `yak bootstrap` — build the platform from source
 
-```bash
-yak build hello
-yak publish y5n-packs-hello             # → ~/.yak/artifacts/
+Use `bootstrap` when you are working inside a Yakoon source repository.
 
-# Another developer on the same machine:
-mkdir other && cd other
-yak install
-yak add y5n-packs-hello                 # finds it from ~/.yak/artifacts/
-yak shell
-```
+    git clone <yakoon-repository>
+    cd <yakoon-repository>
 
-## Artifact lifecycle
+    yak bootstrap
 
-```
-create → build → publish
-install → add → update
-```
+`bootstrap` uses the platform projects from the local source tree and
+installs them editable.
 
-| Step | Command | Effect |
-|------|---------|--------|
-| 1 | `yak create pack <name>` | Scaffolds a new pack project |
-| 2 | `yak build <source>` | Builds wheel + artifact.yml → `.yak/artifacts/` |
-| 3 | `yak publish <name>` | Copies artifact → `~/.yak/artifacts/` (shareable) |
-| 4 | `yak install` | Creates the minimal Yakoon platform (runtime + SDK, no packs) |
-| 5 | `yak add <component>` | Adds a distribution or artifact to the installation |
-| 6 | `yak update` | Reconciles the installation with its desired state |
-| 7 | `yak shell` | Opens interactive shell |
+It is intended for developing Yakoon itself.
 
-## Architecture
+After bootstrap, the platform is deliberately empty:
 
-Every `yak` command starts by locating a **YakContext** — similar to a
-Git repository, it defines the root for builds, artifacts, environments,
-and the workspace. Commands find it by walking up from the current
-working directory.
+    0 packs
+    0 nodes
+    runtime store
 
-```
-YakContext
+Add whatever you need:
+
+    yak add system
+    yak add ident
+    yak add crm
+
+### `yak install` — install the platform
+
+Use `install` when you want to use or operate Yakoon without developing
+the Yakoon platform itself.
+
+    mkdir my-yakoon
+    cd my-yakoon
+
+    yak install
+
+`install` creates the same minimal platform from installable platform
+artifacts.
+
+Afterwards, compose the installation in exactly the same way:
+
+    yak add system
+    yak add ident
+    yak add crm
+
+The difference is only where the platform comes from:
+
+                         Minimal Yakoon Platform
+                                  ▲
+                                  │
+                     ┌────────────┴────────────┐
+                     │                         │
+                yak bootstrap             yak install
+                     ▲                         ▲
+                     │                         │
+                local sources             artifacts
+                 (editable)
+
+Once the platform exists, both workflows are identical.
+
+---
+
+## Compose your installation
+
+`yak add` determines what a Yakoon installation can do.
+
+For example:
+
+### Minimal system
+
+    yak install
+    yak add system
+
+### CRM system
+
+    yak install
+    yak add system
+    yak add ident
+    yak add crm
+
+### Development from source
+
+    git clone <yakoon-repository>
+    cd yakoon
+
+    yak bootstrap
+    yak add system
+    yak add ident
+    yak add crm
+
+A company can just as well build its own composition:
+
+    yak install
+    yak add acme-system
+    yak add acme-erp
+    yak add acme-machines
+
+Yakoon does not require the standard `system`, `ident`, `crm` or any
+other product pack.
+
+---
+
+## The tree is the model
+
+Packs are mounted into the Yakoon tree.
+
+For example:
+
+    /
+    ├── system/
+    │   ├── ls
+    │   ├── cd
+    │   └── su
     │
-    ▼
-Template (desired state)
+    ├── ident/
+    │   ├── accounts
+    │   └── groups
     │
-    ▼
-Environment (instance)
-    │
-    ▼
-Workspace (materialized)
-    │
-    ▼
-Runtime
-```
+    └── crm/
+        └── contacts
 
-| Layer | Location | Created by |
-|-------|----------|------------|
-| **YakContext** | `<root>/.yak/` | `yak init` |
-| **Context marker** | `.yak/context.toml` | `yak init` |
-| **Environment** | `.yak/environment.yml` | `install` / `bootstrap` / `sync` |
-| **Installation state** | `.yak/state.toml` | `install` |
-| **Build artifacts** | `.yak/artifacts/` | `build` |
+There is no global command pool and no PATH.
 
-## Language-neutral artifacts
+Commands are resolved relative to the current node or addressed by
+their path.
 
-Yakoon artifacts are independent of the implementation language.
-A single artifact may contain:
+For example:
 
-- Python wheels (`.whl`)
-- .NET assemblies (`.dll`)
-- Java archives (`.jar`)
-- Native binaries
-- WebAssembly modules
+    /system/ls
 
-The `artifact.yml` manifest describes the builder, host, and fingerprint —
-the runtime installs and materializes artifacts without depending on a
-specific programming language.
+or, when the current node is `/system`:
 
-## Commands
+    ls
 
-```
-  Getting started
-    init                   Create a Yak context
+`system` is not a privileged `/usr/bin`. It is a pack namespace like
+any other.
 
-  Development
-    create pack            Create a new pack
-    create command         Add a command to the current pack
-    bootstrap              Prepare this repository for development
+---
 
-  Packaging
-    build                  Build artifacts
-    publish                Publish an artifact to ~/.yak/artifacts/
+## Typical workflows
 
-  Installation
-    install                Create a Yakoon installation
-    add                    Add a distribution or artifact
-    update                 Update the installation
-    sync                   Reconcile the workspace
+### Develop Yakoon itself
 
-  Run
-    shell                  Open the Yakoon shell
-    runtime                Manage the runtime service
-    web                    Manage the web service
+    git clone <yakoon-repository>
+    cd yakoon
 
-  Tools
-    status                 Show installation status
-    resolve                Show resolved artifacts
-    logs                   Show logs
-    doctor                 Check installation health
-```
+    yak bootstrap
+    yak add system
 
-## Context model
+### Use Yakoon
 
-```bash
-yak init                    #  .yak/context.toml
-yak create pack hello       #  hello/pack.toml + structure/
-yak build hello             #  → .yak/artifacts/
-yak publish y5n-packs-hello #  → ~/.yak/artifacts/ (shareable)
-yak install                 #  → minimal platform + .yak/deployment.yml + state.toml
-yak add y5n-packs-hello     #  → adds the artifact to the installation
-yak shell                   #  → interactive shell
-```
+    mkdir my-yakoon
+    cd my-yakoon
 
-- `init` and `install` create context markers.
-- All other commands find the context via `find_context_root()`.
-- No global state — each context is self‑contained.
+    yak install
+    yak add system
+    yak runtime start
 
-## Context sources
+### Develop a pack
 
-The `.yak/context.toml` created by `yak init` can declare **sources** —
-directories where `yak` looks for packs, runtime, apps, and SDK source
-code during development.
+    yak create pack hello
+    cd hello
+    yak create command greet
 
-> **The repository layout is a development concern, not a platform concern.**
-> Yakoon distinguishes between *source repositories* (where code lives)
-> and *artifact repositories* (where published artifacts are consumed).
+    yak build .
+    yak publish y5n-packs-hello
 
-### Monorepo (default)
+    # Add it to an existing Yakoon installation
+    yak add y5n-packs-hello
 
-```toml
-[context]
-name = "yakoon"
+### Operate an installation
 
-[sources]
-dirs = ["packs", "runtime", "apps", "sdk"]
-```
+    yak add <component>
+    yak update
 
-`yak init` detects these directories automatically.
+    yak runtime start
+    yak runtime status
+    yak runtime stop
 
-### Standalone product repository
+    yak shell
+    yak doctor
 
-```toml
-[context]
-name = "crm"
+---
 
-[sources]
-dirs = ["."]
-```
+## Lifecycle
 
-Packs are discovered directly in the repository root.
+Yakoon separates platform creation, composition and operation:
 
-### Workspace with multiple repositories
+    Platform
+        bootstrap / install
+               │
+               ▼
+    Composition
+              add
+               │
+               ▼
+    Reconciliation
+             update
+               │
+               ▼
+    Operation
+        runtime / shell / doctor
 
-```toml
-[context]
-name = "workspace"
+Or, from a development perspective:
 
-[sources]
-dirs = [
-    "../yakoon/runtime",
-    "../yakoon/sdk",
-    "../crm",
-    "../luma",
-]
-```
-
-Source dirs are resolved relative to the context directory.
-
-### Artifact repositories (prepared for future use)
-
-```toml
-[repositories]
-sources = [
-    "github:yakoon-runtime/apps",
-    "gitlab:company/internal",
-]
-```
-
-This section is parsed by the context model but not yet active.
-It will describe where to find published artifacts for `install` and `sync`.
-
-### How sources are used
-
-```
-CLI
- │
- ▼
-Context.current()
- │
- ▼
-context.resolve_sources()  → [./packs, ./runtime, ./apps, ...]
- │
- ▼
-FileRepository(*sources)     → finds pack.toml, resolves distributions
-DirectoryArtifactStore(*sources) → finds artifacts, resolves mounts
-```
-
-There is no architectural difference between "core" and "product"
-components. The only difference is which sources the context provides.
+    create → build → publish
+                       │
+                       ▼
+                 yak add

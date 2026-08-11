@@ -43,16 +43,13 @@ def bootstrap(
     if not check:
         all_ok = True
         for label, task in tasks:
-            label = f"  {label:<24}"
             try:
                 ok = task.run()
-                if ok:
-                    print(f"✓ {label}")
-                else:
-                    print(f"✘ {label}")
+                if not ok:
                     all_ok = False
+                print(f"  {'✓' if ok else '✘'} {label:<24}")
             except Exception as e:
-                print(f"✘ {label}  {e}")
+                print(f"  ✘ {label:<24}  {e}")
                 all_ok = False
 
         if all_ok:
