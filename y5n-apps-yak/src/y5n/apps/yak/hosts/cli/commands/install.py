@@ -2,54 +2,31 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
-from y5n.apps.yak.resolver.artifact import _parse_manifest
-from y5n.apps.yak.resolver.install import (
-    _collect_roots,
-    find_artifact,
-    install_artifact,
-)
+from y5n.apps.yak.resolver.install import find_artifact, install_artifact
 
 
 def run(args, mgr) -> None:
     name = getattr(args, "artifact", None)
     if not name:
-        _list_environments()
+        _list_environments(mgr)
         return
 
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
 
-    if _is_distribution(name, mgr):
+    if mgr.is_distribution(name):
         _distribution_install(args, mgr, ui)
     else:
         _artifact_install(args, mgr, ui)
 
 
-def _list_environments() -> None:
-    from pathlib import Path
-
-    seen: set[str] = set()
-    names: list[str] = []
-
-    # Bundled environments
-    bundle_dir = Path(__file__).resolve().parents[7] / "artifacts"
-    if bundle_dir.is_dir():
-        for f in sorted(bundle_dir.iterdir()):
-            if f.suffix == ".yml":
-                meta = _parse_manifest(f)
-                if meta.get("kind") == "meta":
-                    name = meta.get("name", "")
-                    desc = meta.get("description", "")
-                    if name and name not in seen:
-                        seen.add(name)
-                        names.append((name, desc))
-
-    if names:
+def _list_environments(mgr) -> None:
+    environments = mgr.list_environments()
+    if environments:
         print("  Available environments:")
-        for name, desc in names:
+        for name, desc in environments:
             desc_str = f"  — {desc}" if desc else ""
             print(f"    {name}{desc_str}")
     else:
@@ -58,33 +35,19 @@ def _list_environments() -> None:
 
 
 def _artifact_install(args, mgr, ui) -> None:
+    """Install a single artifact (built wheel) into the target root."""
     target = Path(args.target).resolve()
     upgrade = getattr(args, "upgrade", False)
     force = getattr(args, "force", False) or upgrade
 
-    # Repositories: CLI --repository overrides, otherwise use context
-    from y5n.apps.yak.hosts.cli.cwd import Context
-
-    repositories = []
-    cli_repo = getattr(args, "repository", None)
-    if cli_repo:
-        repositories.append(cli_repo)
-    else:
-        ctx = Context.current()
-        if ctx:
-            repositories = list(ctx.repository_sources)
-
-    repositories = repositories or None
-
+    repositories = _repositories(args)
     artifact = find_artifact(args.artifact, sources=repositories)
     if artifact is None:
         ui.fail(f"Unknown target: {args.artifact}")
         return
 
-    version = artifact.version or "?"
-    label = f"{args.artifact} {version}"
+    label = f"{args.artifact} {artifact.version or '?'}"
 
-    # Check if already installed
     from y5n.apps.yak.resolver.install import _fingerprint_matches
 
     if not force and _fingerprint_matches(artifact, target):
@@ -100,108 +63,61 @@ def _artifact_install(args, mgr, ui) -> None:
             sources=repositories,
         ),
     )
-    if ok:
-        _mark_installed(args.artifact, target)
-        _materialize_dev_workspace(args.artifact, target, mgr)
-        _write_environment(target, args.artifact)
-        ui.ok(f"{label} installed at {target}")
-    else:
+    if not ok:
         ui.fail(f"{label} install failed")
-
-
-def _write_environment(root: Path, env_name: str) -> None:
-    """Write .yak/environment.yml from context or template."""
-    from y5n.apps.yak.distribution.models import Mount, PackName
-    from y5n.apps.yak.environment.io import load, save
-    from y5n.apps.yak.environment.models import Environment
-    from y5n.apps.yak.resolver.artifact import DirectorySource
-    from y5n.apps.yak.resolver.install import _collect_roots
-
-    existing = load(root)
-    if existing:
         return
 
-    # Try to read workspace config from installed meta-artifact
-    for artifact_root in _collect_roots(None):
-        source = DirectorySource(artifact_root)
-        art = source.resolve(env_name)
-        if art and art.kind == "meta" and art.path:
-            import yaml
+    _write_environment(target, args.artifact, mgr)
+    mgr.materialize_dev_workspace(args.artifact, target)
+    from y5n.apps.yak.environment.io import touch
 
-            manifest = art.path / "artifact.yml"
-            if manifest.exists():
-                data = yaml.safe_load(manifest.read_text())
-                ws = data.get("workspace", {})
-                if ws:
-                    deps = [PackName(p) for p in data.get("dependencies", [])]
-                    mounts = [
-                        Mount(
-                            source=str(
-                                (source_dir / m["pack"] / "structure").resolve()
-                            ),
-                            target=m["target"],
-                        )
-                        for m in ws.get("mounts", [])
-                        for source_dir in _collect_roots(None)
-                        if (source_dir / m["pack"] / "structure").is_dir()
-                    ]
-                    env = Environment(
-                        name=env_name,
-                        dependencies=deps,
-                        mounts=mounts,
-                    )
-                    save(env, root)
-                    return
-
-    # Fallback: minimal env
-    save(Environment(name=env_name), root)
+    touch(target, name=args.artifact)
+    ui.ok(f"{label} installed at {target}")
 
 
-def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
-    """Materialize workspace from the artifact's manifest, if configured."""
-    from y5n.apps.yak.resolver.artifact import DirectorySource
+def _repositories(args) -> list[str] | None:
+    """Repositories: CLI --repository overrides, otherwise the context."""
+    cli_repo = getattr(args, "repository", None)
+    if cli_repo:
+        return [cli_repo]
 
-    for artifact_root in _collect_roots(None):
-        source = DirectorySource(artifact_root)
-        art = source.resolve(name)
-        if art and art.kind == "meta" and art.path:
-            manifest = art.path / "artifact.yml"
-            if manifest.exists():
-                import yaml
+    from y5n.apps.yak.hosts.cli.cwd import Context
 
-                data = yaml.safe_load(manifest.read_text())
-                ws = data.get("workspace")
-                if ws:
-                    raw_mounts = [
-                        {"pack": m["pack"], "target": m["target"]}
-                        for m in ws.get("mounts", [])
-                    ]
-                    resolved = mgr._resolve_mount_sources(raw_mounts)
-                    mgr._materializer.materialize(
-                        root / "structure", name, mounts=resolved
-                    )
-                    return
+    ctx = Context.current()
+    return list(ctx.repository_sources) if ctx else None
 
 
-def _mark_installed(name: str, root: Path, packs: list | None = None) -> None:
-    """Write installation metadata to .yak/environment.yml."""
-    from datetime import UTC, datetime
-
+def _write_environment(root: Path, env_name: str, mgr) -> None:
+    """Write .yak/environment.yml from a meta-artifact's workspace, if any."""
+    from y5n.apps.yak.distribution.models import PackName
     from y5n.apps.yak.environment.io import load, save
+    from y5n.apps.yak.environment.models import Environment
+    from y5n.apps.yak.resolver.artifact import (
+        DirectorySource,
+        load_workspace_manifest,
+    )
+    from y5n.apps.yak.resolver.install import _collect_roots
 
-    env = load(root)
-    if env is None:
-        from y5n.apps.yak.environment.models import Environment
+    if load(root):
+        return
 
-        env = Environment(name=name)
-    now = datetime.now(UTC)
-    env.created = env.created or now
-    env.updated = now
-    if packs:
-        from y5n.apps.yak.distribution.models import PackName
+    for artifact_root in _collect_roots(None):
+        art = DirectorySource(artifact_root).resolve(env_name)
+        if art is None or not art.is_meta() or art.manifest is None:
+            continue
+        ws = load_workspace_manifest(art.manifest)
+        if ws is None:
+            continue
+        mounts = mgr.resolve_mount_sources(ws.mounts)
+        env = Environment(
+            name=env_name,
+            dependencies=[PackName(p) for p in ws.dependencies],
+            mounts=mounts,
+        )
+        save(env, root)
+        return
 
-        env.dependencies = [PackName(p) for p in packs]
-    save(env, root)
+    save(Environment(name=env_name), root)
 
 
 def _distribution_install(args, mgr, ui) -> None:
@@ -209,167 +125,37 @@ def _distribution_install(args, mgr, ui) -> None:
     target = Path(args.target).resolve()
     root = target / artifact
 
-    existing = root if (root / ".yak" / "environment.yml").exists() else None
+    from y5n.apps.yak.environment.io import env_path
 
-    if existing is not None:
-        _add_to_existing(args, mgr, ui, existing)
+    if env_path(root).exists():
+        _add_to_existing(args, mgr, ui, root)
     else:
         _create_new(args, mgr, ui, artifact, root)
 
 
-def _is_distribution(name: str, mgr) -> bool:
-    return mgr._repo.resolve_distribution(name) is not None
-
-
-def _assemble_installation(mgr, root: Path, ui) -> None:
-    """Assemble `.yak/deployment.yml` for the materialized structure.
-
-    Existing bindings are preserved; the operator is asked only for newly
-    declared stores. In non-interactive contexts the memory defaults are
-    used.
-    """
+def _create_new(args, mgr, ui, name, root) -> None:
     from y5n.apps.yak.installation.ask import TerminalStoreAsker
-    from y5n.runtime.engine.installation import load_installation
 
-    existing = load_installation(root / ".yak" / "deployment.yml")
-    try:
-        mgr._assemble(
-            root / "structure",
-            root / ".yak",
-            existing=existing,
-            asker=TerminalStoreAsker(),
-        )
-    except EOFError:
-        ui.detail("Non-interactive: using memory backends")
-        mgr._assemble(root / "structure", root / ".yak", existing=existing)
-
-
-def _create_new(args, mgr, ui, name, root):
     ui.title(f'Installing "{name}"')
-
     try:
-        with ui.step("Distribution"):
-            dist = mgr._repo.resolve_distribution(name)
-
-        with ui.step("Packs"):
-            packs, tools = mgr._resolver.resolve(dist)
-            ui.detail(", ".join(packs))
-
-        with ui.step("Workspace"):
-            root.mkdir(parents=True, exist_ok=True)
-            resolved = mgr._resolve_mount_sources(dist.mounts)
-            mgr._materializer.materialize(
-                root / "structure", dist.name, mounts=resolved
-            )
-
-        with ui.step("Mounts"):
-            for m in resolved:
-                ui.detail(f"{m.target} ← {m.source}")
-
-        with ui.step("Deployment"):
-            _assemble_installation(mgr, root, ui)
-
-        with ui.step("Installing"):
-            from y5n.apps.yak.installation.models import (
-                Installation,
-                InstallationStatus,
-            )
-
-            inst = Installation(
-                name=name,
-                distribution=dist.name,
-                root=root,
-                packs=packs,
-                status=InstallationStatus.MATERIALIZED,
-            )
-            mgr._installer.install(inst, tools=tools, sdk_path=mgr._sdk_path)
-
-        with ui.step("Environment"):
-            from y5n.apps.yak.environment.io import save
-            from y5n.apps.yak.environment.models import Environment
-
-            env = Environment(name=name, dependencies=list(packs), mounts=resolved)
-            save(env, root)
-            _mark_installed(name, root, packs)
-
+        mgr.install(name, root, asker=TerminalStoreAsker(), ui=ui)
         ui.ok(f"{name} ready at {root}")
-
     except Exception as e:
         ui.fail(f"Installation failed: {e}")
 
 
-def _add_to_existing(args, mgr, ui, existing):
+def _add_to_existing(args, mgr, ui, root) -> None:
+    from y5n.apps.yak.environment.io import load as load_env
+    from y5n.apps.yak.installation.ask import TerminalStoreAsker
+
     name = args.artifact
-    ui.title(f'Adding "{name}" to {existing.name}')
-
+    env = load_env(root)
+    ui.title(f'Adding "{name}" to {env.name if env else root.name}')
     try:
-        with ui.step("Resolving"):
-            from y5n.apps.yak.environment.io import load as load_env
-
-            env = load_env(existing)
-            if env is None:
-                raise RuntimeError("No environment found")
-            existing_packs = list(env.dependencies)
-
-            dist = mgr._repo.resolve_distribution(name)
-            if dist is None:
-                raise ValueError(f"Unknown pack: {name}")
-            ui.detail(name)
-
-        with ui.step("Packs"):
-            new_packs, new_tools = mgr._resolver.resolve(dist)
-            from y5n.apps.yak.distribution.models import PackName
-
-            if not new_packs:
-                new_packs = [PackName(name)]
-            added = [p for p in new_packs if p not in existing_packs]
-            if not added:
-                ui.ok("Already installed")
-                return
-            all_packs = existing_packs + added
-            ui.detail(", ".join(added))
-
-        with ui.step("Workspace"):
-            resolved = mgr._resolve_mount_sources(dist.mounts)
-            if not resolved:
-                from y5n.apps.yak.distribution.models import Mount
-
-                artifact = mgr._artifacts.get_artifact(PackName(name))
-                if artifact and (artifact / "structure").is_dir():
-                    resolved = [
-                        Mount(
-                            source=str((artifact / "structure").resolve()),
-                            target=f"/{name}",
-                        )
-                    ]
-            mgr._materializer.materialize(
-                existing / "structure", env.name, mounts=resolved
-            )
-
-        with ui.step("Mounts"):
-            for m in resolved:
-                ui.detail(f"{m.target} ← {m.source}")
-
-        with ui.step("Deployment"):
-            _assemble_installation(mgr, existing, ui)
-
-        with ui.step("Environment"):
-            from y5n.apps.yak.installation.models import (
-                Installation,
-                InstallationStatus,
-            )
-
-            inst = Installation(
-                name=name,
-                distribution=dist.name,
-                root=existing,
-                packs=all_packs,
-                status=InstallationStatus.MATERIALIZED,
-            )
-            mgr._installer.install(inst, sdk_path=mgr._sdk_path)
-            _mark_installed(name, existing, all_packs)
-
+        result = mgr.add(name, root, asker=TerminalStoreAsker(), ui=ui)
+        if result is None:
+            ui.ok("Already installed")
+            return
         ui.ok(f"Added {name}")
-
     except Exception as e:
         ui.fail(f"Failed: {e}")

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
 from y5n.apps.yak.distribution.models import ToolReference
 from y5n.apps.yak.installation.models import Installation
+from y5n.apps.yak.installer.venv import ensure_venv, upgrade_pip
 from y5n.apps.yak.repository.artifact import ArtifactStore
 
 # Map tool names to app directories (package = directory under apps/)
@@ -68,18 +68,8 @@ class Installer:
         return tool_dir if tool_dir.is_dir() else None
 
     def _ensure_venv(self, path: Path) -> Path:
-        if not (path / "bin" / "python").exists():
-            subprocess.run(
-                [sys.executable, "-m", "venv", str(path)],
-                check=True,
-                capture_output=True,
-            )
-        python = path / "bin" / "python"
-        subprocess.run(
-            [str(python), "-m", "pip", "install", "--upgrade", "pip"],
-            check=True,
-            capture_output=True,
-        )
+        python = ensure_venv(path)
+        upgrade_pip(python)
         return python
 
     def _find_projects(self, pack_dir: Path) -> list[Path]:

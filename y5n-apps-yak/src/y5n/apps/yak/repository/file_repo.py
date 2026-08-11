@@ -20,6 +20,10 @@ class FileRepository:
     def roots(self) -> list[Path]:
         return list(self._roots)
 
+    def builtin_artifacts_dir(self) -> Path | None:
+        """The bundled artifacts directory (meta distributions), if any."""
+        return self._artifacts_dir
+
     def resolve_distribution(self, name: str) -> Distribution | None:
         # 1. Bundled artifacts (apps/y5n-apps-yak/artifacts/<name>.yml)
         if self._artifacts_dir is not None:

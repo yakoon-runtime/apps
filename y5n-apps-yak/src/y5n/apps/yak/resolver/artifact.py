@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -114,3 +115,27 @@ def _parse_manifest(path: Path) -> dict:
         return meta
     except Exception:
         return {}
+
+
+@dataclass(frozen=True)
+class WorkspaceManifest:
+    """The ``workspace`` section of a meta artifact's manifest."""
+
+    path: str = "structure"
+    packs: list[str] = field(default_factory=list)
+    mounts: list[dict] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
+
+
+def load_workspace_manifest(path: Path) -> WorkspaceManifest | None:
+    """Read a meta artifact's workspace manifest, or None when absent."""
+    data = _parse_manifest(path)
+    ws = data.get("workspace")
+    if not isinstance(ws, dict):
+        return None
+    return WorkspaceManifest(
+        path=ws.get("path", "structure"),
+        packs=ws.get("packs", []) or [],
+        mounts=ws.get("mounts", []) or [],
+        dependencies=data.get("dependencies", []) or [],
+    )

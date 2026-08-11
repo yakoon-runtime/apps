@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -15,6 +15,30 @@ ENV_FILENAME = "environment.yml"
 
 def env_path(context_root: Path) -> Path:
     return context_root / ".yak" / ENV_FILENAME
+
+
+def touch(
+    root: Path,
+    *,
+    name: str | None = None,
+    dependencies: list[PackName] | None = None,
+    mounts: list[Mount] | None = None,
+) -> Environment:
+    """Load-or-create the environment, apply fields, stamp timestamps, save.
+
+    This is the single write path for environment.yml during installs:
+    created stays from the first write, updated always advances.
+    """
+    env = load(root) or Environment(name=name or root.name)
+    now = datetime.now(UTC)
+    env.created = env.created or now
+    env.updated = now
+    if dependencies is not None:
+        env.dependencies = dependencies
+    if mounts is not None:
+        env.mounts = mounts
+    save(env, root)
+    return env
 
 
 def load(context_root: Path) -> Environment | None:

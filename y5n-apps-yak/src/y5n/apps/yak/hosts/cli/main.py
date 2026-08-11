@@ -68,11 +68,13 @@ def _build_manager() -> InstallationManager:
 
     repo = FileRepository(*roots, builtin_artifacts=artifact_dir)
     artifacts = DirectoryArtifactStore(*roots)
-    mgr = InstallationManager(repo, artifacts)
-    mgr._sdk_path = repo_root / "sdk" / "y5n-sdk-python"
-    mgr._installer._apps_root = repo_root / "apps"
-    mgr._installer._runtime_root = repo_root / "runtime"
-    return mgr
+    return InstallationManager(
+        repo,
+        artifacts,
+        sdk_path=repo_root / "sdk" / "y5n-sdk-python",
+        apps_root=repo_root / "apps",
+        runtime_root=repo_root / "runtime",
+    )
 
 
 def main() -> None:

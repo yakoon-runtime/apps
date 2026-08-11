@@ -6,7 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from y5n.apps.yak.resolver.artifact import DirectorySource
+from y5n.apps.yak.installer.venv import ensure_venv
+from y5n.apps.yak.resolver.artifact import Artifact, DirectorySource
 
 _INSTALLED: list[str] = []
 
@@ -41,7 +42,6 @@ _FORCE = False
 
 def _all_sources(extra_sources: list[str] | None = None) -> list:
     """Collect all source implementations."""
-    from y5n.apps.yak.resolver.artifact import DirectorySource
 
     sources: list = []
 
@@ -99,19 +99,18 @@ def install_artifact(
     if artifact.is_meta():
         all_ok = True
         for dep in artifact.dependencies:
-            if not install_artifact(dep, target_root, artifact_root, _FORCE, _seen):
+            if not install_artifact(
+                dep,
+                target_root=target_root,
+                artifact_root=artifact_root,
+                force=_FORCE,
+                _seen=_seen,
+            ):
                 all_ok = False
         return all_ok
 
     if target_root is not None:
-        venv = target_root / ".venv"
-        if not (venv / "bin" / "python").exists():
-            subprocess.run(
-                [sys.executable, "-m", "venv", str(venv)],
-                check=True,
-                capture_output=True,
-            )
-        python = venv / "bin" / "python"
+        python = ensure_venv(target_root / ".venv")
     else:
         python = Path(sys.executable)
 
