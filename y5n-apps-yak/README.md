@@ -6,7 +6,9 @@ language‑neutral runtime platform.
 ## Typical workflow
 
 ```
-create → build → publish → install → sync → shell
+Development:   create → build → publish
+Installation:  install → add → update
+Operation:     shell / runtime / status / doctor
 ```
 
 ## Quick start
@@ -15,14 +17,13 @@ create → build → publish → install → sync → shell
 
 ```bash
 mkdir demo && cd demo
-yak init                    # Create a Yak context
 yak create pack hello       # Scaffold a new pack
 cd hello
 yak create command greet    # Add a command to the pack
 cd ..
 yak build hello             # Build the pack
-yak install y5n-packs-hello # Install the artifact
-yak sync                    # Sync environment + materialize workspace
+yak install crm             # Create a Yakoon installation (interactive: 'yak install')
+yak add y5n-packs-hello     # Add the built artifact to the installation
 yak shell                   # Open the interactive shell
 ```
 
@@ -51,9 +52,8 @@ yak publish y5n-packs-hello --repository github:yakoon-runtime/apps --release
 
 # Consumer:
 mkdir other && cd other
-yak init
-yak install y5n-packs-hello --repository github:yakoon-runtime/apps
-yak sync
+yak install crm
+yak add y5n-packs-hello --repository github:yakoon-runtime/apps
 yak shell
 ```
 
@@ -65,16 +65,16 @@ yak publish y5n-packs-hello             # → ~/.yak/artifacts/
 
 # Another developer on the same machine:
 mkdir other && cd other
-yak init
-yak install y5n-packs-hello             # finds it from ~/.yak/artifacts/
-yak sync
+yak install crm
+yak add y5n-packs-hello                 # finds it from ~/.yak/artifacts/
 yak shell
 ```
 
 ## Artifact lifecycle
 
 ```
-create → build → publish → install → sync → shell
+create → build → publish
+install → add → update
 ```
 
 | Step | Command | Effect |
@@ -82,9 +82,10 @@ create → build → publish → install → sync → shell
 | 1 | `yak create pack <name>` | Scaffolds a new pack project |
 | 2 | `yak build <source>` | Builds wheel + artifact.yml → `.yak/artifacts/` |
 | 3 | `yak publish <name>` | Copies artifact → `~/.yak/artifacts/` (shareable) |
-| 4 | `yak install <name>` | Installs wheel → `.venv` + `.yak/state.toml` |
-| 5 | `yak sync` | Reconciles environment → `.yak/environment.yml` + workspace |
-| 6 | `yak shell` | Opens interactive shell |
+| 4 | `yak install <environment>` | Creates a Yakoon installation (workspace, deployment, state) |
+| 5 | `yak add <component>` | Adds a distribution or artifact to the installation |
+| 6 | `yak update` | Reconciles the installation with its desired state |
+| 7 | `yak shell` | Opens interactive shell |
 
 ## Architecture
 
@@ -147,9 +148,11 @@ specific programming language.
     build                  Build artifacts
     publish                Publish an artifact to ~/.yak/artifacts/
 
-  Environment
-    install                Install a pack
-    sync                   Sync workspace with environment
+  Installation
+    install                Create a Yakoon installation
+    add                    Add a distribution or artifact
+    update                 Update the installation
+    sync                   Reconcile the workspace
 
   Run
     shell                  Open the Yakoon shell
@@ -170,8 +173,8 @@ yak init                    #  .yak/context.toml
 yak create pack hello       #  hello/pack.toml + structure/
 yak build hello             #  → .yak/artifacts/
 yak publish y5n-packs-hello #  → ~/.yak/artifacts/ (shareable)
-yak install y5n-packs-hello #  → .venv + .yak/state.toml
-yak sync                    #  → .yak/environment.yml + workspace
+yak install crm             #  → workspace + .yak/deployment.yml + state.toml
+yak add y5n-packs-hello     #  → adds the artifact to the installation
 yak shell                   #  → interactive shell
 ```
 

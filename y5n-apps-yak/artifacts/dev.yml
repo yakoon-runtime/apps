@@ -1,5 +1,5 @@
 name: dev
-kind: meta
+kind: development
 dependencies:
   - y5n-sdk-python
   - y5n-runtime-api

@@ -25,6 +25,16 @@ class FileRepository:
         return self._artifacts_dir
 
     def resolve_distribution(self, name: str) -> Distribution | None:
+        resolved = self._resolve_distribution(name)
+        if resolved is not None:
+            return resolved
+        # Accept fully-qualified names ("y5n-packs-luma" → "luma").
+        for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
+            if name.startswith(prefix):
+                return self._resolve_distribution(name[len(prefix) :])
+        return None
+
+    def _resolve_distribution(self, name: str) -> Distribution | None:
         # 1. Bundled artifacts (apps/y5n-apps-yak/artifacts/<name>.yml)
         if self._artifacts_dir is not None:
             yml = self._artifacts_dir / f"{name}.yml"
@@ -83,6 +93,7 @@ class FileRepository:
             return None
 
         name = data.get("name", "")
+        development = data.get("kind") == "development"
 
         # Resolve extends
         extends = data.get("extends")
@@ -105,6 +116,7 @@ class FileRepository:
             return Distribution(
                 name=name,
                 version=data.get("version", "0.1"),
+                development=development,
                 mounts=all_mounts,
                 tools=all_tools,
             )
@@ -114,6 +126,7 @@ class FileRepository:
         return Distribution(
             name=name,
             version=data.get("version", "0.1"),
+            development=development,
             mounts=mounts,
             tools=tools,
         )

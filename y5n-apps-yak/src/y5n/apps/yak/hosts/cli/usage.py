@@ -19,9 +19,11 @@ Usage:
     build                  Build artifacts
     publish                Publish an artifact
 
-  Environment
-    install                Install a pack
-    sync                   Sync workspace with environment
+  Installation
+    install                Create a Yakoon installation
+    add                    Add a distribution or artifact
+    update                 Update the installation
+    sync                   Reconcile the workspace
 
   Run
     shell                  Open the Yakoon shell

@@ -83,6 +83,25 @@ class DirectorySource:
                 )
         return None
 
+    def list_artifacts(self) -> list[tuple[str, str]]:
+        """List the artifacts in this root as (name, kind version)."""
+        if not self._root.is_dir():
+            return []
+        found: list[tuple[str, str]] = []
+        for entry in sorted(self._root.iterdir()):
+            if not entry.is_dir():
+                continue
+            manifest = entry / "artifact.yml"
+            if not manifest.exists():
+                continue
+            meta = _parse_manifest(manifest)
+            name = meta.get("name", "")
+            if name:
+                found.append(
+                    (name, f"{meta.get('kind', 'package')} {meta.get('version', '?')}")
+                )
+        return found
+
 
 def _parse_manifest(path: Path) -> dict:
     try:
@@ -119,7 +138,13 @@ def _parse_manifest(path: Path) -> dict:
 
 @dataclass(frozen=True)
 class WorkspaceManifest:
-    """The ``workspace`` section of a meta artifact's manifest."""
+    """The ``workspace`` section of a meta artifact's manifest.
+
+    ``path`` is relative to the environment root and says where the
+    structure goes — ``structure`` for standalone environments,
+    ``workspace/structure`` for the dev environment hosted in its source
+    repo.
+    """
 
     path: str = "structure"
     packs: list[str] = field(default_factory=list)

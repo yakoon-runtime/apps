@@ -11,6 +11,7 @@ def _add_action(sub, name: str, actions: list[str], func):
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from y5n.apps.yak.hosts.cli.commands import add as _add
     from y5n.apps.yak.hosts.cli.commands import bootstrap as _bootstrap
     from y5n.apps.yak.hosts.cli.commands import build as _build
     from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
@@ -25,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import shell as _shell
     from y5n.apps.yak.hosts.cli.commands import status as _status
     from y5n.apps.yak.hosts.cli.commands import sync as _sync
+    from y5n.apps.yak.hosts.cli.commands import update as _update
     from y5n.apps.yak.hosts.cli.commands import web as _web
     from y5n.apps.yak.hosts.cli.commands import workspace as _workspace
     from y5n.apps.yak.hosts.cli.usage import USAGE
@@ -45,18 +47,45 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_init.run)
 
     p = sub.add_parser(
-        "install", help="Install a pack (list available when run without args)"
+        "install",
+        help="Create a Yakoon installation (list environments when run without args)",
     )
     p.add_argument(
-        "artifact", nargs="?", help="Environment name (dev, desktop, crm, ...)"
+        "environment", nargs="?", help="Environment name (dev, desktop, crm, ...)"
     )
-    p.add_argument("target", nargs="?", default=".", help=argparse.SUPPRESS)
+    p.add_argument(
+        "--target", "-t", default=".", help="Target directory (default: current)"
+    )
+    p.add_argument("--verbose", "-v", action="store_true")
+    p.set_defaults(func=_install.run)
+
+    p = sub.add_parser(
+        "add",
+        help="Add a distribution or artifact to the installation",
+    )
+    p.add_argument("name", help="Component name (e.g. crm, y5n-packs-hello)")
+    p.add_argument(
+        "--target", "-t", default=".", help="Installation directory (default: current)"
+    )
     p.add_argument("--verbose", "-v", action="store_true")
     p.add_argument(
         "--upgrade", "-u", action="store_true", help="Upgrade to latest version"
     )
+    p.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force reinstall even if version is unchanged",
+    )
     p.add_argument("--repository", help="Package repository (e.g. github:owner/repo)")
-    p.set_defaults(func=_install.run)
+    p.set_defaults(func=_add.run)
+
+    p = sub.add_parser("update", help="Update the installation")
+    p.add_argument(
+        "--target", "-t", default=".", help="Installation directory (default: current)"
+    )
+    p.add_argument("--verbose", "-v", action="store_true")
+    p.set_defaults(func=_update.run)
 
     p = sub.add_parser("status", help="Show installation status")
     p.set_defaults(func=_status.run)

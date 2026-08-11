@@ -5,11 +5,12 @@ import signal
 import subprocess
 import sys
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
-from y5n.apps.yak.distribution.models import Mount, PackName
+from y5n.apps.yak.distribution.models import Distribution, Mount, PackName
 from y5n.apps.yak.environment.io import touch
 from y5n.apps.yak.installation.assemble import (
     StoreAsker,
@@ -20,10 +21,21 @@ from y5n.apps.yak.installation.models import Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
+from y5n.apps.yak.resolver.artifact import Artifact
 from y5n.apps.yak.resolver.resolver import Resolver
 from y5n.apps.yak.workspace.materializer import Materializer
 from y5n.runtime.engine.installation import Installation as RuntimeInstallation
 from y5n.runtime.engine.installation import load_installation, to_dict
+
+
+@dataclass(frozen=True)
+class _Component:
+    """A resolved installable: a distribution or an artifact."""
+
+    kind: str
+    name: str
+    dist: Distribution | None = None
+    artifact: Artifact | None = None
 
 
 class InstallationManager:
@@ -65,6 +77,10 @@ class InstallationManager:
             dist = self._repo.resolve_distribution(target)
             if dist is None:
                 raise ValueError(f"Unknown target: {target}")
+            if dist.development:
+                raise ValueError(
+                    f"'{target}' is a development environment — use 'yak bootstrap'"
+                )
 
         with self._step(ui, "Packs"):
             packs, tools = self._resolver.resolve(dist)
@@ -112,43 +128,38 @@ class InstallationManager:
         *,
         asker: StoreAsker | None = None,
         ui=None,
+        sources: list[str] | None = None,
+        force: bool = False,
     ) -> Installation | None:
-        """Add a distribution to an existing environment.
+        """Add a component (distribution or artifact) to an installation.
 
-        Returns None when everything is already installed.
+        Both share one reconciliation: resolve → make available →
+        materialize → discover requirements → reconcile deployment →
+        persist. Only "make available" differs — a distribution is built
+        from its source packs, an artifact installs its payload. Returns
+        None when the component is already part of the installation.
         """
         with self._step(ui, "Resolving"):
             from y5n.apps.yak.environment.io import load as load_env
 
             env = load_env(path)
             if env is None:
-                raise RuntimeError(f"No environment found at {path}")
+                raise RuntimeError(f"No installation found at {path}")
             existing_packs = list(env.dependencies)
 
-            dist = self._repo.resolve_distribution(target)
-            if dist is None:
-                raise ValueError(f"Unknown pack: {target}")
+            component = self._resolve_component(target, sources=sources)
+            if component is None:
+                raise ValueError(f"Unknown component: {target}")
 
-        with self._step(ui, "Packs"):
-            new_packs, new_tools = self._resolver.resolve(dist)
-            if not new_packs:
-                new_packs = [PackName(target)]
-            added = [p for p in new_packs if p not in existing_packs]
-            if not added:
+        with self._step(ui, "Making available"):
+            made = self._make_available(
+                component, target, path, existing_packs, force, sources
+            )
+            if made is None:
                 return None
-            all_packs = existing_packs + added
+            all_packs, mounts = made
 
-        with self._step(ui, "Workspace"):
-            mounts = self.resolve_mount_sources(dist.mounts)
-            if not mounts:
-                artifact = self._artifacts.get_artifact(PackName(target))
-                if artifact and (artifact / "structure").is_dir():
-                    mounts = [
-                        Mount(
-                            source=str((artifact / "structure").resolve()),
-                            target=f"/{target}",
-                        )
-                    ]
+        with self._step(ui, "Materializing"):
             self._materializer.materialize(path / "structure", env.name, mounts=mounts)
 
         self._report_mounts(ui, mounts)
@@ -159,10 +170,13 @@ class InstallationManager:
                 path / "structure", path / ".yak", existing=existing, asker=asker
             )
 
+        existing_inst = self.load(path)
         now = datetime.now(UTC)
         inst = Installation(
-            name=target,
-            distribution=dist.name,
+            name=existing_inst.name if existing_inst else target,
+            distribution=(
+                existing_inst.distribution if existing_inst else component.name
+            ),
             root=path.resolve(),
             packs=all_packs,
             status=InstallationStatus.MATERIALIZED,
@@ -170,9 +184,6 @@ class InstallationManager:
             updated=now,
         )
         self._write_state(inst)
-
-        with self._step(ui, "Installing"):
-            self._installer.install(inst, sdk_path=self._sdk_path)
 
         with self._step(ui, "Environment"):
             merged = list(env.mounts) + [m for m in mounts if m not in env.mounts]
@@ -182,6 +193,113 @@ class InstallationManager:
         inst.updated = datetime.now(UTC)
         self._write_state(inst)
         return inst
+
+    def _resolve_component(
+        self, target: str, *, sources: list[str] | None = None
+    ) -> _Component | None:
+        """Resolve a name to a distribution or an artifact."""
+        dist = self._repo.resolve_distribution(target)
+        if dist is not None:
+            return _Component(kind="distribution", name=dist.name, dist=dist)
+
+        from y5n.apps.yak.resolver.install import find_artifact
+
+        artifact = find_artifact(target, sources=sources)
+        if artifact is not None:
+            return _Component(kind="artifact", name=target, artifact=artifact)
+        return None
+
+    def _make_available(
+        self,
+        component: _Component,
+        target: str,
+        path: Path,
+        existing_packs: list,
+        force: bool,
+        sources: list[str] | None,
+    ) -> tuple[list, list] | None:
+        """Make the component available in the installation's environment.
+
+        Returns (all_packs, mounts) or None when nothing is new.
+        """
+        if component.kind == "distribution":
+            return self._make_distribution_available(
+                component, target, path, existing_packs
+            )
+        return self._make_artifact_available(
+            component, target, path, existing_packs, force, sources
+        )
+
+    def _make_distribution_available(
+        self,
+        component: _Component,
+        target: str,
+        path: Path,
+        existing_packs: list,
+    ) -> tuple[list, list] | None:
+        dist = component.dist
+        assert dist is not None
+        packs, tools = self._resolver.resolve(dist)
+        if not packs:
+            packs = [PackName(target)]
+        added = [p for p in packs if p not in existing_packs]
+        if not added:
+            return None
+        all_packs = existing_packs + added
+
+        mounts = self.resolve_mount_sources(dist.mounts)
+        if not mounts:
+            artifact = self._artifacts.get_artifact(PackName(target))
+            if artifact and (artifact / "structure").is_dir():
+                mounts = [
+                    Mount(
+                        source=str((artifact / "structure").resolve()),
+                        target=f"/{target}",
+                    )
+                ]
+
+        inst = Installation(
+            name=target,
+            distribution=dist.name,
+            root=path.resolve(),
+            packs=all_packs,
+        )
+        self._installer.install(inst, tools=tools, sdk_path=self._sdk_path)
+        return all_packs, mounts
+
+    def _make_artifact_available(
+        self,
+        component: _Component,
+        target: str,
+        path: Path,
+        existing_packs: list,
+        force: bool,
+        sources: list[str] | None,
+    ) -> tuple[list, list] | None:
+        if PackName(target) in existing_packs and not force:
+            return None
+
+        from y5n.apps.yak.resolver.install import install_artifact
+
+        ok = install_artifact(target, target_root=path, force=force, sources=sources)
+        if not ok:
+            raise RuntimeError(f"Failed to install artifact: {target}")
+
+        all_packs = existing_packs + [PackName(target)]
+
+        mounts = self._artifact_mounts(component.artifact)
+        return all_packs, mounts
+
+    def _artifact_mounts(self, artifact) -> list:
+        """The workspace mounts a meta-artifact declares, resolved."""
+        from y5n.apps.yak.resolver.artifact import load_workspace_manifest
+
+        if artifact is None or artifact.manifest is None:
+            return []
+        ws = load_workspace_manifest(artifact.manifest)
+        if ws is None:
+            return []
+        return self.resolve_mount_sources(ws.mounts)
 
     # ── Update ──
 
@@ -206,6 +324,12 @@ class InstallationManager:
         with self._step(ui, "Packs"):
             packs, tools = self._resolver.resolve(dist)
 
+        # Refresh the base distribution but keep added components.
+        all_packs = list(inst.packs)
+        for p in packs:
+            if p not in all_packs:
+                all_packs.append(p)
+
         now = datetime.now(UTC)
         with self._step(ui, "Workspace"):
             mounts = self.resolve_mount_sources(dist.mounts)
@@ -226,7 +350,7 @@ class InstallationManager:
                 asker=asker,
             )
 
-        inst.packs = packs
+        inst.packs = all_packs
         inst.status = InstallationStatus.MATERIALIZED
         inst.updated = now
         self._write_state(inst)
@@ -235,7 +359,12 @@ class InstallationManager:
             self._installer.install(inst, tools=tools, sdk_path=self._sdk_path)
 
         with self._step(ui, "Environment"):
-            touch(inst.root, name=inst.name, dependencies=packs, mounts=mounts)
+            from y5n.apps.yak.environment.io import load as load_env
+
+            env = load_env(inst.root)
+            existing_mounts = list(env.mounts) if env else []
+            merged = existing_mounts + [m for m in mounts if m not in existing_mounts]
+            touch(inst.root, name=inst.name, dependencies=all_packs, mounts=merged)
 
         inst.status = InstallationStatus.CREATED
         inst.updated = datetime.now(UTC)
@@ -492,6 +621,15 @@ class InstallationManager:
     def is_distribution(self, name: str) -> bool:
         return self._repo.resolve_distribution(name) is not None
 
+    def is_development(self, name: str) -> bool:
+        """Whether the named distribution is a development template.
+
+        Development templates (``kind: development``) are prepared by
+        ``yak bootstrap`` in the source repository, never installed.
+        """
+        dist = self._repo.resolve_distribution(name)
+        return bool(dist and dist.development)
+
     def list_environments(self) -> list[tuple[str, str]]:
         """List the bundled meta distributions (installable environments)."""
         from y5n.apps.yak.resolver.artifact import _parse_manifest
@@ -507,25 +645,6 @@ class InstallationManager:
                 if name:
                     environments.append((name, meta.get("description", "")))
         return environments
-
-    def materialize_dev_workspace(self, name: str, root: Path) -> None:
-        """Materialize a workspace from a meta-artifact's manifest, if any."""
-        from y5n.apps.yak.resolver.artifact import (
-            DirectorySource,
-            load_workspace_manifest,
-        )
-        from y5n.apps.yak.resolver.install import _collect_roots
-
-        for artifact_root in _collect_roots(None):
-            art = DirectorySource(artifact_root).resolve(name)
-            if art is None or not art.is_meta() or art.manifest is None:
-                continue
-            ws = load_workspace_manifest(art.manifest)
-            if ws is None:
-                continue
-            resolved = self.resolve_mount_sources(ws.mounts)
-            self._materializer.materialize(root / "structure", name, mounts=resolved)
-            return
 
     # ── Internals ──
 
