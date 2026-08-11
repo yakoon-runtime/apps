@@ -1,4 +1,4 @@
-"""Sharp test: yak install crm into an independent directory outside the repo."""
+"""Sharp test: minimal platform install + add crm outside the repo."""
 
 import shutil
 import tempfile
@@ -10,7 +10,7 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 
 def test_sharp_install():
-    """Install crm to ~/yak/crm/ and verify the structure."""
+    """Install the minimal platform, then add the crm distribution."""
     root = Path(tempfile.mkdtemp(prefix="yak-sharp-"))
     try:
         repo_root = Path(__file__).resolve().parents[3]
@@ -22,12 +22,17 @@ def test_sharp_install():
         artifacts = DirectoryArtifactStore(packs, runtime)
         mgr = InstallationManager(repo, artifacts)
 
-        inst = mgr.install("crm", root / "installations" / "crm")
+        inst = mgr.install(root / "installations" / "crm")
+        assert inst.packs == []
+
+        added = mgr.add("crm", inst.root)
+        assert added is not None
+        assert "crm" in added.packs
 
         print(f"Name:         {inst.name}")
         print(f"Distribution: {inst.distribution}")
         print(f"Status:       {inst.status.value}")
-        print(f"Packs:        {', '.join(inst.packs)}")
+        print(f"Packs:        {', '.join(added.packs)}")
         print(f"Root:         {inst.root}")
         print()
 
@@ -37,8 +42,6 @@ def test_sharp_install():
 
         workspace = inst.root / "workspace.toml"
         assert workspace.exists()
-        content = workspace.read_text()
-        assert "crm" in content
 
         state = inst.root / ".yak" / "state.toml"
         assert state.exists()

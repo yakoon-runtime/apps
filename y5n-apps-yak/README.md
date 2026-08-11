@@ -22,7 +22,7 @@ cd hello
 yak create command greet    # Add a command to the pack
 cd ..
 yak build hello             # Build the pack
-yak install crm             # Create a Yakoon installation (interactive: 'yak install')
+yak install                 # Create the minimal Yakoon platform (no packs)
 yak add y5n-packs-hello     # Add the built artifact to the installation
 yak shell                   # Open the interactive shell
 ```
@@ -52,7 +52,7 @@ yak publish y5n-packs-hello --repository github:yakoon-runtime/apps --release
 
 # Consumer:
 mkdir other && cd other
-yak install crm
+yak install
 yak add y5n-packs-hello --repository github:yakoon-runtime/apps
 yak shell
 ```
@@ -65,7 +65,7 @@ yak publish y5n-packs-hello             # → ~/.yak/artifacts/
 
 # Another developer on the same machine:
 mkdir other && cd other
-yak install crm
+yak install
 yak add y5n-packs-hello                 # finds it from ~/.yak/artifacts/
 yak shell
 ```
@@ -82,7 +82,7 @@ install → add → update
 | 1 | `yak create pack <name>` | Scaffolds a new pack project |
 | 2 | `yak build <source>` | Builds wheel + artifact.yml → `.yak/artifacts/` |
 | 3 | `yak publish <name>` | Copies artifact → `~/.yak/artifacts/` (shareable) |
-| 4 | `yak install <environment>` | Creates a Yakoon installation (workspace, deployment, state) |
+| 4 | `yak install` | Creates the minimal Yakoon platform (runtime + SDK, no packs) |
 | 5 | `yak add <component>` | Adds a distribution or artifact to the installation |
 | 6 | `yak update` | Reconciles the installation with its desired state |
 | 7 | `yak shell` | Opens interactive shell |
@@ -173,7 +173,7 @@ yak init                    #  .yak/context.toml
 yak create pack hello       #  hello/pack.toml + structure/
 yak build hello             #  → .yak/artifacts/
 yak publish y5n-packs-hello #  → ~/.yak/artifacts/ (shareable)
-yak install crm             #  → workspace + .yak/deployment.yml + state.toml
+yak install                 #  → minimal platform + .yak/deployment.yml + state.toml
 yak add y5n-packs-hello     #  → adds the artifact to the installation
 yak shell                   #  → interactive shell
 ```

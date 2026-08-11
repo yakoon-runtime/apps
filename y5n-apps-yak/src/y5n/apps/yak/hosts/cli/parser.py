@@ -48,10 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "install",
-        help="Create a Yakoon installation (list environments when run without args)",
-    )
-    p.add_argument(
-        "environment", nargs="?", help="Environment name (dev, desktop, crm, ...)"
+        help="Create the minimal Yakoon platform (no packs)",
     )
     p.add_argument(
         "--target", "-t", default=".", help="Target directory (default: current)"

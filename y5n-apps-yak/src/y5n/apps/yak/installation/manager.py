@@ -61,47 +61,32 @@ class InstallationManager:
 
     def install(
         self,
-        target: str,
         path: Path,
         *,
         asker: StoreAsker | None = None,
         ui=None,
     ) -> Installation:
-        """Install a distribution into a fresh root.
+        """Install the minimal Yakoon platform into ``path``.
 
-        ``asker`` guides the store mapping interactively; ``ui`` reports
-        progress. Without them the flow runs silently with memory
-        backends.
+        The platform is the runtime, the SDK and the host apps only — no
+        packs. What the installation can do is decided afterwards with
+        ``yak add``.
         """
-        with self._step(ui, "Distribution"):
-            dist = self._repo.resolve_distribution(target)
-            if dist is None:
-                raise ValueError(f"Unknown target: {target}")
-            if dist.development:
-                raise ValueError(
-                    f"'{target}' is a development environment — use 'yak bootstrap'"
-                )
-
-        with self._step(ui, "Packs"):
-            packs, tools = self._resolver.resolve(dist)
-
         now = datetime.now(UTC)
         root = path.resolve()
+        name = root.name or "yakoon"
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            mounts = self.resolve_mount_sources(dist.mounts)
-            self._materializer.materialize(root / "structure", dist.name, mounts=mounts)
-
-        self._report_mounts(ui, mounts)
+            self._materializer.materialize(root / "structure", name, mounts=[])
 
         with self._step(ui, "Deployment"):
             self._assemble(root / "structure", root / ".yak", asker=asker)
 
         inst = Installation(
-            name=target,
-            distribution=dist.name,
+            name=name,
+            distribution="yakoon",
             root=root,
-            packs=packs,
+            packs=[],
             status=InstallationStatus.MATERIALIZED,
             created=now,
             updated=now,
@@ -109,10 +94,12 @@ class InstallationManager:
         self._write_state(inst)
 
         with self._step(ui, "Installing"):
-            self._installer.install(inst, tools=tools, sdk_path=self._sdk_path)
+            from y5n.apps.yak.installer.installer import PLATFORM_TOOLS
+
+            self._installer.install(inst, tools=PLATFORM_TOOLS, sdk_path=self._sdk_path)
 
         with self._step(ui, "Environment"):
-            touch(root, name=target, dependencies=packs, mounts=mounts)
+            touch(root, name=name, dependencies=[], mounts=[])
 
         inst.status = InstallationStatus.CREATED
         inst.updated = datetime.now(UTC)
@@ -197,10 +184,20 @@ class InstallationManager:
     def _resolve_component(
         self, target: str, *, sources: list[str] | None = None
     ) -> _Component | None:
-        """Resolve a name to a distribution or an artifact."""
-        dist = self._repo.resolve_distribution(target)
+        """Resolve a name to a pack distribution or a built artifact.
+
+        Product bundles (crm.yml, desktop.yml) are not components — they
+        are recipes, composed of packs, and are not add-able.
+        """
+        dist = self._repo.resolve_pack_distribution(target)
         if dist is not None:
             return _Component(kind="distribution", name=dist.name, dist=dist)
+
+        product = self._repo.resolve_distribution(target)
+        if product is not None and product.development:
+            raise ValueError(
+                f"'{target}' is a development environment — use 'yak bootstrap'"
+            )
 
         from y5n.apps.yak.resolver.install import find_artifact
 
@@ -310,61 +307,48 @@ class InstallationManager:
         asker: StoreAsker | None = None,
         ui=None,
     ) -> Installation:
-        with self._step(ui, "Distribution"):
+        with self._step(ui, "Resolving"):
+            from y5n.apps.yak.environment.io import load as load_env
+
             inst = self.load(path)
             if inst is None:
                 raise ValueError(f"Installation not found: {path}")
             if inst.status == InstallationStatus.RUNNING:
                 raise RuntimeError(f"Cannot update running installation: {inst.name}")
+            env = load_env(path)
+            if env is None:
+                raise RuntimeError(f"No environment found at {path}")
 
-            dist = self._repo.resolve_distribution(inst.distribution)
-            if dist is None:
-                raise ValueError(f"Distribution not found: {inst.distribution}")
-
-        with self._step(ui, "Packs"):
-            packs, tools = self._resolver.resolve(dist)
-
-        # Refresh the base distribution but keep added components.
-        all_packs = list(inst.packs)
-        for p in packs:
-            if p not in all_packs:
-                all_packs.append(p)
-
+        # Reconcile against the recorded desired state (the environment):
+        # re-materialize its mounts, rediscover stores, reinstall.
         now = datetime.now(UTC)
+        structure_dir = path / env.workspace_path
         with self._step(ui, "Workspace"):
-            mounts = self.resolve_mount_sources(dist.mounts)
             self._materializer.materialize(
-                inst.root / "structure", dist.name, mounts=mounts
+                structure_dir, env.name, mounts=list(env.mounts)
             )
-
-        self._report_mounts(ui, mounts)
 
         with self._step(ui, "Deployment"):
             # Preserve the operator's bindings; only newly declared stores
             # are (re)assembled.
-            existing = load_installation(inst.root / ".yak" / "deployment.yml")
-            self._assemble(
-                inst.root / "structure",
-                inst.root / ".yak",
-                existing=existing,
-                asker=asker,
-            )
+            existing = load_installation(path / ".yak" / "deployment.yml")
+            self._assemble(structure_dir, path / ".yak", existing=existing, asker=asker)
 
-        inst.packs = all_packs
+        inst.packs = list(env.dependencies)
         inst.status = InstallationStatus.MATERIALIZED
         inst.updated = now
         self._write_state(inst)
 
         with self._step(ui, "Installing"):
-            self._installer.install(inst, tools=tools, sdk_path=self._sdk_path)
+            self._installer.install(inst, sdk_path=self._sdk_path)
 
         with self._step(ui, "Environment"):
-            from y5n.apps.yak.environment.io import load as load_env
-
-            env = load_env(inst.root)
-            existing_mounts = list(env.mounts) if env else []
-            merged = existing_mounts + [m for m in mounts if m not in existing_mounts]
-            touch(inst.root, name=inst.name, dependencies=all_packs, mounts=merged)
+            touch(
+                path,
+                name=env.name,
+                dependencies=list(env.dependencies),
+                mounts=list(env.mounts),
+            )
 
         inst.status = InstallationStatus.CREATED
         inst.updated = datetime.now(UTC)
@@ -615,36 +599,6 @@ class InstallationManager:
 
         with open(installation_dir / "deployment.yml", "w") as f:
             yaml.safe_dump(to_dict(installation), f, sort_keys=False)
-
-    # ── Introspection ──
-
-    def is_distribution(self, name: str) -> bool:
-        return self._repo.resolve_distribution(name) is not None
-
-    def is_development(self, name: str) -> bool:
-        """Whether the named distribution is a development template.
-
-        Development templates (``kind: development``) are prepared by
-        ``yak bootstrap`` in the source repository, never installed.
-        """
-        dist = self._repo.resolve_distribution(name)
-        return bool(dist and dist.development)
-
-    def list_environments(self) -> list[tuple[str, str]]:
-        """List the bundled meta distributions (installable environments)."""
-        from y5n.apps.yak.resolver.artifact import _parse_manifest
-
-        d = self._repo.builtin_artifacts_dir()
-        if d is None or not d.is_dir():
-            return []
-        environments: list[tuple[str, str]] = []
-        for f in sorted(d.glob("*.yml")):
-            meta = _parse_manifest(f)
-            if meta.get("kind") == "meta":
-                name = meta.get("name", "")
-                if name:
-                    environments.append((name, meta.get("description", "")))
-        return environments
 
     # ── Internals ──
 

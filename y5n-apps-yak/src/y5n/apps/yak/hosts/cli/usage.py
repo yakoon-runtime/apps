@@ -20,7 +20,7 @@ Usage:
     publish                Publish an artifact
 
   Installation
-    install                Create a Yakoon installation
+    install                Create the minimal Yakoon platform
     add                    Add a distribution or artifact
     update                 Update the installation
     sync                   Reconcile the workspace

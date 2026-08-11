@@ -13,7 +13,12 @@ _TOOL_PACKAGES: dict[str, str] = {
     "runtime": "y5n-apps-runtime",
     "shell": "y5n-apps-shell",
     "web": "y5n-apps-web",
+    "yak": "y5n-apps-yak",
 }
+
+# The minimal platform: the SDK, every runtime project, and the host apps.
+# No packs — capabilities are added with `yak add`.
+PLATFORM_TOOLS = [ToolReference("runtime"), ToolReference("yak")]
 
 
 class Installer:

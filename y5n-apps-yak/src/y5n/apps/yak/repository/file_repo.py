@@ -20,10 +20,6 @@ class FileRepository:
     def roots(self) -> list[Path]:
         return list(self._roots)
 
-    def builtin_artifacts_dir(self) -> Path | None:
-        """The bundled artifacts directory (meta distributions), if any."""
-        return self._artifacts_dir
-
     def resolve_distribution(self, name: str) -> Distribution | None:
         resolved = self._resolve_distribution(name)
         if resolved is not None:
@@ -32,6 +28,24 @@ class FileRepository:
         for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
             if name.startswith(prefix):
                 return self._resolve_distribution(name[len(prefix) :])
+        return None
+
+    def resolve_pack_distribution(self, name: str) -> Distribution | None:
+        """Resolve a pack (pack.toml) — not a bundled product template."""
+        resolved = self._resolve_pack_distribution(name)
+        if resolved is not None:
+            return resolved
+        for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
+            if name.startswith(prefix):
+                return self._resolve_pack_distribution(name[len(prefix) :])
+        return None
+
+    def _resolve_pack_distribution(self, name: str) -> Distribution | None:
+        for root in self._roots:
+            for prefix in ("y5n-packs-", "y5n-runtime-"):
+                dist_path = root / f"{prefix}{name}" / "pack.toml"
+                if dist_path.exists():
+                    return self._parse(dist_path)
         return None
 
     def _resolve_distribution(self, name: str) -> Distribution | None:
