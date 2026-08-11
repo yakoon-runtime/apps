@@ -64,12 +64,6 @@ def _load_context(root: Path) -> Context:
     )
 
 
-def default_sources() -> list[Path]:
-    """Fallback: monorepo paths relative to this source file."""
-    root = Path(__file__).resolve().parents[8]
-    return [root / d for d in ("packs", "runtime", "apps", "sdk", root)]
-
-
 def find_context_root() -> Path | None:
     cwd = Path.cwd()
     found: Path | None = None

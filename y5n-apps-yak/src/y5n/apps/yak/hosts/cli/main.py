@@ -23,10 +23,14 @@ def _show_banner() -> None:
 
 
 def _build_manager() -> InstallationManager:
-    from y5n.apps.yak.hosts.cli.cwd import Context, default_sources
+    from y5n.apps.yak.hosts.cli.cwd import Context
 
     ctx = Context.current()
-    roots = ctx.resolve_sources() if ctx else default_sources()
+    # Component sources come from the context only — no hidden monorepo
+    # fallback. Without a context there are no source directories; add
+    # then resolves components from the local artifact store and the
+    # configured repositories.
+    roots = ctx.resolve_sources() if ctx is not None else []
 
     # Monorepo paths for the installer (source projects it installs from).
     repo_root = Path(__file__).resolve().parents[8]

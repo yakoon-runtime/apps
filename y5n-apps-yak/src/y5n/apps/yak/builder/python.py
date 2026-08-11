@@ -43,6 +43,18 @@ class PythonBuildProvider:
         info = self._parse_wheel(wheel)
         if info is None:
             return None
+
+        # A pack is identified by its pack.toml name, not its Python
+        # distribution name ("system", not "y5n-packs-system").
+        pack_manifest = project_dir / "pack.toml"
+        if pack_manifest.exists():
+            import tomllib
+
+            with open(pack_manifest, "rb") as f:
+                pack = tomllib.load(f)
+            info.name = pack.get("name", info.name)
+            info.version = pack.get("version", info.version)
+
         info.fingerprint = fingerprint
 
         artifact_dir = output_dir / info.filename

@@ -23,12 +23,28 @@ class FileRepository:
                 return self._resolve_pack(name[len(prefix) :])
         return None
 
-    def _resolve_pack(self, name: str) -> Pack | None:
+    def resolve_pack_dir(self, name: str) -> Path | None:
+        """Resolve a pack name to its source directory (with pack.toml)."""
+        resolved = self._resolve_pack_dir(name)
+        if resolved is not None:
+            return resolved
+        for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
+            if name.startswith(prefix):
+                return self._resolve_pack_dir(name[len(prefix) :])
+        return None
+
+    def _resolve_pack_dir(self, name: str) -> Path | None:
         for root in self._roots:
             for prefix in ("y5n-packs-", "y5n-runtime-"):
-                dist_path = root / f"{prefix}{name}" / "pack.toml"
-                if dist_path.exists():
-                    return self._parse(dist_path)
+                candidate = root / f"{prefix}{name}"
+                if (candidate / "pack.toml").exists():
+                    return candidate
+        return None
+
+    def _resolve_pack(self, name: str) -> Pack | None:
+        dir_path = self._resolve_pack_dir(name)
+        if dir_path is not None:
+            return self._parse(dir_path / "pack.toml")
         return None
 
     def _parse(self, path: Path) -> Pack:

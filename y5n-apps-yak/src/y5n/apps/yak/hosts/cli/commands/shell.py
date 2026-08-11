@@ -5,14 +5,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from y5n.apps.yak.hosts.cli.cwd import find_context_root
+from y5n.apps.yak.hosts.cli.cwd import find_runtime_root
 
 
 def run(args, mgr) -> None:
-    path = find_context_root()
+    path = find_runtime_root()
     if path is None:
-        print("Not inside a Yak context.")
-        print("Run 'yak init' first or cd into one.")
+        print("Not inside a Yak context or installation.")
+        print("Run 'yak install' first or cd into one.")
         return
 
     python = path / ".venv" / "bin" / "python"
