@@ -109,24 +109,6 @@ def _artifact_install(args, mgr, ui) -> None:
         ui.fail(f"{label} install failed")
 
 
-def _resolve_mount_sources(root: Path, mounts: list, mgr) -> list:
-    """Convert pack-name mounts to source-path mounts using artifact store."""
-    from y5n.apps.yak.distribution.models import Mount, PackName
-
-    resolved = []
-    for m in mounts:
-        pack_name = m.source if hasattr(m, "source") else getattr(m, "pack", "")
-        artifact = mgr._artifacts.get_artifact(PackName(pack_name))
-        if artifact and (artifact / "structure").is_dir():
-            resolved.append(
-                Mount(
-                    source=str((artifact / "structure").resolve()),
-                    target=m.target,
-                )
-            )
-    return resolved
-
-
 def _write_environment(root: Path, env_name: str) -> None:
     """Write .yak/environment.yml from context or template."""
     from y5n.apps.yak.distribution.models import Mount, PackName
@@ -194,7 +176,7 @@ def _materialize_dev_workspace(name: str, root: Path, mgr) -> None:
                         {"pack": m["pack"], "target": m["target"]}
                         for m in ws.get("mounts", [])
                     ]
-                    resolved = _resolve_mount_sources(root, raw_mounts, mgr)
+                    resolved = mgr._resolve_mount_sources(raw_mounts)
                     mgr._materializer.materialize(
                         root / "structure", name, mounts=resolved
                     )
@@ -239,6 +221,29 @@ def _is_distribution(name: str, mgr) -> bool:
     return mgr._repo.resolve_distribution(name) is not None
 
 
+def _assemble_installation(mgr, root: Path, ui) -> None:
+    """Assemble `.yak/deployment.yml` for the materialized structure.
+
+    Existing bindings are preserved; the operator is asked only for newly
+    declared stores. In non-interactive contexts the memory defaults are
+    used.
+    """
+    from y5n.apps.yak.installation.ask import TerminalStoreAsker
+    from y5n.runtime.engine.installation import load_installation
+
+    existing = load_installation(root / ".yak" / "deployment.yml")
+    try:
+        mgr._assemble(
+            root / "structure",
+            root / ".yak",
+            existing=existing,
+            asker=TerminalStoreAsker(),
+        )
+    except EOFError:
+        ui.detail("Non-interactive: using memory backends")
+        mgr._assemble(root / "structure", root / ".yak", existing=existing)
+
+
 def _create_new(args, mgr, ui, name, root):
     ui.title(f'Installing "{name}"')
 
@@ -252,7 +257,7 @@ def _create_new(args, mgr, ui, name, root):
 
         with ui.step("Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            resolved = _resolve_mount_sources(root, dist.mounts, mgr)
+            resolved = mgr._resolve_mount_sources(dist.mounts)
             mgr._materializer.materialize(
                 root / "structure", dist.name, mounts=resolved
             )
@@ -260,6 +265,9 @@ def _create_new(args, mgr, ui, name, root):
         with ui.step("Mounts"):
             for m in resolved:
                 ui.detail(f"{m.target} ← {m.source}")
+
+        with ui.step("Deployment"):
+            _assemble_installation(mgr, root, ui)
 
         with ui.step("Installing"):
             from y5n.apps.yak.installation.models import (
@@ -322,7 +330,7 @@ def _add_to_existing(args, mgr, ui, existing):
             ui.detail(", ".join(added))
 
         with ui.step("Workspace"):
-            resolved = _resolve_mount_sources(existing, dist.mounts, mgr)
+            resolved = mgr._resolve_mount_sources(dist.mounts)
             if not resolved:
                 from y5n.apps.yak.distribution.models import Mount
 
@@ -341,6 +349,9 @@ def _add_to_existing(args, mgr, ui, existing):
         with ui.step("Mounts"):
             for m in resolved:
                 ui.detail(f"{m.target} ← {m.source}")
+
+        with ui.step("Deployment"):
+            _assemble_installation(mgr, existing, ui)
 
         with ui.step("Environment"):
             from y5n.apps.yak.installation.models import (

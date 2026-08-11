@@ -17,6 +17,9 @@ class FileRepository:
         self._roots = list(roots)
         self._artifacts_dir = builtin_artifacts
 
+    def roots(self) -> list[Path]:
+        return list(self._roots)
+
     def resolve_distribution(self, name: str) -> Distribution | None:
         # 1. Bundled artifacts (apps/y5n-apps-yak/artifacts/<name>.yml)
         if self._artifacts_dir is not None:

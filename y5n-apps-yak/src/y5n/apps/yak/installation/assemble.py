@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Protocol
 
 import yaml
 from y5n.runtime.engine.installation import (
@@ -27,6 +28,17 @@ EVENT_STORE_FACTORY = "y5n.runtime.store.event.wire:EventStoreFactory"
 """The factory path for the event store — the default memory backend."""
 
 MEMORY_CONFIG = {"backend": "memory"}
+"""The config of the default in-memory event store."""
+
+POSTGRES_BACKEND = "postgres"
+
+
+class StoreAsker(Protocol):
+    """The questions the assembler asks the operator per declared store."""
+
+    def backend(self, store: str) -> str: ...
+
+    def dsn(self, store: str, default: str) -> str: ...
 
 
 def collect_declared_stores(structure_dir: Path) -> list[str]:
@@ -65,17 +77,58 @@ def build_memory_installation(store_names: list[str]) -> Installation:
     in-memory event store. This is the developer default; a real
     deployment points the factories at physical backends.
     """
-    stores: dict[str, StoreBinding] = {
-        RUNTIME_STORE: StoreBinding(
-            store=RUNTIME_STORE,
-            factory=EVENT_STORE_FACTORY,
-            config=dict(MEMORY_CONFIG),
-        ),
-    }
+    return assemble_installation(store_names, existing=None, asker=None)
+
+
+def assemble_installation(
+    store_names: list[str],
+    existing: Installation | None = None,
+    asker: StoreAsker | None = None,
+) -> Installation:
+    """Assemble the installation for the declared stores.
+
+    The `runtime` store — the runtime's own session/activity
+    infrastructure — is always bound, by default to the in-memory event
+    store. Every other declared store defaults to memory; with an asker
+    the operator picks the backend and, for `postgres`, the DSN.
+
+    Existing bindings are reused untouched: on update only newly declared
+    stores are asked, while the operator's previous choices survive
+    (ADR-19, open question #4).
+    """
+    stores: dict[str, StoreBinding] = {}
+
+    runtime = existing.binding_for(RUNTIME_STORE) if existing is not None else None
+    stores[RUNTIME_STORE] = runtime or StoreBinding(
+        store=RUNTIME_STORE,
+        factory=EVENT_STORE_FACTORY,
+        config=dict(MEMORY_CONFIG),
+    )
+
     for name in store_names:
-        stores[name] = StoreBinding(
+        if name == RUNTIME_STORE:
+            continue
+        binding = existing.binding_for(name) if existing is not None else None
+        if binding is not None:
+            stores[name] = binding
+            continue
+        stores[name] = _ask_binding(name, asker)
+
+    return Installation(stores=stores)
+
+
+def _ask_binding(name: str, asker: StoreAsker | None) -> StoreBinding:
+    """Bind one declared store — memory by default, operator-guided if asked."""
+    if asker is None:
+        return StoreBinding(
             store=name,
             factory=EVENT_STORE_FACTORY,
             config=dict(MEMORY_CONFIG),
         )
-    return Installation(stores=stores)
+    backend = asker.backend(name)
+    config: dict[str, str] = {"backend": backend}
+    if backend == POSTGRES_BACKEND:
+        default = f"env://{name.upper()}_DATABASE"
+        dsn = asker.dsn(name, default) or default
+        config["dsn"] = dsn
+    return StoreBinding(store=name, factory=EVENT_STORE_FACTORY, config=config)

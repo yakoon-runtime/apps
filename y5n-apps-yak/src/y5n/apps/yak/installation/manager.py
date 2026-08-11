@@ -9,7 +9,8 @@ from pathlib import Path
 import yaml
 from y5n.apps.yak.distribution.models import PackName
 from y5n.apps.yak.installation.assemble import (
-    build_memory_installation,
+    StoreAsker,
+    assemble_installation,
     collect_declared_stores,
 )
 from y5n.apps.yak.installation.models import Installation, InstallationStatus
@@ -18,7 +19,8 @@ from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.resolver import Resolver
 from y5n.apps.yak.workspace.materializer import Materializer
-from y5n.runtime.engine.installation import to_dict
+from y5n.runtime.engine.installation import Installation as RuntimeInstallation
+from y5n.runtime.engine.installation import load_installation, to_dict
 
 
 class InstallationManager:
@@ -91,6 +93,11 @@ class InstallationManager:
         inst.status = InstallationStatus.MATERIALIZED
         inst.updated = now
         self._write_state(inst)
+
+        # Preserve the operator's bindings on update; only newly declared
+        # stores are (re)assembled.
+        existing = load_installation(inst.root / ".yak" / "deployment.yml")
+        self._assemble(inst.root / "structure", inst.root / ".yak", existing=existing)
 
         self._installer.install(inst, tools=tools, sdk_path=self._sdk_path)
         inst.status = InstallationStatus.CREATED
@@ -249,36 +256,71 @@ class InstallationManager:
     # ── Mount resolution ──
 
     def _resolve_mount_sources(self, mounts: list) -> list:
-        """Convert pack-name mounts to source-path mounts using artifact store."""
+        """Convert pack-name or repo-relative mounts to source-path mounts.
+
+        A mount source is either a pack name (resolved through the
+        artifact store) or a repo-relative path like
+        ``packs/y5n-packs-ident/structure`` (resolved against the
+        repository roots).
+        """
         from y5n.apps.yak.distribution.models import Mount, PackName
 
         resolved = []
         for m in mounts:
-            pack_name = m.source if hasattr(m, "source") else getattr(m, "pack", "")
-            if not pack_name:
+            if isinstance(m, dict):
+                source = m.get("source") or m.get("pack") or ""
+                target = m.get("target", "")
+            else:
+                source = m.source if hasattr(m, "source") else getattr(m, "pack", "")
+                target = getattr(m, "target", "")
+            if not source:
                 continue
-            artifact = self._artifacts.get_artifact(PackName(pack_name))
-            if artifact and (artifact / "structure").is_dir():
-                resolved.append(
-                    Mount(
-                        source=str((artifact / "structure").resolve()),
-                        target=m.target,
-                    )
-                )
+            artifact_root = self._resolve_source(source)
+            if artifact_root is None:
+                continue
+            structure = artifact_root / "structure"
+            if not structure.is_dir():
+                structure = artifact_root
+            resolved.append(Mount(source=str(structure.resolve()), target=target))
         return resolved
+
+    def _resolve_source(self, source: str) -> Path | None:
+        """Resolve a mount source — a pack name or a repo-relative path."""
+        from y5n.apps.yak.distribution.models import PackName
+
+        artifact = self._artifacts.get_artifact(PackName(source))
+        if artifact is not None:
+            return artifact
+        s = Path(source)
+        if s.is_absolute() and s.is_dir():
+            return s
+        for root in self._repo.roots():
+            candidate = root / s
+            if candidate.is_dir():
+                return candidate
+        return None
 
     # ── Assembly (ADR-19) ──
 
-    def _assemble(self, structure_dir: Path, installation_dir: Path) -> None:
+    def _assemble(
+        self,
+        structure_dir: Path,
+        installation_dir: Path,
+        existing: RuntimeInstallation | None = None,
+        asker: StoreAsker | None = None,
+    ) -> None:
         """Materialize the deployment from the declared stores.
 
         The installation binds the runtime's own `runtime` store plus
         every store the installed packs declare, each to its StoreFactory
         and config. It is written to `.yak/deployment.yml` —
         machine-specific, not versioned, owned by `yak`.
+
+        Existing bindings are preserved on update; with an asker the
+        operator guides the mapping for newly declared stores.
         """
         stores = collect_declared_stores(structure_dir)
-        installation = build_memory_installation(stores)
+        installation = assemble_installation(stores, existing=existing, asker=asker)
         installation_dir.mkdir(parents=True, exist_ok=True)
 
         with open(installation_dir / "deployment.yml", "w") as f:
