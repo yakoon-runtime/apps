@@ -44,8 +44,8 @@ class PythonBuildProvider:
         if info is None:
             return None
 
-        # A pack is identified by its pack.toml name, not its Python
-        # distribution name ("system", not "y5n-packs-system").
+        # A pack is identified by its pack.toml name and mount, not its
+        # Python distribution name ("system", not "y5n-packs-system").
         pack_manifest = project_dir / "pack.toml"
         if pack_manifest.exists():
             import tomllib
@@ -54,11 +54,21 @@ class PythonBuildProvider:
                 pack = tomllib.load(f)
             info.name = pack.get("name", info.name)
             info.version = pack.get("version", info.version)
-
-        info.fingerprint = fingerprint
+            info.mount = pack.get("mount")
 
         artifact_dir = output_dir / info.filename
         artifact_dir.mkdir(parents=True, exist_ok=True)
+
+        if info.mount:
+            import shutil
+
+            structure = project_dir / "structure"
+            if structure.is_dir():
+                shutil.copytree(
+                    structure, artifact_dir / "structure", dirs_exist_ok=True
+                )
+
+        info.fingerprint = fingerprint
 
         (artifact_dir / wheel.name).write_bytes(wheel_bytes)
         wheel.unlink()

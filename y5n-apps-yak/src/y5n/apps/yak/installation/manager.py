@@ -302,10 +302,29 @@ class InstallationManager:
         return all_packs, mounts
 
     def _artifact_mounts(self, artifact) -> list:
-        """The workspace mounts a meta-artifact declares, resolved."""
+        """The mounts an artifact materializes: its structure at its mount.
+
+        A pack artifact carries its structure and its declared mount
+        (e.g. ``/usr/bin``); a meta-artifact declares workspace mounts.
+        """
+        from y5n.apps.yak.pack.models import Mount
+
+        if artifact is None:
+            return []
+
+        # A pack artifact: materialize its structure at its mount.
+        if artifact.structure is not None and artifact.mount:
+            return [
+                Mount(
+                    source=str(artifact.structure.resolve()),
+                    target=artifact.mount,
+                )
+            ]
+
+        # A meta-artifact: its declared workspace mounts.
         from y5n.apps.yak.resolver.artifact import load_workspace_manifest
 
-        if artifact is None or artifact.manifest is None:
+        if artifact.manifest is None:
             return []
         ws = load_workspace_manifest(artifact.manifest)
         if ws is None:

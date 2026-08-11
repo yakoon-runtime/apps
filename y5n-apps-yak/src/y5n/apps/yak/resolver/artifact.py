@@ -20,6 +20,7 @@ class Artifact:
         dependencies: list[str] | None = None,
         fingerprint: str = "",
         path: Path | None = None,
+        mount: str | None = None,
     ) -> None:
         self.name = name
         self.version = version
@@ -29,6 +30,7 @@ class Artifact:
         self.dependencies = dependencies or []
         self.fingerprint = fingerprint
         self.path = path
+        self.mount = mount
 
     @property
     def package_file(self) -> Path | None:
@@ -38,6 +40,14 @@ class Artifact:
             if f.suffix == ".whl":
                 return f
         return None
+
+    @property
+    def structure(self) -> Path | None:
+        """The artifact's materializable tree (its pack structure)."""
+        if self.path is None:
+            return None
+        structure = self.path / "structure"
+        return structure if structure.is_dir() else None
 
     @property
     def manifest(self) -> Path | None:
@@ -80,6 +90,7 @@ class DirectorySource:
                     dependencies=meta.get("dependencies", []),
                     fingerprint=fp,
                     path=entry,
+                    mount=meta.get("mount"),
                 )
         return None
 

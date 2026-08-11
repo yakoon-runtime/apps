@@ -14,6 +14,7 @@ class ArtifactInfo:
     builder: str
     entry: str | None
     fingerprint: str
+    mount: str | None = None
 
     def __init__(
         self,
@@ -24,6 +25,7 @@ class ArtifactInfo:
         builder: str = "python",
         entry: str | None = None,
         fingerprint: str = "",
+        mount: str | None = None,
     ) -> None:
         self.name = name
         self.version = version
@@ -32,6 +34,7 @@ class ArtifactInfo:
         self.builder = builder
         self.entry = entry
         self.fingerprint = fingerprint
+        self.mount = mount
 
     @property
     def filename(self) -> str:
@@ -45,6 +48,8 @@ class ArtifactInfo:
             f"host: {self.host}",
             f"builder: {self.builder}",
         ]
+        if self.mount:
+            lines.append(f"mount: {self.mount}")
         if self.entry:
             lines.append(f"entry: {self.entry}")
         if self.fingerprint:
