@@ -2,12 +2,7 @@ from pathlib import Path
 
 import yaml
 from y5n.apps.yak.installation.assemble import collect_declared_stores
-from y5n.runtime.engine.installation import (
-    Deployment,
-    Installation,
-    StoreMapping,
-    to_dict,
-)
+from y5n.runtime.engine.installation import Installation, StoreBinding, to_dict
 from y5n.runtime.engine.machine import RuntimeManager
 from y5n.runtime.engine.settings import RuntimeSettings, Settings
 from y5n.runtime.engine.wire.runtime import build_runtime
@@ -23,10 +18,7 @@ def _write_memory_installation(structure_dir: Path, target: Path) -> None:
     """
     stores = collect_declared_stores(structure_dir)
     installation = Installation(
-        stores={name: StoreMapping(store=name, deployment="memory") for name in stores},
-        deployments={
-            "memory": Deployment(name="memory", backend="memory"),
-        },
+        stores={name: StoreBinding(store=name, backend="memory://") for name in stores},
     )
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(yaml.safe_dump(to_dict(installation), sort_keys=False))

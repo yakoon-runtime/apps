@@ -275,18 +275,12 @@ class InstallationManager:
         versioned, owned by `yak`.
         """
         from y5n.apps.yak.installation.assemble import collect_declared_stores
-        from y5n.runtime.engine.installation import (
-            Deployment,
-            Installation,
-            StoreMapping,
-            to_dict,
-        )
+        from y5n.runtime.engine.installation import Installation, StoreBinding, to_dict
 
         stores = collect_declared_stores(structure_dir)
         installations = Installation(
-            stores={name: StoreMapping(store=name, deployment=name) for name in stores},
-            deployments={
-                name: Deployment(name=name, backend="memory") for name in stores
+            stores={
+                name: StoreBinding(store=name, backend="memory://") for name in stores
             },
         )
         installation_dir.mkdir(parents=True, exist_ok=True)

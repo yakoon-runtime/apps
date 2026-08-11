@@ -62,16 +62,14 @@ def test_installation_roundtrip(tmp_path: Path):
 
     from y5n.apps.yak.installation.assemble import collect_declared_stores
     from y5n.runtime.engine.installation import (
-        Deployment,
         Installation,
-        StoreMapping,
+        StoreBinding,
         to_dict,
     )
 
     stores = collect_declared_stores(tmp_path)
     installation = Installation(
-        stores={name: StoreMapping(store=name, deployment=name) for name in stores},
-        deployments={name: Deployment(name=name, backend="memory") for name in stores},
+        stores={name: StoreBinding(store=name, backend="memory://") for name in stores},
     )
 
     deployment_file = tmp_path / "installation" / "deployment.yml"
@@ -83,5 +81,5 @@ def test_installation_roundtrip(tmp_path: Path):
     loaded = load_installation(deployment_file)
     assert loaded is not None
     assert set(loaded.stores) == {"crm", "telemetry"}
-    assert loaded.deployment_for("crm") is not None
-    assert loaded.deployment_for("crm").backend == "memory"
+    assert loaded.binding_for("crm") is not None
+    assert loaded.binding_for("crm").backend == "memory://"
