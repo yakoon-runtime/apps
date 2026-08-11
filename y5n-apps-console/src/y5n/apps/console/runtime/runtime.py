@@ -30,7 +30,11 @@ async def create_runtime() -> RuntimeManager:
     structure_dir = Path.cwd() / "structure"
     installation_path = Path.cwd() / ".yak" / "installation" / "deployment.yml"
 
-    _write_memory_installation(structure_dir, installation_path)
+    # Respect an existing installation (ADR-19: owned by `yak`, machine
+    # specific). Only a workspace without one gets the developer memory
+    # fallback — the console never overwrites a real installation.
+    if not installation_path.is_file():
+        _write_memory_installation(structure_dir, installation_path)
 
     settings = Settings(
         runtime=RuntimeSettings(
