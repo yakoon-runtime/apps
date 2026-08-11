@@ -163,10 +163,10 @@ class InstallationManager:
                 )
                 if not target.exists():
                     issues.append(
-                        f"✘ Symlink       {mount.pack} → {mount.target}: missing"
+                        f"✘ Symlink       {mount.source} → {mount.target}: missing"
                     )
                 elif target.is_symlink() and not target.resolve().exists():
-                    issues.append(f"✘ Symlink       {mount.pack}: broken at {target}")
+                    issues.append(f"✘ Symlink       {mount.source}: broken at {target}")
 
         # Fingerprint check (compare installed vs current artifact)
         from y5n.apps.yak.resolver.install import _fingerprint_matches
