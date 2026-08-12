@@ -52,9 +52,9 @@ Components are added with the same command in every environment:
 `yak add` resolves a component from the sources available to the
 current context:
 
-    1. Source directories      [sources] in context.toml
-    2. Local artifact store    published artifacts
-    3. Repositories            [repositories] in context.toml
+    1. Source directories       [sources] in context.toml
+    2. Global artifact store    ~/.yak/artifacts/
+    3. Repositories             [repositories] in context.toml
 
 The artifact store is always system-global:
 
@@ -75,9 +75,10 @@ component store, at a version-stable path:
     .yak/components/<name>/structure
 
 A source component is a symlink into its source tree (editable); an
-artifact component is copied (self-contained). The workspace
-materializes exclusively from the component store — never directly
-from a source tree, an artifact store or a language package:
+artifact component is copied (self-contained). The materializer never
+reads from artifact stores or language packages — component namespaces
+are staged through `.yak/components/<name>/structure` first. Explicit
+operator or host mounts pass through directly:
 
     .yak/artifacts/                  build staging
     ~/.yak/artifacts/                system-wide distribution
@@ -155,11 +156,23 @@ Other installations can then resolve it as an artifact.
 
 ## Distribute a component
 
-The component path to other systems:
+Yak in one picture:
 
-    build     → .yak/artifacts/       built for this context
-    publish   → ~/.yak/artifacts/     available on this system
-    deploy    → repository            available outside this system
+    Source
+      │ build
+      ▼
+    .yak/artifacts/
+      │ publish
+      ▼
+    ~/.yak/artifacts/
+      │
+      ├── add ──────→ Installation
+      │
+      │ deploy
+      ▼
+    Repository
+      │
+      └── add ──────→ Other installation
 
 `publish` copies a built artifact into the system-global store:
 
