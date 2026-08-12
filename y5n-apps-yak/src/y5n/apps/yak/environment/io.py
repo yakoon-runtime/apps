@@ -23,6 +23,7 @@ def touch(
     name: str | None = None,
     components: list[PackName] | None = None,
     mounts: list[Mount] | None = None,
+    workspace_path: str | None = None,
 ) -> Environment:
     """Load-or-create the environment, apply fields, stamp timestamps, save.
 
@@ -37,6 +38,8 @@ def touch(
         env.components = components
     if mounts is not None:
         env.mounts = mounts
+    if workspace_path is not None:
+        env.workspace_path = workspace_path
     save(env, root)
     return env
 

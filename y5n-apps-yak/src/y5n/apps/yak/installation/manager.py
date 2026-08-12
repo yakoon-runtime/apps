@@ -85,6 +85,7 @@ class InstallationManager:
         *,
         asker: StoreAsker | None = None,
         ui=None,
+        workspace_path: str = "structure",
     ) -> Installation:
         """Install the minimal Yakoon platform into ``path``.
 
@@ -92,23 +93,27 @@ class InstallationManager:
         packs. What the installation can do is decided afterwards with
         ``yak add``. The platform's own namespaces (root, boot) are
         staged into ``.yak/components/`` and the workspace materializes
-        exclusively from there.
+        exclusively from there. ``workspace_path`` is the workspace
+        layout: ``structure/`` for a regular installation,
+        ``workspace/structure/`` when bootstrapping inside a source
+        checkout.
         """
         now = datetime.now(UTC)
         root = path.resolve()
         name = root.name or "yakoon"
+        structure_dir = root / workspace_path
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
             platform = self._platform_components(root)
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
-                root / "structure",
+                structure_dir,
                 mounts=mounts,
                 components_dir=self._components_dir(root),
             )
 
         with self._step(ui, "Deployment"):
-            self._assemble(root / "structure", root / ".yak", asker=asker)
+            self._assemble(structure_dir, root / ".yak", asker=asker)
 
         inst = Installation(
             name=name,
@@ -132,6 +137,7 @@ class InstallationManager:
                 name=name,
                 components=[PackName(c.name) for c in platform],
                 mounts=mounts,
+                workspace_path=workspace_path,
             )
 
         inst.status = InstallationStatus.CREATED

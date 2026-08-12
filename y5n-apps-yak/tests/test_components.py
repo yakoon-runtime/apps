@@ -216,6 +216,52 @@ def test_update_artifact_refreshes_component(monkeypatch):
         assert record.mount == "/opt/erp"
 
 
+def test_install_and_bootstrap_share_installation_structure():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        mgr = _platform_mgr(root)
+        installed = root / "installed"
+        bootstrapped = root / "source-checkout"
+        mgr.install(installed)
+        mgr.install(bootstrapped, workspace_path="workspace/structure")
+
+        # The same installation model: same .yak structure.
+        for sub in ("state.toml", "environment.yml", "deployment.yml"):
+            assert (installed / ".yak" / sub).exists()
+            assert (bootstrapped / ".yak" / sub).exists()
+        assert sorted(
+            p.name for p in (installed / ".yak" / "components").iterdir()
+        ) == [
+            "boot",
+            "root",
+        ]
+        assert sorted(
+            p.name for p in (bootstrapped / ".yak" / "components").iterdir()
+        ) == ["boot", "root"]
+
+        # Same SOLL/IST; only the workspace layout differs.
+        env_inst = load_env(installed)
+        env_boot = load_env(bootstrapped)
+        assert env_inst is not None and env_boot is not None
+        assert (
+            env_inst.components
+            == env_boot.components
+            == [
+                PackName("root"),
+                PackName("boot"),
+            ]
+        )
+        assert env_inst.workspace_path == "structure"
+        assert env_boot.workspace_path == "workspace/structure"
+
+        st_inst = mgr.load(installed)
+        st_boot = mgr.load(bootstrapped)
+        assert st_inst is not None and st_boot is not None
+        assert [c.name for c in st_inst.components] == ["root", "boot"]
+        assert [c.name for c in st_boot.components] == ["root", "boot"]
+        assert all(c.mode == "source" for c in st_boot.components)
+
+
 def test_materializer_refuses_store_source():
     mat = Materializer()
     store = Path.home() / ".yak" / "artifacts" / "x" / "structure"
