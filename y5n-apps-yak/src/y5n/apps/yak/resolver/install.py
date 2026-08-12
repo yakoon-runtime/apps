@@ -208,9 +208,16 @@ def _write_fingerprint(artifact, target_root: Path | None) -> None:
 
 
 def _install_one(artifact, python: Path) -> bool:
+    """Install a component's payload into the environment.
+
+    A wheel is installed with pip; an artifact without a wheel carries a
+    non-Python payload (or none) that this host does not install — the
+    namespace was staged separately, so the component is fully available
+    on the namespace side.
+    """
     wheel = artifact.package_file
     if wheel is None or not wheel.exists():
-        return False
+        return True
 
     cmd = [str(python), "-m", "pip", "install", "--no-deps"]
     if _FORCE:

@@ -28,6 +28,9 @@ def publish_local(name: str) -> Path | None:
     target_dir = Path.home() / ".yak" / "artifacts"
     target_dir.mkdir(parents=True, exist_ok=True)
     dest = target_dir / src.name
+    if dest.resolve() == src.resolve():
+        # Already in the global store — publishing is a no-op.
+        return dest
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(src, dest)
