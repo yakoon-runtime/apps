@@ -68,7 +68,11 @@ def deploy_artifact(name: str, target: str) -> bool | None:
 
     repository = repository_for(target)
     if repository is None:
-        raise RuntimeError(f"Unknown repository: {target}")
+        raise RuntimeError(
+            f"Unknown repository: {target}\n"
+            "Define it in .yak/context.toml under [repositories.<name>]\n"
+            "or use an inline spec like 'github:owner/repo'."
+        )
 
     published = DirectorySource(Path.home() / ".yak" / "artifacts").resolve(name)
     if published is None or published.path is None:
