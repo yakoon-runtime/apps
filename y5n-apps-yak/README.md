@@ -149,12 +149,54 @@ When a component is ready for release:
 
     yak build acme-erp
     yak publish acme-erp
+    yak deploy acme-erp --to acme
 
 Other installations can then resolve it as an artifact.
+
+## Distribute a component
+
+The component path to other systems:
+
+    build     → .yak/artifacts/       built for this context
+    publish   → ~/.yak/artifacts/     available on this system
+    deploy    → repository            available outside this system
+
+`publish` copies a built artifact into the system-global store:
+
+    yak publish acme-erp
+
+`deploy` ships a *published* artifact into a remote repository, where
+other installations can resolve it immediately:
+
+    yak deploy acme-erp --to acme
+
+`deploy` reads only from the published store — an artifact must be
+published first. It publishes a release, never a draft.
+
+Repositories are configured in the context. A named repository is both a
+read source (`add --from`) and a deploy target (`deploy --to`):
+
+    # .yak/context.toml
+
+    [repositories]
+    sources = ["github:yakoon-runtime/packs"]
+
+    [repositories.acme]
+    type = "github"
+    repo = "acme/packs"
+
+    yak add acme-erp --from acme
+    yak deploy acme-erp --to acme
+
+An inline spec works without configuration:
+
+    yak deploy acme-erp --to github:acme/packs
 
 ## The model
 
     install/bootstrap    creates the platform
-    context              defines where components can be found
-    add                  adds a component
-    publish              makes a component available without its sources
+    context              defines where components are found
+    build                builds a component
+    publish              makes a component available on this system
+    add                  adds a component to an installation
+    deploy               makes a component available outside this system
