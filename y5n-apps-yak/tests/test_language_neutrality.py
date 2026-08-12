@@ -77,8 +77,18 @@ class _FakeRequest:
 
 
 class FakeGithub:
+    """A minimal GitHub Releases API: releases hold named assets."""
+
     def __init__(self) -> None:
         self.releases: dict[str, dict] = {}
+        self.uploaded_assets: list[str] = []
+        self._next_id = 1
+
+    def _release(self, repo: str) -> dict | None:
+        return self.releases.get(repo)
+
+    def _upload_url(self, repo: str, rid: int) -> str:
+        return f"https://uploads.gh/repos/{repo}/releases/{rid}/assets"
 
     def urlopen(self, url):
         full = url.full_url if hasattr(url, "full_url") else str(url)
@@ -87,7 +97,7 @@ class FakeGithub:
 
         if "/releases/latest" in full:
             repo = full.split("/repos/", 1)[1].split("/releases", 1)[0]
-            release = self.releases.get(repo)
+            release = self._release(repo)
             if release is None:
                 raise OSError("no release")
             assets = [
@@ -101,28 +111,89 @@ class FakeGithub:
             ]
             return _FakeResp(json.dumps({"assets": assets}).encode())
 
+        if "/releases/tags/" in full:
+            repo = full.split("/repos/", 1)[1].split("/releases/tags/", 1)[0]
+            tag = full.split("/releases/tags/", 1)[1]
+            release = self._release(repo)
+            if release is None or release["tag"] != tag:
+                raise OSError("no release")
+            return _FakeResp(
+                json.dumps(
+                    {
+                        "id": release["id"],
+                        "tag_name": release["tag"],
+                        "upload_url": self._upload_url(repo, release["id"])
+                        + "{?name,label}",
+                    }
+                ).encode()
+            )
+
         if full.endswith("/releases") and method == "POST":
             repo = full.split("/repos/", 1)[1].split("/releases", 1)[0]
             body = json.loads((data or b"").decode())
-            self.releases[repo] = {"tag": body["tag_name"], "assets": {}}
-            upload_url = f"https://uploads.gh/repos/{repo}/releases/1/assets"
+            assert body["draft"] is False, "deploy must publish, not draft"
+            rid = self._next_id
+            self._next_id += 1
+            self.releases[repo] = {"id": rid, "tag": body["tag_name"], "assets": {}}
             return _FakeResp(
                 json.dumps(
-                    {"id": 1, "upload_url": upload_url + "{?name,label}"}
+                    {
+                        "id": rid,
+                        "upload_url": self._upload_url(repo, rid) + "{?name,label}",
+                    }
                 ).encode()
             )
+
+        if "/releases/" in full and method == "PATCH":
+            repo = full.split("/repos/", 1)[1].split("/releases/", 1)[0]
+            rid = int(full.rsplit("/", 1)[1])
+            release = self._release(repo)
+            assert release is not None and release["id"] == rid
+            return _FakeResp(
+                json.dumps(
+                    {
+                        "id": rid,
+                        "tag_name": release["tag"],
+                        "upload_url": self._upload_url(repo, rid) + "{?name,label}",
+                    }
+                ).encode()
+            )
+
+        if "/assets" in full and method == "GET":
+            repo = full.split("/repos/", 1)[1].split("/releases/", 1)[0]
+            release = self._release(repo)
+            assert release is not None
+            assets = [
+                {"id": aid, "name": name}
+                for name, (aid, _bytes) in release["assets"].items()
+            ]
+            return _FakeResp(json.dumps(assets).encode())
 
         if "/assets" in full and method == "POST":
             repo = full.split("/repos/", 1)[1].split("/releases/", 1)[0]
             name = full.split("name=", 1)[1]
-            self.releases[repo]["assets"][name] = data
+            release = self._release(repo)
+            assert release is not None
+            aid = self._next_id
+            self._next_id += 1
+            release["assets"][name] = (aid, data)
+            self.uploaded_assets.append(name)
             return _FakeResp(b"{}")
+
+        if "/releases/assets/" in full and method == "DELETE":
+            aid = int(full.rsplit("/", 1)[1])
+            for release in self.releases.values():
+                for name, (asset_id, _bytes) in list(release["assets"].items()):
+                    if asset_id == aid:
+                        del release["assets"][name]
+                        return _FakeResp(b"{}")
+            raise OSError("no asset")
 
         if "/dl/" in full:
             name = full.rsplit("/", 1)[1]
             for release in self.releases.values():
                 if name in release["assets"]:
-                    return _FakeResp(release["assets"][name])
+                    return _FakeResp(release["assets"][name][1])
             raise OSError("asset not found")
 
         raise AssertionError(f"unexpected request: {full}")
