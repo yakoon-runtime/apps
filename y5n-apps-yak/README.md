@@ -184,7 +184,8 @@ other installations can resolve it immediately:
     yak deploy acme-erp --to acme
 
 `deploy` reads only from the published store — an artifact must be
-published first. It publishes a release, never a draft.
+published first. A successful deploy makes the artifact immediately
+resolvable from the target repository.
 
 Repositories are configured in the context. A named repository is both a
 read source (`add --from`) and a deploy target (`deploy --to`):
