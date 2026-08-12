@@ -230,6 +230,14 @@ Any installation can then resolve the component from that repository:
 
     yak add y5n-apps-yak --from github:acme/packs
 
+For the Yakoon project itself, source and distribution are separate
+repositories:
+
+    yakoon-runtime/yakoon    the source repository (monorepo)
+    yakoon-runtime/apps      the default artifact repository for released
+                             Yakoon applications — the launcher and
+                             `add --from` resolve `y5n-apps-yak` from here
+
 ## The model
 
     install/bootstrap    creates the platform
