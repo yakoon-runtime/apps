@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Protocol
 
 import yaml
-from y5n.runtime.engine.installation import (
+from y5n.apps.yak.installation.deployment import (
     RUNTIME_STORE,
     Installation,
     StoreBinding,

@@ -18,6 +18,10 @@ from y5n.apps.yak.installation.assemble import (
     assemble_installation,
     collect_declared_stores,
 )
+from y5n.apps.yak.installation.deployment import (
+    Installation as RuntimeInstallation,
+)
+from y5n.apps.yak.installation.deployment import load_installation, to_dict
 from y5n.apps.yak.installation.models import Component, Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer
 from y5n.apps.yak.pack.models import Mount, Pack, PackName, ToolReference
@@ -25,8 +29,6 @@ from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import Artifact
 from y5n.apps.yak.workspace.materializer import Materializer
-from y5n.runtime.engine.installation import Installation as RuntimeInstallation
-from y5n.runtime.engine.installation import load_installation, to_dict
 
 
 @dataclass(frozen=True)
