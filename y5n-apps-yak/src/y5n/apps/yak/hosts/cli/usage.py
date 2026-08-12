@@ -17,7 +17,8 @@ Usage:
 
   Packaging
     build                  Build artifacts
-    publish                Publish an artifact
+    publish                Publish an artifact to the local store
+    deploy                 Make a published artifact available in a repository
 
   Installation
     install                Create the minimal Yakoon platform
