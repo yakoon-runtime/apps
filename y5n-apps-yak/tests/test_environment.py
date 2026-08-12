@@ -16,7 +16,7 @@ class TestEnvironmentModels:
     def test_environment_defaults(self):
         env = Environment(name="dev")
         assert env.schema == "1"
-        assert env.dependencies == []
+        assert env.components == []
         assert env.mounts == []
 
     def test_environment_with_mounts(self):
@@ -31,10 +31,10 @@ class TestEnvironmentIO:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             mounts = [Mount(source="/path/to/system", target="/usr/bin")]
-            deps = [PackName("y5n-packs-system")]
+            comps = [PackName("y5n-packs-system")]
             env = Environment(
                 name="dev",
-                dependencies=deps,
+                components=comps,
                 mounts=mounts,
             )
             save(env, root)
@@ -43,10 +43,23 @@ class TestEnvironmentIO:
             assert loaded is not None
             assert loaded.name == "dev"
             assert loaded.schema == "1"
-            assert loaded.dependencies == deps
+            assert loaded.components == comps
             assert len(loaded.mounts) == 1
             assert loaded.mounts[0].source == "/path/to/system"
             assert loaded.mounts[0].target == "/usr/bin"
+
+    def test_load_legacy_dependencies_key(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_path = root / ".yak" / "environment.yml"
+            env_path.parent.mkdir(parents=True)
+            env_path.write_text("dependencies:\n- y5n-packs-system\n")
+            loaded = load(root)
+            assert loaded is not None
+            assert loaded.components == [PackName("y5n-packs-system")]
 
     def test_load_nonexistent(self):
         with tempfile.TemporaryDirectory() as tmp:

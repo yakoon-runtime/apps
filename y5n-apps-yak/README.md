@@ -67,6 +67,26 @@ every installation can resolve it.
 This allows released and development components to be mixed in the
 same installation.
 
+### Where a component lives in an installation
+
+`add` stages each component's namespace into the installation-local
+component store, at a version-stable path:
+
+    .yak/components/<name>/structure
+
+A source component is a symlink into its source tree (editable); an
+artifact component is copied (self-contained). The workspace
+materializes exclusively from the component store — never directly
+from a source tree, an artifact store or a language package:
+
+    .yak/artifacts/                  build staging
+    ~/.yak/artifacts/                system-wide distribution
+    <installation>/.yak/components/  installed state
+
+`environment.yml` lists the desired components (SOLL); `state.toml`
+records what is installed and why (IST: mode, version, fingerprint,
+source). `yak update` reconciles the two.
+
 
 ### Regular installation
 

@@ -10,7 +10,7 @@ from y5n.apps.yak.pack.models import Mount, PackName
 class Environment:
     name: str
     schema: str = "1"
-    dependencies: list[PackName] = field(default_factory=list)
+    components: list[PackName] = field(default_factory=list)
     mounts: list[Mount] = field(default_factory=list)
     workspace_path: str = "structure"
     created: datetime | None = None

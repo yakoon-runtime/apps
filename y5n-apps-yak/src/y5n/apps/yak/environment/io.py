@@ -21,7 +21,7 @@ def touch(
     root: Path,
     *,
     name: str | None = None,
-    dependencies: list[PackName] | None = None,
+    components: list[PackName] | None = None,
     mounts: list[Mount] | None = None,
 ) -> Environment:
     """Load-or-create the environment, apply fields, stamp timestamps, save.
@@ -33,8 +33,8 @@ def touch(
     now = datetime.now(UTC)
     env.created = env.created or now
     env.updated = now
-    if dependencies is not None:
-        env.dependencies = dependencies
+    if components is not None:
+        env.components = components
     if mounts is not None:
         env.mounts = mounts
     save(env, root)
@@ -51,13 +51,18 @@ def load(context_root: Path) -> Environment | None:
             Mount(source=m.get("source") or m.get("pack", ""), target=m["target"])
             for m in data.get("mounts", [])
         ]
-        deps = [PackName(d) for d in data.get("dependencies", [])]
+        # "components" is the desired set; "dependencies" is read for
+        # backwards compatibility with older environment files.
+        components = data.get("components")
+        if components is None:
+            components = data.get("dependencies", [])
+        deps = [PackName(d) for d in components]
         ws = data.get("workspace", {})
         inst = data.get("installation", {})
         return Environment(
             name=data.get("name", ""),
             schema=data.get("schema", "1"),
-            dependencies=deps,
+            components=deps,
             mounts=mounts,
             workspace_path=(
                 ws.get("path", "structure") if isinstance(ws, dict) else "structure"
@@ -85,7 +90,7 @@ def save(env: Environment, context_root: Path) -> None:
     data = {
         "schema": env.schema,
         "name": env.name,
-        "dependencies": list(env.dependencies),
+        "components": list(env.components),
         "workspace": {"path": env.workspace_path},
         "mounts": mounts_yaml,
     }
