@@ -27,6 +27,7 @@ def run(args, mgr) -> None:
             asker=TerminalStoreAsker(),
             ui=ui,
             sources=_repositories(args),
+            sources_exclusive=bool(getattr(args, "from_repo", None)),
             force=bool(
                 getattr(args, "force", False) or getattr(args, "upgrade", False)
             ),

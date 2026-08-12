@@ -8,7 +8,7 @@ Usage:
     init                   Create a Yak context
 
   Typical workflow
-    create → build → install → sync → shell
+    create → build → install → add → shell
 
   Development
     create pack            Create a new pack
@@ -24,7 +24,6 @@ Usage:
     install                Create the minimal Yakoon platform
     add                    Add a pack or artifact
     update                 Update the installation
-    sync                   Reconcile the workspace
 
   Run
     shell                  Open the Yakoon shell

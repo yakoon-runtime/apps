@@ -155,6 +155,7 @@ class InstallationManager:
         asker: StoreAsker | None = None,
         ui=None,
         sources: list[str] | None = None,
+        sources_exclusive: bool = False,
         force: bool = False,
     ) -> Installation | None:
         """Add a component (a pack or an artifact) to an installation.
@@ -174,57 +175,75 @@ class InstallationManager:
                 raise RuntimeError(f"No installation found at {path}")
             existing = list(env.components)
 
-            component = self._resolve_component(target, sources=sources)
+            component = self._resolve_component(
+                target, sources=sources, sources_exclusive=sources_exclusive
+            )
             if component is None:
                 raise ValueError(f"Unknown component: {target}")
 
-        with self._step(ui, "Making available"):
-            made = self._make_available(
-                component, target, path, existing, force, sources
+        records: list[Component] = []
+        try:
+            with self._step(ui, "Making available"):
+                made = self._make_available(
+                    component, target, path, existing, force, sources
+                )
+                if made is None:
+                    return None
+                all_packs, mounts, records = made
+
+            structure_dir = path / env.workspace_path
+            merged = list(env.mounts) + [m for m in mounts if m not in env.mounts]
+
+            with self._step(ui, "Materializing"):
+                self._materializer.materialize(
+                    structure_dir,
+                    mounts=merged,
+                    components_dir=self._components_dir(path),
+                )
+
+            self._report_mounts(ui, mounts)
+
+            with self._step(ui, "Deployment"):
+                existing_dep = load_installation(path / ".yak" / "deployment.yml")
+                self._assemble(
+                    structure_dir, path / ".yak", existing=existing_dep, asker=asker
+                )
+
+            existing_inst = self.load(path)
+            now = datetime.now(UTC)
+            inst = Installation(
+                name=existing_inst.name if existing_inst else target,
+                root=path.resolve(),
+                packs=all_packs,
+                components=self._merge_component_records(
+                    (existing_inst.components if existing_inst else []), records
+                ),
+                status=InstallationStatus.MATERIALIZED,
+                created=now,
+                updated=now,
             )
-            if made is None:
-                return None
-            all_packs, mounts, records = made
+            self._write_state(inst)
 
-        structure_dir = path / env.workspace_path
-        merged = list(env.mounts) + [m for m in mounts if m not in env.mounts]
+            with self._step(ui, "Environment"):
+                touch(path, name=env.name, components=all_packs, mounts=merged)
 
-        with self._step(ui, "Materializing"):
-            self._materializer.materialize(
-                structure_dir,
-                mounts=merged,
-                components_dir=self._components_dir(path),
-            )
-
-        self._report_mounts(ui, mounts)
-
-        with self._step(ui, "Deployment"):
-            existing = load_installation(path / ".yak" / "deployment.yml")
-            self._assemble(structure_dir, path / ".yak", existing=existing, asker=asker)
-
-        existing_inst = self.load(path)
-        now = datetime.now(UTC)
-        inst = Installation(
-            name=existing_inst.name if existing_inst else target,
-            root=path.resolve(),
-            packs=all_packs,
-            components=(existing_inst.components if existing_inst else []) + records,
-            status=InstallationStatus.MATERIALIZED,
-            created=now,
-            updated=now,
-        )
-        self._write_state(inst)
-
-        with self._step(ui, "Environment"):
-            touch(path, name=env.name, components=all_packs, mounts=merged)
-
-        inst.status = InstallationStatus.CREATED
-        inst.updated = datetime.now(UTC)
-        self._write_state(inst)
-        return inst
+            inst.status = InstallationStatus.CREATED
+            inst.updated = datetime.now(UTC)
+            self._write_state(inst)
+            return inst
+        except Exception:
+            # The operation failed after components were staged: roll back
+            # the partial staging/payload so no residue remains.
+            for record in records:
+                self._cleanup_component(path, record)
+            raise
 
     def _resolve_component(
-        self, target: str, *, sources: list[str] | None = None
+        self,
+        target: str,
+        *,
+        sources: list[str] | None = None,
+        sources_exclusive: bool = False,
     ) -> _Component | None:
         """Resolve a name to a pack, a built artifact or a tool (host app)."""
         pack = self._repo.resolve_pack(target)
@@ -238,10 +257,10 @@ class InstallationManager:
         if tool is not None:
             return _Component(kind="tool", name=target, tool=tool)
 
-        artifact = find_artifact(target, sources=sources)
+        artifact = find_artifact(target, sources=sources, exclusive=sources_exclusive)
         if artifact is not None:
             return _Component(kind="artifact", name=target, artifact=artifact)
-        return None
+        return self._resolve_platform_component(target)
 
     def _make_available(
         self,
@@ -255,12 +274,14 @@ class InstallationManager:
         """Make the component available in the installation's environment.
 
         Returns (all_packs, mounts, records) or None when nothing is new.
-        The mounts always reference the staged component store
-        (``.yak/components/<name>/structure``), never an artifact store
-        or a language package.
+        Staging goes through ``_ensure_component`` so ``add`` and
+        ``update`` share the same mechanism; on failure any partially
+        staged components are cleaned up before re-raising.
         """
         if component.kind == "pack":
-            return self._make_pack_available(component, target, path, existing_packs)
+            return self._make_pack_available(
+                component, target, path, existing_packs, force
+            )
         if component.kind == "tool":
             return self._make_tool_available(component, path, existing_packs)
         return self._make_artifact_available(
@@ -285,9 +306,7 @@ class InstallationManager:
             packs=existing_packs + [PackName(tool.name)],
         )
         self._installer.install(inst, tools=[tool], sdk_path=self._sdk_path)
-        records = [
-            Component(name=tool.name, mode="tool", package=f"y5n-apps-{tool.name}")
-        ]
+        records = [self._ensure_component(path, tool.name, component)]
         return existing_packs + [PackName(tool.name)], [], records
 
     def _make_pack_available(
@@ -296,14 +315,9 @@ class InstallationManager:
         target: str,
         path: Path,
         existing_packs: list,
+        force: bool,
     ) -> tuple[list, list, list] | None:
-        """Link a source pack into the installation (editable).
-
-        The pack's structure is staged as a symlink under
-        ``.yak/components/<name>/structure``; the workspace mounts from
-        that staged path, so edits in the pack's source tree stay
-        visible while the workspace never references the source directly.
-        """
+        """Link a source pack into the installation (editable)."""
         pack = component.pack
         assert pack is not None
         # A pack is one unit; its mounts name the packs it depends on.
@@ -317,44 +331,32 @@ class InstallationManager:
 
         records: list[Component] = []
         mounts: list[Mount] = []
-        for name in added:
-            pack_dir = self._repo.resolve_pack_dir(str(name))
-            structure = (pack_dir / "structure") if pack_dir else None
-            mount = (pack.mount or f"/{target}") if name == PackName(target) else ""
-            if structure is not None and structure.is_dir():
-                self._stage_structure(path, str(name), structure, copy=False)
-                records.append(
-                    Component(
+        try:
+            for name in added:
+                if str(name) == target:
+                    comp = component
+                else:
+                    comp = self._resolve_component(str(name)) or _Component(
+                        kind="pack",
                         name=str(name),
-                        mode="source",
-                        source=str(structure),
-                        mount=mount,
-                        package=f"y5n-packs-{name}",
+                        pack=Pack(name=str(name), version="0.1"),
                     )
-                )
-                if mount:
-                    mounts.append(
-                        Mount(
-                            source=str(self._component_structure(path, str(name))),
-                            target=mount,
-                        )
-                    )
-            else:
-                records.append(
-                    Component(
-                        name=str(name),
-                        mode="source",
-                        mount=mount,
-                        package=f"y5n-packs-{name}",
-                    )
-                )
+                record = self._ensure_component(path, str(name), comp, force=force)
+                records.append(record)
+                staged = self._component_structure(path, str(name))
+                if record.mount and staged.exists():
+                    mounts.append(Mount(source=str(staged), target=record.mount))
 
-        inst = Installation(
-            name=target,
-            root=path.resolve(),
-            packs=all_packs,
-        )
-        self._installer.install(inst, tools=pack.tools, sdk_path=self._sdk_path)
+            inst = Installation(
+                name=target,
+                root=path.resolve(),
+                packs=all_packs,
+            )
+            self._installer.install(inst, tools=pack.tools, sdk_path=self._sdk_path)
+        except Exception:
+            for record in records:
+                self._cleanup_component(path, record)
+            raise
         return all_packs, mounts, records
 
     def _make_artifact_available(
@@ -376,60 +378,157 @@ class InstallationManager:
             raise RuntimeError(f"Failed to install artifact: {target}")
 
         all_packs = existing_packs + [PackName(target)]
-        records, mounts = self._stage_artifact(component.artifact, target, path)
-        return all_packs, mounts, records
-
-    def _stage_artifact(
-        self, artifact, target: str, path: Path
-    ) -> tuple[list[Component], list[Mount]]:
-        """Stage an artifact into .yak/components and produce its mounts.
-
-        A pack artifact copies its structure into the component store
-        (self-contained: the installation works without the artifact
-        store afterwards). A meta-artifact declares workspace mounts and
-        contributes no namespace of its own.
-        """
-        if artifact is None:
-            return [Component(name=target, mode="artifact")], []
-
-        # A meta-artifact: its declared workspace mounts.
-        if artifact.is_meta():
+        record = self._ensure_component(path, target, component, force=force)
+        mounts: list[Mount] = []
+        artifact = component.artifact
+        if artifact is not None and artifact.is_meta():
+            # A meta-artifact declares workspace mounts and contributes
+            # no namespace of its own.
             from y5n.apps.yak.resolver.artifact import load_workspace_manifest
 
-            mounts: list[Mount] = []
             if artifact.manifest is not None:
                 ws = load_workspace_manifest(artifact.manifest)
                 if ws is not None:
                     mounts = self.resolve_mount_sources(ws.mounts)
-            return [
-                Component(
-                    name=target,
-                    mode="artifact",
-                    version=artifact.version,
-                    fingerprint=artifact.fingerprint,
-                )
-            ], mounts
+        else:
+            staged = self._component_structure(path, target)
+            if record.mount and staged.exists():
+                mounts.append(Mount(source=str(staged), target=record.mount))
+        return all_packs, mounts, [record]
 
-        # A pack artifact: copy its structure into the component store.
-        mount = artifact.mount or f"/{target}"
+    def _ensure_component(
+        self,
+        path: Path,
+        name: str,
+        component: _Component,
+        *,
+        force: bool = False,
+    ) -> Component:
+        """Stage ``.yak/components/<name>`` to match the resolved component.
+
+        Source components become a symlink (editable), artifact components
+        a local copy (self-contained). The staged object is replaced when
+        it is missing, of the wrong kind (mode change) or ``force`` is
+        set. Returns the IST ``Component`` record.
+        """
+        staged = self._component_structure(path, name)
+
+        if component.kind == "tool":
+            return Component(name=name, mode="tool", package=f"y5n-apps-{name}")
+
+        if component.kind == "pack":
+            pack = component.pack
+            mount = (pack.mount or f"/{name}") if pack is not None else f"/{name}"
+            record = Component(
+                name=name,
+                mode="source",
+                mount=mount,
+                package=f"y5n-packs-{name}",
+            )
+            source = self._pack_structure(name)
+            if source is not None and source.is_dir():
+                replace = force or self._staging_mismatch(staged, mode="source")
+                self._stage_structure(path, name, source, copy=False, replace=replace)
+                return Component(
+                    name=name,
+                    mode="source",
+                    source=str(source),
+                    mount=mount,
+                    package=record.package,
+                )
+            return record
+
+        artifact = component.artifact
+        if artifact is None:
+            return Component(name=name, mode="artifact")
         record = Component(
-            name=target,
+            name=name,
             mode="artifact",
             version=artifact.version,
             fingerprint=artifact.fingerprint,
-            mount=mount,
+            mount=artifact.mount or f"/{name}",
             package=self._wheel_dist(artifact.package_file),
         )
-        mounts = []
-        if artifact.structure is not None:
-            self._stage_structure(path, target, artifact.structure, copy=True)
-            mounts = [
-                Mount(
-                    source=str(self._component_structure(path, target)),
-                    target=mount,
+        if not artifact.is_meta() and artifact.structure is not None:
+            replace = force or self._staging_mismatch(staged, mode="artifact")
+            self._stage_structure(
+                path, name, artifact.structure, copy=True, replace=replace
+            )
+        return record
+
+    def _pack_structure(self, name: str) -> Path | None:
+        """The structure dir of a source-pack component, incl. platform."""
+        if name == "root" and self._packs_root is not None:
+            src = self._packs_root / "y5n-packs-root" / "structure"
+            if src.is_dir():
+                return src
+        if name == "boot" and self._runtime_root is not None:
+            src = self._runtime_root / "y5n-runtime-boot" / "structure"
+            if src.is_dir():
+                return src
+        pack_dir = self._repo.resolve_pack_dir(name)
+        if pack_dir is not None:
+            src = pack_dir / "structure"
+            if src.is_dir():
+                return src
+        return None
+
+    def _resolve_platform_component(self, name: str) -> _Component | None:
+        """Resolve the platform namespaces root and boot as components."""
+        if name == "root" and self._packs_root is not None:
+            src = self._packs_root / "y5n-packs-root" / "structure"
+            if src.is_dir():
+                return _Component(
+                    kind="pack",
+                    name="root",
+                    pack=Pack(name="root", version="0.1", mount="/"),
                 )
-            ]
-        return [record], mounts
+        if name == "boot" and self._runtime_root is not None:
+            src = self._runtime_root / "y5n-runtime-boot" / "structure"
+            if src.is_dir():
+                return _Component(
+                    kind="pack",
+                    name="boot",
+                    pack=Pack(name="boot", version="0.1", mount="/boot"),
+                )
+        return None
+
+    @staticmethod
+    def _staging_mismatch(staged: Path, *, mode: str) -> bool:
+        """Whether the staged structure does not match the desired mode."""
+        if mode == "source":
+            return not (staged.is_symlink() and staged.exists())
+        return not (staged.is_dir() and not staged.is_symlink())
+
+    @staticmethod
+    def _record_mode(component: _Component) -> str:
+        return {"pack": "source", "artifact": "artifact", "tool": "tool"}[
+            component.kind
+        ]
+
+    def _cleanup_component(self, path: Path, record: Component) -> None:
+        """Remove a component's staged namespace and installed payload."""
+        comp_dir = self._components_dir(path) / record.name
+        if comp_dir.exists():
+            shutil.rmtree(comp_dir, ignore_errors=True)
+        if record.package:
+            python = path / ".venv" / "bin" / "python"
+            if python.exists():
+                subprocess.run(
+                    [str(python), "-m", "pip", "uninstall", "-y", record.package],
+                    capture_output=True,
+                    check=False,
+                )
+
+    @staticmethod
+    def _merge_component_records(
+        existing: list[Component], added: list[Component]
+    ) -> list[Component]:
+        """Merge IST records — exactly one per component name."""
+        by_name = {c.name: c for c in existing}
+        for record in added:
+            by_name[record.name] = record
+        return list(by_name.values())
 
     @staticmethod
     def _wheel_dist(package_file: Path | None) -> str:
@@ -470,58 +569,43 @@ class InstallationManager:
         now = datetime.now(UTC)
         structure_dir = path / env.workspace_path
         desired = [str(c) for c in env.components]
-        actual = [c.name for c in inst.components]
         merged = {c.name: c for c in inst.components}
 
         with self._step(ui, "Reconciling"):
-            missing = [d for d in desired if d not in actual]
-            obsolete = [a for a in actual if a not in desired]
-
-            from y5n.apps.yak.resolver.install import find_artifact, install_artifact
-
-            for name in missing:
+            for name in desired:
                 component = self._resolve_component(name)
                 if component is None:
                     continue
-                made = self._make_available(
-                    component,
-                    name,
-                    path,
-                    [PackName(n) for n in actual],
-                    False,
-                    None,
+                record = merged.get(name)
+                fingerprint_drift = (
+                    record is not None
+                    and component.kind == "artifact"
+                    and component.artifact is not None
+                    and component.artifact.fingerprint
+                    and component.artifact.fingerprint != record.fingerprint
                 )
-                if made is None:
-                    continue
-                _, _, records = made
-                for record in records:
-                    merged[record.name] = record
+                mode_drift = (
+                    record is not None and self._record_mode(component) != record.mode
+                )
+                if record is None or fingerprint_drift or mode_drift:
+                    if fingerprint_drift:
+                        from y5n.apps.yak.resolver.install import install_artifact
 
+                        install_artifact(name, target_root=path, force=True)
+                    merged[name] = self._ensure_component(
+                        path, name, component, force=True
+                    )
+                else:
+                    # Heals a missing/broken staged structure; a no-op when
+                    # the staged component already matches the desired state.
+                    merged[name] = self._ensure_component(path, name, component)
+
+            obsolete = [name for name in merged if name not in desired]
             for name in obsolete:
                 self._remove_component(path, name)
                 merged.pop(name, None)
 
-            for name in desired:
-                record = merged.get(name)
-                if record is None or record.mode != "artifact":
-                    continue
-                artifact = find_artifact(name)
-                if artifact is None or artifact.is_meta():
-                    continue
-                if artifact.fingerprint and artifact.fingerprint != record.fingerprint:
-                    install_artifact(name, target_root=path, force=True)
-                    if artifact.structure is not None:
-                        self._stage_structure(
-                            path, name, artifact.structure, copy=True, replace=True
-                        )
-                    merged[name] = Component(
-                        name=name,
-                        mode="artifact",
-                        version=artifact.version,
-                        fingerprint=artifact.fingerprint,
-                        mount=artifact.mount or record.mount,
-                        package=self._wheel_dist(artifact.package_file),
-                    )
+            self._remove_orphans(path, set(desired))
 
         new_records = [merged.get(d, Component(name=d)) for d in desired]
 
@@ -562,22 +646,22 @@ class InstallationManager:
 
     def _remove_component(self, path: Path, name: str) -> None:
         """Remove a component: drop its staged namespace and uninstall it."""
-        comp_dir = self._components_dir(path) / name
-        if comp_dir.exists():
-            shutil.rmtree(comp_dir, ignore_errors=True)
-
         inst = self.load(path)
-        if inst is None:
+        record = (
+            next((c for c in inst.components if c.name == name), None)
+            if inst is not None
+            else None
+        )
+        self._cleanup_component(path, record or Component(name=name))
+
+    def _remove_orphans(self, path: Path, desired: set[str]) -> None:
+        """Remove staged components that are not desired (not in SOLL)."""
+        comps = self._components_dir(path)
+        if not comps.is_dir():
             return
-        record = next((c for c in inst.components if c.name == name), None)
-        if record is not None and record.package:
-            python = path / ".venv" / "bin" / "python"
-            if python.exists():
-                subprocess.run(
-                    [str(python), "-m", "pip", "uninstall", "-y", record.package],
-                    capture_output=True,
-                    check=False,
-                )
+        for entry in comps.iterdir():
+            if entry.name not in desired and entry.is_dir():
+                shutil.rmtree(entry, ignore_errors=True)
 
     # ── Doctor ──
 
@@ -633,6 +717,18 @@ class InstallationManager:
                 else:
                     issues.append(f"✓ Component     {component.name} (tool)")
 
+        # Orphans: staged components that are not desired (SOLL).
+        if env:
+            desired = {str(c) for c in env.components}
+            comps_dir = self._components_dir(root)
+            if comps_dir.is_dir():
+                for entry in sorted(comps_dir.iterdir()):
+                    if entry.name not in desired and entry.is_dir():
+                        issues.append(
+                            f"✘ Orphan        .yak/components/{entry.name} — "
+                            "not in environment (run 'yak update')"
+                        )
+
         # Mount resolution
         if env:
             for mount in env.mounts:
@@ -672,7 +768,7 @@ class InstallationManager:
                 if _fingerprint_matches(artifact, root):
                     issues.append(f"✓ Fingerprint   {pack} current")
                 else:
-                    issues.append(f"✘ Fingerprint   {pack} outdated — run 'yak sync'")
+                    issues.append(f"✘ Fingerprint   {pack} outdated — run 'yak update'")
 
         # Runtime
         pid = self.runtime_status(root)
@@ -988,11 +1084,16 @@ class InstallationManager:
         points at the source directly, only through the staged path).
         Artifact components are copied (self-contained — the installation
         works without the artifact store afterwards). ``replace`` re-stages
-        an existing copy (used when an artifact component is updated).
+        an existing object — including a mode change between symlink and
+        directory (used when an artifact component is updated or a
+        component switches between source and artifact).
         """
         target = self._component_structure(path, name)
-        if target.exists() and replace:
-            shutil.rmtree(target, ignore_errors=True)
+        if replace and (target.exists() or target.is_symlink()):
+            if target.is_symlink() or target.is_file():
+                target.unlink()
+            else:
+                shutil.rmtree(target)
         if target.exists():
             return target
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -1007,27 +1108,14 @@ class InstallationManager:
 
         Neither provides commands — root defines the tree root and its
         ``.yak/path`` command paths; boot is the Python host namespace.
-        Both are staged into the component store like any other component.
+        Both are staged through the same ``_ensure_component`` mechanism
+        as any other component.
         """
         components: list[Component] = []
-        if self._packs_root is not None:
-            root_src = self._packs_root / "y5n-packs-root" / "structure"
-            if root_src.is_dir():
-                self._stage_structure(path, "root", root_src, copy=False)
-                components.append(
-                    Component(
-                        name="root", mode="source", source=str(root_src), mount="/"
-                    )
-                )
-        if self._runtime_root is not None:
-            boot_src = self._runtime_root / "y5n-runtime-boot" / "structure"
-            if boot_src.is_dir():
-                self._stage_structure(path, "boot", boot_src, copy=False)
-                components.append(
-                    Component(
-                        name="boot", mode="source", source=str(boot_src), mount="/boot"
-                    )
-                )
+        for name in ("root", "boot"):
+            component = self._resolve_platform_component(name)
+            if component is not None:
+                components.append(self._ensure_component(path, name, component))
         return components
 
     def _component_mounts(self, path: Path, components: list[Component]) -> list:

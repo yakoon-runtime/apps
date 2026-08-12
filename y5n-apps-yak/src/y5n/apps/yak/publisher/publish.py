@@ -34,29 +34,6 @@ def publish_local(name: str) -> Path | None:
     return dest
 
 
-def publish_github(name: str, repo: str, draft: bool = True) -> bool:
-    """Upload artifact as a GitHub Release asset (legacy publish path).
-
-    Superseded by ``yak deploy``; kept for ``publish --repository``.
-    """
-    from y5n.apps.yak.resolver.github import GithubReleaseRepository
-
-    src = _find_artifact(name)
-    if src is None:
-        return False
-    return GithubReleaseRepository(repo).deploy(name, src, draft=draft)
-
-
-def publish_artifact(
-    name: str, target: str | None = None, release: bool = False
-) -> Path | bool | None:
-    """Publish artifact. target can be a path or 'github:owner/repo'."""
-    if target and target.startswith("github:"):
-        ok = publish_github(name, target, draft=not release)
-        return ok
-    return publish_local(name)
-
-
 def deploy_artifact(name: str, target: str) -> bool | None:
     """Deploy a published artifact to a remote repository.
 

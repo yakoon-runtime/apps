@@ -26,7 +26,6 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import runtime as _runtime
     from y5n.apps.yak.hosts.cli.commands import shell as _shell
     from y5n.apps.yak.hosts.cli.commands import status as _status
-    from y5n.apps.yak.hosts.cli.commands import sync as _sync
     from y5n.apps.yak.hosts.cli.commands import update as _update
     from y5n.apps.yak.hosts.cli.commands import web as _web
     from y5n.apps.yak.hosts.cli.commands import workspace as _workspace
@@ -93,19 +92,6 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("status", help="Show installation status")
     p.set_defaults(func=_status.run)
 
-    p = sub.add_parser(
-        "sync",
-        help="Sync workspace with environment",
-    )
-    p.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="Force reinstall even if version is unchanged",
-    )
-    p.add_argument("--verbose", "-v", action="store_true")
-    p.set_defaults(func=_sync.run)
-
     p = sub.add_parser("mount", help="Manage workspace mounts")
     mount_sub = p.add_subparsers(dest="mount_action", required=True)
     p_add = mount_sub.add_parser("add", help="Add a mount")
@@ -133,12 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
 
-    p = sub.add_parser("publish", help="Publish an artifact")
+    p = sub.add_parser("publish", help="Publish an artifact to the local store")
     p.add_argument("name", help="Artifact name (e.g. y5n-packs-hello)")
-    p.add_argument("--repository", help="Target repository (e.g. github:owner/repo)")
-    p.add_argument(
-        "--release", action="store_true", help="Publish immediately (not draft)"
-    )
     p.set_defaults(func=_publish.run)
 
     p = sub.add_parser(

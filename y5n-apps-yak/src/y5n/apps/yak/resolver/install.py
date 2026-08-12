@@ -40,14 +40,21 @@ def _collect_roots(artifact_root: Path | None) -> list[Path]:
 _FORCE = False
 
 
-def _all_sources(extra_sources: list[str] | None = None) -> list:
-    """Collect all source implementations."""
+def _all_sources(
+    extra_sources: list[str] | None = None, *, exclusive: bool = False
+) -> list:
+    """Collect all source implementations.
+
+    By default local stores are searched first, then the extra sources.
+    With ``exclusive`` only the extra sources are used.
+    """
 
     sources: list = []
 
     # Local roots
-    for root in _collect_roots(None):
-        sources.append(DirectorySource(root))
+    if not exclusive:
+        for root in _collect_roots(None):
+            sources.append(DirectorySource(root))
 
     # Remote sources (github:owner/repo, etc.)
     for src in extra_sources or []:
@@ -63,9 +70,11 @@ def find_artifact(
     name: str,
     artifact_root: Path | None = None,
     sources: list[str] | None = None,
+    *,
+    exclusive: bool = False,
 ) -> Artifact | None:
     """Resolve an artifact by name from all configured sources."""
-    for source in _all_sources(sources):
+    for source in _all_sources(sources, exclusive=exclusive):
         candidate = source.resolve(name)
         if candidate is not None:
             return candidate

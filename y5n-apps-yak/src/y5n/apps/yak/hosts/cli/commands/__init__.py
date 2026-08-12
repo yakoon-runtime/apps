@@ -5,7 +5,6 @@ from y5n.apps.yak.hosts.cli.commands import (
     runtime,
     shell,
     status,
-    sync,
     web,
 )
 
@@ -16,6 +15,5 @@ __all__ = [
     "runtime",
     "shell",
     "status",
-    "sync",
     "web",
 ]
