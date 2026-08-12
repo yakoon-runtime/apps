@@ -211,9 +211,24 @@ Credentials come from the environment, never from configuration files:
     export GITHUB_TOKEN=<token>
     # or: export YAK_GITHUB_TOKEN=<token>
 
-`deploy` uses `GITHUB_TOKEN` (or `YAK_GITHUB_TOKEN`) and needs permission
-to create releases in the target repository. Tokens are never stored in
-`.yak/` configuration.
+Create the token at:
+
+    https://github.com/settings/personal-access-tokens
+
+`deploy` needs permission to create releases in the target repository:
+a fine-grained token requires **Contents: Read and write** for that
+repository; a classic token requires the `repo` scope. Tokens are never
+stored in `.yak/` configuration.
+
+A real deploy to a repository:
+
+    yak build y5n-apps-yak
+    yak publish y5n-apps-yak
+    yak deploy y5n-apps-yak --to github:acme/packs
+
+Any installation can then resolve the component from that repository:
+
+    yak add y5n-apps-yak --from github:acme/packs
 
 ## The model
 
