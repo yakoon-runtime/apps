@@ -192,6 +192,15 @@ An inline spec works without configuration:
 
     yak deploy acme-erp --to github:acme/packs
 
+Credentials come from the environment, never from configuration files:
+
+    export GITHUB_TOKEN=<token>
+    # or: export YAK_GITHUB_TOKEN=<token>
+
+`deploy` uses `GITHUB_TOKEN` (or `YAK_GITHUB_TOKEN`) and needs permission
+to create releases in the target repository. Tokens are never stored in
+`.yak/` configuration.
+
 ## The model
 
     install/bootstrap    creates the platform
