@@ -72,6 +72,48 @@ def find_artifact(
     return None
 
 
+def repository_for(spec: str):
+    """Resolve a repository name or inline spec to a client.
+
+    A name refers to ``[repositories.<name>]`` in the context; an inline
+    spec like ``github:owner/repo`` is used directly. Returns None when
+    the repository cannot be resolved.
+    """
+    from y5n.apps.yak.resolver.github import GithubReleaseRepository
+
+    if spec.startswith("github:") or "/" in spec:
+        return GithubReleaseRepository(spec)
+
+    from y5n.apps.yak.hosts.cli.cwd import Context
+
+    ctx = Context.current()
+    if ctx is None:
+        return None
+    cfg = ctx.named_repositories.get(spec)
+    if cfg is None or cfg.get("type") != "github":
+        return None
+    return GithubReleaseRepository(cfg.get("repo", spec))
+
+
+def expand_repository_specs(specs: list[str]) -> list[str]:
+    """Map repository names to inline specs (``github:owner/repo``)."""
+    from y5n.apps.yak.hosts.cli.cwd import Context
+
+    ctx = Context.current()
+    expanded: list[str] = []
+    for spec in specs:
+        if ":" in spec or "/" in spec:
+            expanded.append(spec)
+            continue
+        if ctx is not None:
+            cfg = ctx.named_repositories.get(spec)
+            if cfg is not None and cfg.get("type") == "github":
+                expanded.append(f"github:{cfg.get('repo', spec)}")
+                continue
+        expanded.append(spec)
+    return expanded
+
+
 def install_artifact(
     name: str,
     target_root: Path | None = None,

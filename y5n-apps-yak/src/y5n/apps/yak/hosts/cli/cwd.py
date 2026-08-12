@@ -18,6 +18,7 @@ class Context:
     schema: str = "1"
     source_dirs: list[Path] = field(default_factory=list)
     repository_sources: list[str] = field(default_factory=list)
+    named_repositories: dict[str, dict] = field(default_factory=dict)
 
     def resolve_sources(self) -> list[Path]:
         paths = list(self.source_dirs)
@@ -55,12 +56,20 @@ def _load_context(root: Path) -> Context:
     raw_repos = repos_section.get("sources", [])
     repository_sources = list(raw_repos) if isinstance(raw_repos, list) else []
 
+    named_repositories: dict[str, dict] = {}
+    for name, spec in repos_section.items():
+        if name == "sources" or not isinstance(spec, dict):
+            continue
+        if spec.get("type"):
+            named_repositories[name] = spec
+
     return Context(
         path=root,
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
         source_dirs=source_dirs,
         repository_sources=repository_sources,
+        named_repositories=named_repositories,
     )
 
 

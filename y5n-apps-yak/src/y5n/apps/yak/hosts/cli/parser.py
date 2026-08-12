@@ -16,6 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import build as _build
     from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
     from y5n.apps.yak.hosts.cli.commands import create_pack as _create_pack
+    from y5n.apps.yak.hosts.cli.commands import deploy as _deploy
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
     from y5n.apps.yak.hosts.cli.commands import install as _install
@@ -75,6 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force reinstall even if version is unchanged",
     )
     p.add_argument("--repository", help="Package repository (e.g. github:owner/repo)")
+    p.add_argument(
+        "--from",
+        dest="from_repo",
+        help="Named repository in the context (e.g. acme)",
+    )
     p.set_defaults(func=_add.run)
 
     p = sub.add_parser("update", help="Update the installation")
@@ -134,6 +140,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--release", action="store_true", help="Publish immediately (not draft)"
     )
     p.set_defaults(func=_publish.run)
+
+    p = sub.add_parser(
+        "deploy",
+        help="Make a published artifact available in a remote repository",
+    )
+    p.add_argument("name", help="Component name (e.g. crm)")
+    p.add_argument(
+        "--to",
+        required=True,
+        help="Repository name or spec (e.g. acme, github:owner/repo)",
+    )
+    p.set_defaults(func=_deploy.run)
 
     p = sub.add_parser(
         "build", help="Build artifacts from source into the current context"

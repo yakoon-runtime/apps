@@ -1,19 +1,21 @@
-"""GitHub Release repository — resolve artifacts from GitHub Releases."""
+"""GitHub Release repository — resolve and deploy artifacts."""
 
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tarfile
 import tempfile
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from y5n.apps.yak.resolver.artifact import Artifact, _parse_manifest
 
 
 class GithubReleaseRepository:
-    """Resolve artifacts from a GitHub repository's releases.
+    """Resolve and deploy artifacts from a GitHub repository's releases.
 
     Cache: ~/.yak/cache/github/<owner>/<repo>/<fingerprint>/<artifact_name>/
     """
@@ -89,7 +91,7 @@ class GithubReleaseRepository:
             tarpath = Path(tmp) / "artifact.tar.gz"
             tarpath.write_bytes(data)
             with tarfile.open(tarpath, "r:gz") as tar:
-                tar.extractall(path=tmp)
+                tar.extractall(path=tmp, filter="data")
 
             # Find the artifact dir (contains artifact.yml)
             artifact_dir = self._find_artifact_dir(Path(tmp), name)
@@ -118,3 +120,74 @@ class GithubReleaseRepository:
                 fingerprint=fp,
                 path=cached,
             )
+
+    def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
+        """Ship an artifact into this repository as a release asset.
+
+        Packages ``artifact_dir`` as ``<name>.artifact.tar.gz`` and
+        publishes it (non-draft by default) so that ``resolve(name)`` can
+        retrieve it immediately. Requires GITHUB_TOKEN or YAK_GITHUB_TOKEN.
+        """
+        token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if not token:
+            print("  GITHUB_TOKEN not set")
+            return False
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tarpath = Path(tmp) / f"{name}.artifact.tar.gz"
+            with tarfile.open(tarpath, "w:gz") as tar:
+                tar.add(artifact_dir, arcname=artifact_dir.name)
+
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            }
+
+            # Extract "0.1.0" from "crm-0.1.0.python.artifact"
+            version_part = artifact_dir.name.replace(f"{name}-", "").rsplit(".", 2)[0]
+            tag = f"{name}-v{version_part}"
+            release_data = {
+                "tag_name": tag,
+                "name": f"{name} {version_part}",
+                "draft": draft,
+            }
+            req = Request(
+                f"https://api.github.com/repos/{self._repo}/releases",
+                data=json.dumps(release_data).encode(),
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with urlopen(req) as resp:
+                    release = json.loads(resp.read().decode())
+            except HTTPError as exc:
+                body = exc.read().decode(errors="replace")
+                print(f"  GitHub API error: {exc}")
+                if body:
+                    print(f"  {body}")
+                return False
+            except Exception as exc:
+                print(f"  GitHub API error: {exc}")
+                return False
+
+            upload_url = release.get("upload_url", "").split("{")[0]
+            asset_data = tarpath.read_bytes()
+            asset_headers = {
+                **headers,
+                "Content-Type": "application/gzip",
+                "Content-Length": str(len(asset_data)),
+            }
+            asset_name = f"{name}.artifact.tar.gz"
+            upload_req = Request(
+                f"{upload_url}?name={asset_name}",
+                data=asset_data,
+                headers=asset_headers,
+                method="POST",
+            )
+            try:
+                with urlopen(upload_req) as resp:
+                    print(f"  Deployed {name} to {self._repo} release {tag}")
+                    return True
+            except Exception as exc:
+                print(f"  Failed to upload asset: {exc}")
+                return False

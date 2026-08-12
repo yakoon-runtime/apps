@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
 class Artifact:
@@ -61,6 +61,13 @@ class Artifact:
 
 class ArtifactSource(Protocol):
     def resolve(self, name: str) -> Artifact | None: ...
+
+
+@runtime_checkable
+class WritableRepository(Protocol):
+    """A repository that can also receive artifacts (``deploy``)."""
+
+    def deploy(self, name: str, artifact_dir: Path) -> bool: ...
 
 
 class DirectorySource:

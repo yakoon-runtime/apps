@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-import json
-import os
 import shutil
-import tarfile
-import tempfile
 from pathlib import Path
-from urllib.request import Request, urlopen
 
 from y5n.apps.yak.resolver.artifact import DirectorySource
 from y5n.apps.yak.resolver.install import _collect_roots
@@ -40,82 +35,16 @@ def publish_local(name: str) -> Path | None:
 
 
 def publish_github(name: str, repo: str, draft: bool = True) -> bool:
-    """Upload artifact as a GitHub Release asset.
+    """Upload artifact as a GitHub Release asset (legacy publish path).
 
-    Requires GITHUB_TOKEN environment variable.
-    repo format: "owner/repo" or "github:owner/repo"
+    Superseded by ``yak deploy``; kept for ``publish --repository``.
     """
-    repo = repo.removeprefix("github:")
-    token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    if not token:
-        print("  GITHUB_TOKEN not set")
-        return False
+    from y5n.apps.yak.resolver.github import GithubReleaseRepository
 
     src = _find_artifact(name)
     if src is None:
         return False
-
-    # Create tar.gz in temp dir
-    with tempfile.TemporaryDirectory() as tmp:
-        tarpath = Path(tmp) / f"{name}.artifact.tar.gz"
-        with tarfile.open(tarpath, "w:gz") as tar:
-            tar.add(src, arcname=src.name)
-
-        # Get or create release
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github.v3+json",
-        }
-
-        # Create tag and release
-        # Extract "0.1.0" from "y5n-apps-yak-0.1.0.python.artifact"
-        version_part = src.name.replace(f"{name}-", "").rsplit(".", 2)[0]
-        tag = f"{name}-v{version_part}"
-        release_data = {
-            "tag_name": tag,
-            "name": f"{name} {version_part}",
-            "draft": draft,
-        }
-        req = Request(
-            f"https://api.github.com/repos/{repo}/releases",
-            data=json.dumps(release_data).encode(),
-            headers=headers,
-            method="POST",
-        )
-        try:
-            with urlopen(req) as resp:
-                release = json.loads(resp.read().decode())
-        except Exception as e:
-            body = e.read().decode() if hasattr(e, "read") else ""
-            print(f"  GitHub API error: {e}")
-            if body:
-                print(f"  {body}")
-            return False
-
-        release_id = release.get("id")
-        upload_url = release.get("upload_url", "").split("{")[0]
-
-        # Upload asset
-        asset_data = tarpath.read_bytes()
-        asset_headers = {
-            **headers,
-            "Content-Type": "application/gzip",
-            "Content-Length": str(len(asset_data)),
-        }
-        asset_name = f"{name}.artifact.tar.gz"
-        upload_req = Request(
-            f"{upload_url}?name={asset_name}",
-            data=asset_data,
-            headers=asset_headers,
-            method="POST",
-        )
-        try:
-            with urlopen(upload_req) as resp:
-                print(f"  Published {name} to {repo} release {tag}")
-                return True
-        except Exception as e:
-            print(f"  Failed to upload asset: {e}")
-            return False
+    return GithubReleaseRepository(repo).deploy(name, src, draft=draft)
 
 
 def publish_artifact(
@@ -126,3 +55,23 @@ def publish_artifact(
         ok = publish_github(name, target, draft=not release)
         return ok
     return publish_local(name)
+
+
+def deploy_artifact(name: str, target: str) -> bool | None:
+    """Deploy a published artifact to a remote repository.
+
+    Reads only from the system-wide store (``~/.yak/artifacts/``) — an
+    artifact must be published first (``yak publish``). Returns None when
+    the artifact is not published, otherwise the deploy result.
+    """
+    from y5n.apps.yak.resolver.install import repository_for
+
+    repository = repository_for(target)
+    if repository is None:
+        raise RuntimeError(f"Unknown repository: {target}")
+
+    published = DirectorySource(Path.home() / ".yak" / "artifacts").resolve(name)
+    if published is None or published.path is None:
+        return None
+
+    return repository.deploy(name, published.path)

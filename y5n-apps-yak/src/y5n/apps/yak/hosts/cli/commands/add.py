@@ -50,10 +50,15 @@ def _resolve_root(args) -> Path | None:
 
 
 def _repositories(args) -> list[str] | None:
-    """Repositories: CLI --repository overrides, otherwise the context."""
+    """Repositories: CLI --repository/--from overrides, otherwise the context."""
     cli_repo = getattr(args, "repository", None)
+    cli_from = getattr(args, "from_repo", None)
     if cli_repo:
         return [cli_repo]
+    if cli_from:
+        from y5n.apps.yak.resolver.install import expand_repository_specs
+
+        return expand_repository_specs([cli_from])
 
     from y5n.apps.yak.hosts.cli.cwd import Context
 
