@@ -43,7 +43,12 @@ def _start(mgr, path: Path) -> None:
         print(f"Runtime already running (pid {running})")
         return
 
-    pid = mgr.run_runtime(path)
+    try:
+        pid = mgr.run_runtime(path)
+    except RuntimeError as exc:
+        print("Runtime start failed.")
+        print(str(exc))
+        return
     if pid is None:
         print("Runtime start failed")
         return
@@ -57,6 +62,7 @@ def _stop(mgr, path: Path) -> None:
         print("Runtime not running")
     else:
         print(f"Runtime stopped (pid {pid})")
+    _report_untracked(mgr, path, tracked=pid)
 
 
 def _status(mgr, path: Path) -> None:
@@ -65,3 +71,17 @@ def _status(mgr, path: Path) -> None:
         print("Runtime not running")
     else:
         print(f"Runtime running (pid {pid})")
+    _report_untracked(mgr, path, tracked=pid)
+
+
+def _report_untracked(mgr, path: Path, *, tracked: int | None) -> None:
+    """Warn about a listener that is not the tracked runtime."""
+    occupant = mgr.runtime_occupant(path)
+    if occupant is None or occupant.pid == tracked:
+        return
+    kind = " (yakoon-runtime)" if occupant.yakoon else ""
+    print(
+        f"Note: pid {occupant.pid}{kind} is still listening on the runtime "
+        "port but is not tracked by this installation. "
+        "Stop it before starting this runtime."
+    )
