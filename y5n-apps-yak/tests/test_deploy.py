@@ -62,6 +62,23 @@ class FakeGithub:
         method = getattr(url, "method", "GET")
         data = getattr(url, "data", None)
 
+        if "/releases?" in full:
+            repo = full.split("/repos/", 1)[1].split("/releases", 1)[0]
+            release = self._release(repo)
+            releases = []
+            if release is not None:
+                assets = [
+                    {
+                        "name": name,
+                        "browser_download_url": (
+                            f"https://gh/{repo}/dl/{release['tag']}/{name}"
+                        ),
+                    }
+                    for name in release["assets"]
+                ]
+                releases.append({"tag_name": release["tag"], "assets": assets})
+            return _FakeResp(json.dumps(releases).encode())
+
         if "/releases/latest" in full:
             repo = full.split("/repos/", 1)[1].split("/releases", 1)[0]
             release = self._release(repo)

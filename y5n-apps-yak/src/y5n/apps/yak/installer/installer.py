@@ -117,12 +117,18 @@ class Installer:
         tool_dir = self._apps_root / pkg
         return tool_dir if tool_dir.is_dir() else None
 
+    def has_tool_source(self, name: str) -> bool:
+        """Whether a host app's source is available in this manager's roots."""
+        return self._find_tool(name) is not None
+
     def _ensure_venv(self, path: Path) -> Path:
         python = ensure_venv(path)
         upgrade_pip(python)
         return python
 
     def _find_projects(self, pack_dir: Path) -> list[Path]:
+        if not pack_dir.is_dir():
+            return []
         if self._has_project_file(pack_dir):
             return [pack_dir]
         projects: list[Path] = []

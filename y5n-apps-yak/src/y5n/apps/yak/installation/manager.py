@@ -165,6 +165,17 @@ class InstallationManager:
             self._context.environment, sources=self._repository_sources()
         )
 
+    def _install_artifact(self, name: str, path: Path, *, force: bool = False) -> bool:
+        """Install a component's wheel from the Context's repositories."""
+        from y5n.apps.yak.resolver.install import install_artifact
+
+        return install_artifact(
+            name,
+            target_root=path,
+            force=force,
+            sources=self._repository_sources(),
+        )
+
     def _materialize_environment(self, path: Path, manifest) -> list[Component]:
         """Reconcile a manifest into staged components (ADR-8).
 
@@ -179,9 +190,7 @@ class InstallationManager:
             if comp is None:
                 continue
             if comp.kind == "artifact":
-                from y5n.apps.yak.resolver.install import install_artifact
-
-                install_artifact(str(name), target_root=path)
+                self._install_artifact(str(name), path)
             components.append(self._ensure_component(path, str(name), comp))
         return components
 
@@ -454,7 +463,12 @@ class InstallationManager:
             root=path.resolve(),
             packs=existing_packs + [PackName(tool.name)],
         )
-        self._installer.install(inst, tools=[tool], sdk_path=self._sdk_path)
+        if self._installer.has_tool_source(tool.name):
+            self._installer.install(inst, tools=[tool], sdk_path=self._sdk_path)
+        else:
+            # Released: a host app is an ordinary artifact — its wheel comes
+            # from the repositories, not from a source checkout.
+            self._install_artifact(f"y5n-apps-{tool.name}", path)
         records = [self._ensure_component(path, tool.name, component)]
         return existing_packs + [PackName(tool.name)], [], records
 
@@ -522,7 +536,12 @@ class InstallationManager:
 
         from y5n.apps.yak.resolver.install import install_artifact
 
-        ok = install_artifact(target, target_root=path, force=force, sources=sources)
+        ok = install_artifact(
+            target,
+            target_root=path,
+            force=force,
+            sources=sources or self._repository_sources(),
+        )
         if not ok:
             raise RuntimeError(f"Failed to install artifact: {target}")
 
@@ -718,9 +737,7 @@ class InstallationManager:
                 )
                 if record is None or fingerprint_drift or mode_drift:
                     if fingerprint_drift:
-                        from y5n.apps.yak.resolver.install import install_artifact
-
-                        install_artifact(name, target_root=path, force=True)
+                        self._install_artifact(name, path, force=True)
                     merged[name] = self._ensure_component(
                         path, name, component, force=True
                     )

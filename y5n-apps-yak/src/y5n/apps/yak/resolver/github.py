@@ -24,6 +24,20 @@ class GithubReleaseRepository:
         self._repo = repo.removeprefix("github:")
         self._cache_root = Path.home() / ".yak" / "cache" / "github" / self._repo
 
+    def _auth_headers(self) -> dict:
+        """Authorization header when a GitHub token is available.
+
+        Authenticated calls lift the anonymous rate limit and unlock
+        private repositories; resolution stays anonymous without a token.
+        """
+        token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if not token:
+            return {}
+        return {"Authorization": f"token {token}"}
+
+    def _get(self, url: str):
+        return urlopen(Request(url, headers=self._auth_headers()))
+
     def _find_artifact_dir(self, parent: Path, name: str) -> Path | None:
         """Find the artifact subdirectory containing artifact.yml for `name`."""
         for child in parent.iterdir():
@@ -59,29 +73,16 @@ class GithubReleaseRepository:
                         path=artifact_dir,
                     )
 
-        # Fetch latest release from GitHub API
-        url = f"https://api.github.com/repos/{self._repo}/releases/latest"
-        try:
-            with urlopen(url) as resp:
-                release = json.loads(resp.read().decode())
-        except Exception:
-            return None
-
-        # Find asset matching artifact name
-        assets = release.get("assets", [])
-        target_name = f"{name}.artifact.tar.gz"
-        asset_url = None
-        for asset in assets:
-            if asset["name"] == target_name:
-                asset_url = asset["browser_download_url"]
-                break
-
+        # Find the release carrying this artifact. Artifacts live in their
+        # own per-component releases, so the single "latest" release is not
+        # enough — search across all releases.
+        asset_url = self._find_asset(f"{name}.artifact.tar.gz")
         if asset_url is None:
             return None
 
         # Download asset
         try:
-            with urlopen(asset_url) as resp:
+            with self._get(asset_url) as resp:
                 data = resp.read()
         except Exception:
             return None
@@ -119,37 +120,25 @@ class GithubReleaseRepository:
                 dependencies=meta.get("dependencies", []),
                 fingerprint=fp,
                 path=cached,
+                mount=meta.get("mount"),
             )
 
     def resolve_environment(self, name: str):
-        """Resolve an environment manifest from the latest release's assets.
+        """Resolve an environment manifest from the release assets.
 
         Environments are plain resources — release assets named
-        ``environments/<name>.yml`` (with ``:`` mapped to ``-``) — not
-        artifacts. The repository answers "do you know environment X?",
-        the same question it answers for artifacts.
+        ``<name>.yml`` (with ``:`` mapped to ``-``) — not artifacts. The
+        repository answers "do you know environment X?", the same question
+        it answers for artifacts.
         """
         from y5n.apps.yak.resolver.artifact import load_remote_environment
 
-        asset_name = f"environments/{name.replace(':', '-')}.yml"
-        url = f"https://api.github.com/repos/{self._repo}/releases/latest"
-        try:
-            with urlopen(url) as resp:
-                release = json.loads(resp.read().decode())
-        except Exception:
-            return None
-        asset_url = next(
-            (
-                a["browser_download_url"]
-                for a in release.get("assets", [])
-                if a["name"] == asset_name
-            ),
-            None,
-        )
+        asset_name = f"{name.replace(':', '-')}.yml"
+        asset_url = self._find_asset(asset_name)
         if asset_url is None:
             return None
         try:
-            with urlopen(asset_url) as resp:
+            with self._get(asset_url) as resp:
                 data = resp.read().decode()
         except Exception:
             return None
@@ -157,6 +146,92 @@ class GithubReleaseRepository:
             p = Path(tmp) / asset_name
             p.write_text(data)
             return load_remote_environment(p)
+
+    def deploy_resource(
+        self, asset_name: str, file_path: Path, *, version: str = "0.1"
+    ) -> bool:
+        """Publish a plain resource (e.g. an environment manifest).
+
+        Resources are release assets in their own per-resource release, so
+        ``resolve_environment`` can find them. Requires GITHUB_TOKEN or
+        YAK_GITHUB_TOKEN.
+        """
+        token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if not token:
+            print("  GITHUB_TOKEN not set")
+            return False
+
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+        }
+        tag = f"{asset_name}-v{version}"
+        release = self._release_by_tag(tag, headers)
+        if release is None:
+            release_data = {"tag_name": tag, "name": f"{asset_name} {version}"}
+            req = Request(
+                f"https://api.github.com/repos/{self._repo}/releases",
+                data=json.dumps(release_data).encode(),
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with urlopen(req) as resp:
+                    release = json.loads(resp.read().decode())
+            except HTTPError as exc:
+                print(f"  GitHub API error: {exc}")
+                return False
+            except Exception as exc:
+                print(f"  GitHub API error: {exc}")
+                return False
+
+        self._delete_asset(release["id"], asset_name, headers)
+        upload_url = release.get("upload_url", "").split("{")[0]
+        asset_data = file_path.read_bytes()
+        asset_headers = {
+            **headers,
+            "Content-Type": "text/yaml",
+            "Content-Length": str(len(asset_data)),
+        }
+        upload_req = Request(
+            f"{upload_url}?name={asset_name}",
+            data=asset_data,
+            headers=asset_headers,
+            method="POST",
+        )
+        try:
+            with urlopen(upload_req) as resp:
+                print(f"  Deployed resource {asset_name} to {self._repo} release {tag}")
+                return True
+        except Exception as exc:
+            print(f"  Failed to upload asset: {exc}")
+            return False
+
+    def _find_asset(self, asset_name: str) -> str | None:
+        """The download URL of an asset in any release, or None.
+
+        Artifacts and environments live in their own per-component or
+        per-resource releases; the single "latest" release is not enough.
+        """
+        page = 1
+        while True:
+            url = (
+                f"https://api.github.com/repos/{self._repo}/releases"
+                f"?per_page=100&page={page}"
+            )
+            try:
+                with self._get(url) as resp:
+                    releases = json.loads(resp.read().decode())
+            except Exception:
+                return None
+            if not isinstance(releases, list) or not releases:
+                return None
+            for release in releases:
+                for asset in release.get("assets", []):
+                    if asset.get("name") == asset_name:
+                        return asset["browser_download_url"]
+            page += 1
 
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
         """Ship an artifact into this repository as a release asset.

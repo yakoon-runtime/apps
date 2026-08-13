@@ -33,7 +33,13 @@ def _build_manager() -> InstallationManager:
     roots = ctx.resolve_sources() if ctx is not None else []
 
     # Monorepo paths for the installer (source projects it installs from).
+    # On a released install there is no monorepo — parents[8] resolves into
+    # the venv and the paths do not exist; the installer then gets None.
     repo_root = Path(__file__).resolve().parents[8]
+
+    def _source_dir(*parts: str) -> Path | None:
+        candidate = repo_root.joinpath(*parts)
+        return candidate if candidate.is_dir() else None
 
     repo = FileRepository(*roots)
     artifacts = DirectoryArtifactStore(*roots)
@@ -41,10 +47,10 @@ def _build_manager() -> InstallationManager:
         repo,
         artifacts,
         context=ctx,
-        sdk_path=repo_root / "sdk" / "y5n-sdk-python",
-        apps_root=repo_root / "apps",
-        runtime_root=repo_root / "runtime",
-        packs_root=repo_root / "packs",
+        sdk_path=_source_dir("sdk", "y5n-sdk-python"),
+        apps_root=_source_dir("apps"),
+        runtime_root=_source_dir("runtime"),
+        packs_root=_source_dir("packs"),
     )
 
 
