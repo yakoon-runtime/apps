@@ -4,6 +4,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
@@ -14,12 +15,20 @@ def test_sharp_install():
     root = Path(tempfile.mkdtemp(prefix="yak-sharp-"))
     try:
         repo_root = Path(__file__).resolve().parents[3]
-        packs = repo_root / "packs"
-        runtime = repo_root / "runtime"
+        source = root / "repo"
+        (source / "packs").mkdir(parents=True)
+        (source / "packs" / "y5n-packs-crm").symlink_to(
+            repo_root / "packs" / "y5n-packs-crm", target_is_directory=True
+        )
+        from conftest import make_source
 
-        repo = FileRepository(packs, runtime)
-        artifacts = DirectoryArtifactStore(packs, runtime)
-        mgr = InstallationManager(repo, artifacts)
+        make_source(source, {"y5n-packs-crm": {"location": "packs/y5n-packs-crm"}})
+        ctx = Context(path=root, sources=[str(source)])
+        mgr = InstallationManager(
+            FileRepository(),
+            DirectoryArtifactStore(),
+            context=ctx,
+        )
 
         inst = mgr.install(root / "installations" / "crm")
         assert inst.packs == []

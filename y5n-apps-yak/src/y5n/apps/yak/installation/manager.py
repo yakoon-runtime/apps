@@ -77,6 +77,22 @@ class InstallationManager:
         self._sdk_path = sdk_path
         self._runtime_root = runtime_root
         self._context = context
+        self._index_cache = None
+
+    def _index(self):
+        """The merged source index (ADR-20), built from the Context sources."""
+        if self._index_cache is None:
+            if self._context is not None and self._context.sources:
+                from y5n.apps.yak.resolver.catalog import build_index
+
+                self._index_cache = build_index(
+                    self._context.sources, self._context.path
+                )
+            else:
+                from y5n.apps.yak.resolver.catalog import Index
+
+                self._index_cache = Index()
+        return self._index_cache
 
     # ── Install ──
 
@@ -149,41 +165,51 @@ class InstallationManager:
         return inst
 
     def _resolve_install_environment(self):
-        """Resolve the Context's environment reference, if any."""
+        """Resolve the Context's environment reference through the index."""
         if self._context is None or not self._context.environment:
             return None
-        from y5n.apps.yak.resolver.install import resolve_environment
+        hit = self._index().resolve_environment(self._context.environment)
+        if hit is None:
+            return None
+        catalog, location = hit
+        from y5n.apps.yak.resolver.artifact import load_remote_environment
 
-        return resolve_environment(
-            self._context.environment, sources=self._repository_sources()
-        )
+        path = self._materialize_location(catalog, location)
+        if path is None:
+            return None
+        return load_remote_environment(path)
 
-    def _install_artifact(self, name: str, path: Path, *, force: bool = False) -> bool:
-        """Install a component's wheel from the Context's repositories."""
-        from y5n.apps.yak.resolver.install import install_artifact
+    def _install_artifact(self, artifact, path: Path, *, force: bool = False) -> bool:
+        """Install a resolved artifact's wheel into the installation venv."""
+        from y5n.apps.yak.installer.venv import ensure_venv
 
-        return install_artifact(
-            name,
-            target_root=path,
-            force=force,
-            sources=self._repository_sources(),
-        )
+        wheel = artifact.package_file
+        if wheel is None or not wheel.exists():
+            return True
+        python = ensure_venv(path / ".venv")
+        cmd = [str(python), "-m", "pip", "install"]
+        if force:
+            cmd.append("--force-reinstall")
+        cmd.append(str(wheel))
+        import subprocess
+
+        return subprocess.run(cmd, capture_output=True).returncode == 0
 
     def _materialize_environment(self, path: Path, manifest) -> list[Component]:
         """Reconcile a manifest into staged components (ADR-8).
 
         Yak knows no component names: every entry of the manifest is
-        resolved through the ordinary resolver, its wheel (if any) is
+        resolved through the source index, its wheel (if any) is
         installed, and its namespace staged — exactly like any component
         added later with ``yak add``.
         """
         components: list[Component] = []
         for name in manifest.components:
-            comp = self._resolve_component(str(name), naming=False)
+            comp = self._resolve_component(str(name))
             if comp is None:
                 continue
-            if comp.kind == "artifact":
-                self._install_artifact(str(name), path)
+            if comp.kind == "artifact" and comp.artifact is not None:
+                self._install_artifact(comp.artifact, path)
             components.append(self._ensure_component(path, str(name), comp))
         return components
 
@@ -288,69 +314,99 @@ class InstallationManager:
         sources_exclusive: bool = False,
         naming: bool = True,
     ) -> _Component | None:
-        """Resolve a component through one Context (ADR-8).
+        """Resolve a component through the source index (ADR-20).
 
-        Order: an explicit ``[sources]`` location → a source pack known to
-        the file repository by name (transition) → a tool (host app) → a
-        released artifact from the configured repositories. Repositories
-        default to the Context so that ``add`` and ``update`` always
-        agree. ``naming=False`` skips the name-based fallback: platform
-        namespaces resolve only through explicit locations or artifacts.
+        ``index.resolve(name)`` returns the first exact hit in source
+        order; the located resource becomes a source pack or an artifact.
+        There is no search, no name interpretation, and no fallback: an
+        unknown identity resolves to nothing.
         """
-        source = self._source_component(target)
-        if source is not None:
-            return source
+        hit = self._index().resolve(target)
+        if hit is None:
+            return None
+        catalog, ref = hit
+        return self._component_from_ref(target, catalog, ref)
 
-        if naming:
-            pack = self._repo.resolve_pack(target)
-            if pack is not None:
-                return _Component(kind="pack", name=pack.name, pack=pack)
+    def _component_from_ref(self, name: str, catalog, ref) -> _Component | None:
+        """Materialize a catalog entry into a source pack or an artifact.
 
-        from y5n.apps.yak.resolver.install import find_artifact
+        The located resource decides its own kind by its metadata
+        (``pack.toml`` → source pack, ``artifact.yml`` → artifact). The
+        catalog's declared identity must equal the component's own
+        identity — otherwise the load is an error.
+        """
+        from y5n.apps.yak.resolver.catalog import CatalogIdentityError
 
-        artifact = find_artifact(
-            target,
-            sources=(sources if sources is not None else self._repository_sources()),
-            exclusive=sources_exclusive,
-        )
+        resource = self._materialize_location(catalog, ref.location)
+        if resource is None:
+            return None
+        pack = self._read_pack(resource)
+        if pack is not None:
+            if pack.name != name:
+                raise CatalogIdentityError(
+                    f"catalog declares '{name}' but the component is "
+                    f"'{pack.name}' at {resource}"
+                )
+            structure = resource / "structure"
+            source = structure if structure.is_dir() else resource
+            return _Component(
+                kind="pack",
+                name=pack.name,
+                pack=Pack(name=pack.name, version=pack.version, mount=pack.mount),
+                source=source,
+            )
+        artifact = self._parse_artifact(resource)
         if artifact is not None:
-            return _Component(kind="artifact", name=target, artifact=artifact)
+            if artifact.name != name:
+                raise CatalogIdentityError(
+                    f"catalog declares '{name}' but the artifact is "
+                    f"'{artifact.name}' at {resource}"
+                )
+            return _Component(kind="artifact", name=name, artifact=artifact)
         return None
 
-    # ── Context source mapping (ADR-8) ──
+    def _materialize_location(self, catalog, location: str) -> Path | None:
+        """Resolve a source-relative catalog location to a local resource."""
+        if catalog.base is not None:
+            path = catalog.base / location
+            return path if path.exists() else None
+        from y5n.apps.yak.resolver.catalog import CatalogError
 
-    def _source_component(self, name: str) -> _Component | None:
-        """Resolve an explicitly located component to a source component.
-
-        The location is the Context's ``[sources]`` mapping (ADR-8). The
-        component's mount comes from its own ``pack.toml``; without one the
-        namespace mount defaults to ``/<name>``.
-        """
-        path = self._context_source_path(name)
-        if path is None:
-            return None
-        pack = self._read_pack(path)
-        if pack is None:
-            pack = Pack(name=name, version="0.1", mount=None)
-        mount = pack.mount or f"/{name}"
-        structure = path / "structure"
-        source = structure if structure.is_dir() else path
-        return _Component(
-            kind="pack",
-            name=pack.name or name,
-            pack=Pack(name=pack.name or name, version=pack.version, mount=mount),
-            source=source,
+        raise CatalogError(
+            f"remote source '{catalog.spec}' materialization is not "
+            f"implemented yet (local sources only)"
         )
 
-    def _context_source_path(self, name: str) -> Path | None:
-        """The Context's mapped path for a component (full name only)."""
-        if self._context is None:
+    @staticmethod
+    def _parse_artifact(resource: Path):
+        """Build an Artifact from a resolved ``artifact.yml`` directory."""
+        from y5n.apps.yak.resolver.artifact import (
+            Artifact,
+            _parse_manifest,
+        )
+
+        manifest = resource / "artifact.yml"
+        if not manifest.exists():
             return None
-        key = self._context.component_sources.get(name)
-        if key is None:
+        meta = _parse_manifest(manifest)
+        if meta is None:
             return None
-        p = Path(key)
-        return p if p.is_absolute() else (self._context.path / p).resolve()
+        fp = meta.get("fingerprint", "")
+        if fp.startswith("sha256:"):
+            fp = fp[7:]
+        return Artifact(
+            name=meta.get("name", ""),
+            version=meta.get("version", "0"),
+            kind=meta.get("kind", "package"),
+            host=meta.get("host", "python"),
+            builder=meta.get("builder", "python"),
+            dependencies=meta.get("dependencies", []),
+            fingerprint=fp,
+            path=resource,
+            mount=meta.get("mount"),
+        )
+
+    # ── Context source mapping (removed in ADR-20; sources replace it) ──
 
     @staticmethod
     def _read_pack(path: Path) -> Pack | None:
@@ -367,25 +423,6 @@ class InstallationManager:
             version=data.get("version", "0.1"),
             mount=data.get("mount"),
         )
-
-    def _repository_sources(self) -> list[str]:
-        """The Context's repositories as inline specs (empty without a Context).
-
-        Both the ``sources`` list and every named GitHub repository are
-        read sources — ``official = "github:yakoon-runtime/apps"`` is a
-        valid resolution source, not only a deploy target.
-        """
-        if self._context is None:
-            return []
-        from y5n.apps.yak.resolver.install import expand_repository_specs
-
-        specs = list(self._context.repository_sources)
-        specs.extend(
-            name
-            for name, cfg in self._context.named_repositories.items()
-            if cfg.get("type") == "github"
-        )
-        return expand_repository_specs(specs)
 
     def _make_available(
         self,
@@ -473,16 +510,10 @@ class InstallationManager:
         if PackName(target) in existing_packs and not force:
             return None
 
-        from y5n.apps.yak.resolver.install import install_artifact
-
-        ok = install_artifact(
-            target,
-            target_root=path,
-            force=force,
-            sources=sources or self._repository_sources(),
-        )
-        if not ok:
-            raise RuntimeError(f"Failed to install artifact: {target}")
+        if component.artifact is not None:
+            ok = self._install_artifact(component.artifact, path, force=force)
+            if not ok:
+                raise RuntimeError(f"Failed to install artifact: {target}")
 
         all_packs = existing_packs + [PackName(target)]
         record = self._ensure_component(path, target, component, force=force)
@@ -662,8 +693,8 @@ class InstallationManager:
                     record is not None and self._record_mode(component) != record.mode
                 )
                 if record is None or fingerprint_drift or mode_drift:
-                    if fingerprint_drift:
-                        self._install_artifact(name, path, force=True)
+                    if fingerprint_drift and component.artifact is not None:
+                        self._install_artifact(component.artifact, path, force=True)
                     merged[name] = self._ensure_component(
                         path, name, component, force=True
                     )

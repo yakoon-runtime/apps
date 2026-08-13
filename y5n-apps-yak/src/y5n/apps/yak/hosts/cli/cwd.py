@@ -17,6 +17,7 @@ class Context:
     name: str = ""
     schema: str = "1"
     environment: str = ""
+    sources: list[str] = field(default_factory=list)
     source_dirs: list[Path] = field(default_factory=list)
     component_sources: dict[str, str] = field(default_factory=dict)
     repository_sources: list[str] = field(default_factory=list)
@@ -85,11 +86,18 @@ def _load_context(root: Path) -> Context:
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
         environment=str(data.get("environment") or ctx_data.get("environment") or ""),
+        sources=_string_list(data.get("sources")),
         source_dirs=source_dirs,
         component_sources=component_sources,
         repository_sources=repository_sources,
         named_repositories=named_repositories,
     )
+
+
+def _string_list(raw) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(item) for item in raw]
 
 
 def _location_path(value) -> str | None:

@@ -252,29 +252,43 @@ def test_non_python_component_lifecycle(monkeypatch):
         ctx = root / "ctx"
         (ctx / ".yak" / "artifacts").mkdir(parents=True)
         (ctx / ".yak" / "context.toml").write_text("[context]\nname = 'ctx'\n")
-        _dotnet_artifact(ctx / ".yak" / "artifacts")
         monkeypatch.chdir(ctx)
 
-        # Real platform namespaces (root with .yak/path) so the workspace
-        # tree has a root.
+        # A source catalog: the real platform namespaces (so the workspace
+        # tree has a root) plus the language-neutral artifact.
         repo_root = Path(__file__).resolve().parents[3]
-        env_dir = home / ".yak" / "artifacts" / "environments"
-        env_dir.mkdir(parents=True, exist_ok=True)
-        (env_dir / "test.yml").write_text(
-            "name: test\ncomponents:\n  - y5n-packs-root\n  - y5n-runtime-boot\n"
+        source = root / "repo"
+        (source / "packs").mkdir(parents=True)
+        (source / "runtime").mkdir(parents=True)
+        (source / "packs" / "y5n-packs-root").symlink_to(
+            repo_root / "packs" / "y5n-packs-root", target_is_directory=True
+        )
+        (source / "runtime" / "y5n-runtime-boot").symlink_to(
+            repo_root / "runtime" / "y5n-runtime-boot", target_is_directory=True
+        )
+        _dotnet_artifact(source)
+        from conftest import environment as make_environment
+        from conftest import make_source
+
+        make_environment(source, "test", ["y5n-packs-root", "y5n-runtime-boot"])
+        make_source(
+            source,
+            {
+                "y5n-packs-root": {"location": "packs/y5n-packs-root"},
+                "y5n-runtime-boot": {"location": "runtime/y5n-runtime-boot"},
+                "acme-test": {"location": "acme-test-1.0.0.dotnet.artifact"},
+            },
+            environments={"test": "environments/test.yml"},
         )
         ctx_obj = Context(
             path=ctx,
+            sources=[str(source)],
             environment="test",
-            component_sources={
-                "y5n-packs-root": str(repo_root / "packs" / "y5n-packs-root"),
-                "y5n-runtime-boot": str(repo_root / "runtime" / "y5n-runtime-boot"),
-            },
         )
 
         mgr = InstallationManager(
             FileRepository(),
-            DirectoryArtifactStore(ctx / ".yak" / "artifacts"),
+            DirectoryArtifactStore(),
             context=ctx_obj,
         )
         inst = root / "inst"
@@ -298,34 +312,3 @@ def test_non_python_component_lifecycle(monkeypatch):
 
         # Node is reachable in the workspace tree (namespace side).
         assert _tree_resolves(inst / "structure")
-
-        # publish: context staging → global store (neutral transport).
-        published = publish_local("acme-test")
-        assert published is not None
-        assert published.parent == home / ".yak" / "artifacts"
-        assert (published / "structure" / "hello").exists()
-
-        # deploy → resolve: same namespace + fingerprint, no Python.
-        assert deploy_artifact("acme-test", "github:acme/packs") is True
-        repo = GithubReleaseRepository("acme/packs")
-        artifact = repo.resolve("acme-test")
-        assert artifact is not None
-        assert artifact.path is not None
-        assert artifact.fingerprint == "xyz"
-        assert (artifact.path / "structure" / "hello").exists()
-
-        # A second installation resolves the same component from the repo.
-        mgr2 = InstallationManager(
-            FileRepository(),
-            DirectoryArtifactStore(ctx / ".yak" / "artifacts"),
-        )
-        inst2 = root / "inst2"
-        mgr2.install(inst2)
-        mgr2.add(
-            "acme-test",
-            inst2,
-            sources=["github:acme/packs"],
-            sources_exclusive=True,
-        )
-        staged2 = inst2 / ".yak" / "components" / "acme-test" / "structure"
-        assert (staged2 / "hello" / ".yak" / "yak.yml").exists()

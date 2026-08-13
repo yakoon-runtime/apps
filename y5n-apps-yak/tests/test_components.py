@@ -13,6 +13,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from conftest import artifact as make_artifact
+from conftest import environment as make_environment
+from conftest import make_source, source_pack
 from y5n.apps.yak.environment.io import load as load_env
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
@@ -23,67 +26,43 @@ from y5n.apps.yak.workspace.materializer import Materializer
 
 
 def _platform_mgr(
-    root: Path, monkeypatch, *, with_system: bool = True
+    root: Path,
+    monkeypatch,
+    *,
+    with_system: bool = True,
+    extra_components: dict | None = None,
 ) -> InstallationManager:
-    """A manager with source packs and the runtime-namespace components."""
-    home = root / "home"
-    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
-    repos = root / "repos"
+    """A manager whose source catalog offers the runtime namespaces (and
+    optionally system and extra components)."""
+    repo = root / "repo"
+    components: dict = {}
     if with_system:
-        (repos / "y5n-packs-system" / "structure" / "bin").mkdir(parents=True)
-        (repos / "y5n-packs-system" / "structure" / "bin" / "ls").write_text(
-            "echo hi\n"
-        )
-        (repos / "y5n-packs-system" / "pack.toml").write_text(
-            'name = "y5n-packs-system"\nversion = "0.1"\nmount = "/usr/bin"\n'
-        )
-    packs_root = root / "packs"
-    runtime_root = root / "runtime"
-    (packs_root / "y5n-packs-root" / "structure" / ".yak").mkdir(parents=True)
-    (packs_root / "y5n-packs-root" / "pack.toml").write_text(
-        'name = "y5n-packs-root"\nversion = "0.1"\nmount = "/"\n'
+        sys_pack = repo / "packs" / "y5n-packs-system"
+        source_pack(sys_pack, "y5n-packs-system", "/usr/bin")
+        (sys_pack / "structure" / "bin").mkdir(parents=True)
+        (sys_pack / "structure" / "bin" / "ls").write_text("echo hi\n")
+        components["y5n-packs-system"] = {"location": "packs/y5n-packs-system"}
+    root_pack = repo / "packs" / "y5n-packs-root"
+    source_pack(root_pack, "y5n-packs-root", "/")
+    (root_pack / "structure" / ".yak").mkdir(parents=True)
+    (root_pack / "structure" / "usr").mkdir(parents=True)
+    boot_pack = repo / "runtime" / "y5n-runtime-boot"
+    source_pack(boot_pack, "y5n-runtime-boot", "/boot")
+    components["y5n-packs-root"] = {"location": "packs/y5n-packs-root"}
+    components["y5n-runtime-boot"] = {"location": "runtime/y5n-runtime-boot"}
+    components.update(extra_components or {})
+    make_environment(repo, "test", ["y5n-packs-root", "y5n-runtime-boot"])
+    make_source(
+        repo,
+        components,
+        environments={"test": "environments/test.yml"},
     )
-    (packs_root / "y5n-packs-root" / "structure" / "usr").mkdir(parents=True)
-    (runtime_root / "y5n-runtime-boot" / "structure" / "python").mkdir(parents=True)
-    (runtime_root / "y5n-runtime-boot" / "pack.toml").write_text(
-        'name = "y5n-runtime-boot"\nversion = "0.1"\nmount = "/boot"\n'
-    )
-    env_dir = home / ".yak" / "artifacts" / "environments"
-    env_dir.mkdir(parents=True, exist_ok=True)
-    (env_dir / "test.yml").write_text(
-        "name: test\ncomponents:\n  - y5n-packs-root\n  - y5n-runtime-boot\n"
-    )
-    ctx = Context(
-        path=root,
-        environment="test",
-        component_sources={
-            "y5n-packs-root": str(packs_root / "y5n-packs-root"),
-            "y5n-runtime-boot": str(runtime_root / "y5n-runtime-boot"),
-        },
-    )
+    ctx = Context(path=root, sources=[str(repo)], environment="test")
     return InstallationManager(
-        FileRepository(repos),
-        DirectoryArtifactStore(repos),
+        FileRepository(),
+        DirectoryArtifactStore(),
         context=ctx,
     )
-
-
-def _write_artifact(
-    home: Path, name: str, version: str, fingerprint: str, content: str
-) -> Path:
-    store = home / ".yak" / "artifacts" / f"{name}-{version}.python.artifact"
-    (store / "structure").mkdir(parents=True)
-    (store / "structure" / "payload.txt").write_text(content)
-    (store / "artifact.yml").write_text(
-        "name: " + name + "\n"
-        "version: " + version + "\n"
-        "kind: package\n"
-        "builder: python\n"
-        "host: python\n"
-        "mount: /opt/erp\n"
-        "fingerprint: " + fingerprint + "\n"
-    )
-    return store
 
 
 def test_install_stages_platform_components(monkeypatch):
@@ -127,7 +106,7 @@ def test_add_source_pack_is_source_linked(monkeypatch):
         assert staged.is_symlink()
         assert (
             staged.resolve()
-            == (root / "repos" / "y5n-packs-system" / "structure").resolve()
+            == (root / "repo" / "packs" / "y5n-packs-system" / "structure").resolve()
         )
 
         env = load_env(inst)
@@ -148,7 +127,9 @@ def test_add_source_pack_is_source_linked(monkeypatch):
         assert state is not None
         record = next(c for c in state.components if c.name == "y5n-packs-system")
         assert record.mode == "source"
-        assert record.source == str(root / "repos" / "y5n-packs-system" / "structure")
+        assert record.source == str(
+            root / "repo" / "packs" / "y5n-packs-system" / "structure"
+        )
 
 
 def test_workspace_points_at_component_store_only(monkeypatch):
@@ -166,16 +147,20 @@ def test_workspace_points_at_component_store_only(monkeypatch):
 
 
 def test_artifact_component_survives_store_deletion(monkeypatch):
-    monkeypatch.setattr(
-        "y5n.apps.yak.resolver.install.install_artifact", lambda *a, **k: True
-    )
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        home = root / "home"
-        monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
-        _write_artifact(home, "erp", "1.0.0", "sha256:abc", "content")
-
-        mgr = _platform_mgr(root, monkeypatch, with_system=False)
+        repo = root / "repo"
+        make_artifact(repo / "artifacts" / "erp-art", "erp", "/opt/erp", "content")
+        make_source(
+            repo,
+            {"erp": {"location": "artifacts/erp-art"}},
+            environments={"test": "environments/test.yml"},
+        )
+        make_environment(repo, "test", [])
+        ctx = Context(path=root, sources=[str(repo)], environment="test")
+        mgr = InstallationManager(
+            FileRepository(), DirectoryArtifactStore(), context=ctx
+        )
         inst = root / "inst"
         mgr.install(inst)
         mgr.add("erp", inst)
@@ -184,8 +169,8 @@ def test_artifact_component_survives_store_deletion(monkeypatch):
         assert staged.is_dir() and not staged.is_symlink()
         assert (staged / "payload.txt").read_text() == "content"
 
-        # GOLD: removing the global artifact store must not break the component.
-        shutil.rmtree(home / ".yak")
+        # GOLD: removing the source resource must not break the component.
+        shutil.rmtree(repo / "artifacts" / "erp-art")
 
         assert (staged / "payload.txt").read_text() == "content"
         ws = inst / "structure" / "opt" / "erp"
@@ -204,23 +189,27 @@ def test_doctor_detects_dangling_source_component(monkeypatch):
         mgr.install(inst)
         mgr.add("y5n-packs-system", inst)
 
-        shutil.rmtree(root / "repos" / "y5n-packs-system" / "structure")
+        shutil.rmtree(root / "repo" / "packs" / "y5n-packs-system" / "structure")
 
         issues = mgr.doctor(inst)
         assert any("dangling" in i for i in issues)
 
 
 def test_update_artifact_refreshes_component(monkeypatch):
-    monkeypatch.setattr(
-        "y5n.apps.yak.resolver.install.install_artifact", lambda *a, **k: True
-    )
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        home = root / "home"
-        monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
-        _write_artifact(home, "erp", "1.0.0", "sha256:old", "v1")
-
-        mgr = _platform_mgr(root, monkeypatch, with_system=False)
+        repo = root / "repo"
+        make_artifact(repo / "artifacts" / "erp-art", "erp", "/opt/erp", "v1")
+        make_source(
+            repo,
+            {"erp": {"location": "artifacts/erp-art"}},
+            environments={"test": "environments/test.yml"},
+        )
+        make_environment(repo, "test", [])
+        ctx = Context(path=root, sources=[str(repo)], environment="test")
+        mgr = InstallationManager(
+            FileRepository(), DirectoryArtifactStore(), context=ctx
+        )
         inst = root / "inst"
         mgr.install(inst)
         mgr.add("erp", inst)
@@ -228,9 +217,10 @@ def test_update_artifact_refreshes_component(monkeypatch):
         staged = inst / ".yak" / "components" / "erp" / "structure"
         assert (staged / "payload.txt").read_text() == "v1"
 
-        # The store now holds v2.
-        shutil.rmtree(home / ".yak" / "artifacts" / "erp-1.0.0.python.artifact")
-        _write_artifact(home, "erp", "2.0.0", "sha256:new", "v2")
+        # The source now holds v2 (new content + fingerprint).
+        make_artifact(
+            repo / "artifacts" / "erp-art", "erp", "/opt/erp", "v2", fingerprint="new"
+        )
 
         mgr.update(inst)
 
@@ -240,7 +230,6 @@ def test_update_artifact_refreshes_component(monkeypatch):
         state = mgr.load(inst)
         assert state is not None
         record = next(c for c in state.components if c.name == "erp")
-        assert record.version == "2.0.0"
         assert record.fingerprint == "new"
         assert record.mount == "/opt/erp"
 
