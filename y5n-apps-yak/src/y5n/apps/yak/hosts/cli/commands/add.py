@@ -51,7 +51,11 @@ def _resolve_root(args) -> Path | None:
 
 
 def _repositories(args) -> list[str] | None:
-    """Repositories: CLI --repository/--from overrides, otherwise the context."""
+    """Repositories: CLI --repository/--from overrides only.
+
+    Without an override the resolver uses the Context repositories itself
+    (ADR-8), so ``add`` and ``update`` always share one source of truth.
+    """
     cli_repo = getattr(args, "repository", None)
     cli_from = getattr(args, "from_repo", None)
     if cli_repo:
@@ -60,8 +64,4 @@ def _repositories(args) -> list[str] | None:
         from y5n.apps.yak.resolver.install import expand_repository_specs
 
         return expand_repository_specs([cli_from])
-
-    from y5n.apps.yak.hosts.cli.cwd import Context
-
-    ctx = Context.current()
-    return list(ctx.repository_sources) if ctx else None
+    return None

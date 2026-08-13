@@ -17,6 +17,7 @@ class Context:
     name: str = ""
     schema: str = "1"
     source_dirs: list[Path] = field(default_factory=list)
+    component_sources: dict[str, str] = field(default_factory=dict)
     repository_sources: list[str] = field(default_factory=list)
     named_repositories: dict[str, dict] = field(default_factory=dict)
 
@@ -52,6 +53,14 @@ def _load_context(root: Path) -> Context:
     raw_dirs = sources_section.get("dirs", [])
     source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
 
+    component_sources: dict[str, str] = {}
+    for key, value in sources_section.items():
+        if key == "dirs" or not isinstance(key, str):
+            continue
+        path = _location_path(value)
+        if path is not None:
+            component_sources[key] = path
+
     repos_section = data.get("repositories", {})
     raw_repos = repos_section.get("sources", [])
     repository_sources = list(raw_repos) if isinstance(raw_repos, list) else []
@@ -68,9 +77,24 @@ def _load_context(root: Path) -> Context:
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
         source_dirs=source_dirs,
+        component_sources=component_sources,
         repository_sources=repository_sources,
         named_repositories=named_repositories,
     )
+
+
+def _location_path(value) -> str | None:
+    """The path of a component location: a bare string or ``{path = ...}``.
+
+    Git/URL locations have no local path and are not materialized yet;
+    they are parsed and stored as None so the schema stays open.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        path = value.get("path")
+        return path if isinstance(path, str) else None
+    return None
 
 
 def find_context_root() -> Path | None:

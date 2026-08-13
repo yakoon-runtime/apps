@@ -33,13 +33,16 @@ from y5n.apps.yak.workspace.materializer import Materializer
 
 @dataclass(frozen=True)
 class _Component:
-    """A resolved installable: a pack, an artifact or a tool (host app)."""
+    """A resolved installable: a source component, a pack, an artifact or a
+    tool (host app). ``source`` is the structure directory of an explicitly
+    mapped development source (ADR-8)."""
 
     kind: str
     name: str
     pack: Pack | None = None
     artifact: Artifact | None = None
     tool: ToolReference | None = None
+    source: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ class InstallationManager:
         apps_root: Path | None = None,
         runtime_root: Path | None = None,
         packs_root: Path | None = None,
+        context=None,
     ) -> None:
         self._repo = repository
         self._artifacts = artifact_store
@@ -78,6 +82,7 @@ class InstallationManager:
         self._sdk_path = sdk_path
         self._packs_root = packs_root
         self._runtime_root = runtime_root
+        self._context = context
 
     # ── Install ──
 
@@ -113,7 +118,6 @@ class InstallationManager:
                 mounts=mounts,
                 components_dir=self._components_dir(root),
             )
-
         with self._step(ui, "Deployment"):
             self._assemble(structure_dir, root / ".yak", asker=asker)
 
@@ -246,11 +250,25 @@ class InstallationManager:
         *,
         sources: list[str] | None = None,
         sources_exclusive: bool = False,
+        naming: bool = True,
     ) -> _Component | None:
-        """Resolve a name to a pack, a built artifact or a tool (host app)."""
-        pack = self._repo.resolve_pack(target)
-        if pack is not None:
-            return _Component(kind="pack", name=pack.name, pack=pack)
+        """Resolve a component through one Context (ADR-8).
+
+        Order: an explicit ``[sources]`` location → a source pack known to
+        the file repository by name (transition) → a tool (host app) → a
+        released artifact from the configured repositories. Repositories
+        default to the Context so that ``add`` and ``update`` always
+        agree. ``naming=False`` skips the name-based fallback: platform
+        namespaces resolve only through explicit locations or artifacts.
+        """
+        source = self._source_component(target)
+        if source is not None:
+            return source
+
+        if naming:
+            pack = self._repo.resolve_pack(target)
+            if pack is not None:
+                return _Component(kind="pack", name=pack.name, pack=pack)
 
         from y5n.apps.yak.installer.installer import resolve_tool
         from y5n.apps.yak.resolver.install import find_artifact
@@ -259,10 +277,94 @@ class InstallationManager:
         if tool is not None:
             return _Component(kind="tool", name=target, tool=tool)
 
-        artifact = find_artifact(target, sources=sources, exclusive=sources_exclusive)
+        artifact = find_artifact(
+            target,
+            sources=(sources if sources is not None else self._repository_sources()),
+            exclusive=sources_exclusive,
+        )
         if artifact is not None:
             return _Component(kind="artifact", name=target, artifact=artifact)
-        return self._resolve_platform_component(target)
+        return None
+
+    # ── Context source mapping (ADR-8) ──
+
+    @staticmethod
+    def _short_name(name: str) -> str:
+        """Strip the family prefix from a fully-qualified component name."""
+        for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
+            if name.startswith(prefix):
+                return name[len(prefix) :]
+        return name
+
+    def _source_component(self, name: str) -> _Component | None:
+        """Resolve an explicitly located component to a source component.
+
+        The location is either the Context's ``[sources]`` mapping (ADR-8)
+        or a transition root for the platform namespaces. The component's
+        mount comes from its own ``pack.toml``; the transition roots carry
+        the platform mounts they always had.
+        """
+        path, default_mount = self._source_location(name)
+        if path is None:
+            return None
+        pack = self._read_pack(path)
+        if pack is None:
+            pack = Pack(name=name, version="0.1", mount=default_mount)
+        mount = pack.mount or default_mount or f"/{name}"
+        structure = path / "structure"
+        source = structure if structure.is_dir() else path
+        return _Component(
+            kind="pack",
+            name=pack.name or name,
+            pack=Pack(name=pack.name or name, version=pack.version, mount=mount),
+            source=source,
+        )
+
+    def _source_location(self, name: str) -> tuple[Path | None, str | None]:
+        """(path, mount) of an explicit component location, if any."""
+        context_path = self._context_source_path(name)
+        if context_path is not None:
+            return context_path, None
+        if name == "root" and self._packs_root is not None:
+            return self._packs_root / "y5n-packs-root", "/"
+        if name == "boot" and self._runtime_root is not None:
+            return self._runtime_root / "y5n-runtime-boot", "/boot"
+        return None, None
+
+    def _context_source_path(self, name: str) -> Path | None:
+        """The Context's mapped path for a component (short or qualified)."""
+        if self._context is None:
+            return None
+        sources = self._context.component_sources
+        key = sources.get(name) or sources.get(self._short_name(name))
+        if key is None:
+            return None
+        p = Path(key)
+        return p if p.is_absolute() else (self._context.path / p).resolve()
+
+    @staticmethod
+    def _read_pack(path: Path) -> Pack | None:
+        """Read a component's own identity from its pack.toml, if any."""
+        manifest = path / "pack.toml"
+        if not manifest.exists():
+            return None
+        import tomllib
+
+        with open(manifest, "rb") as f:
+            data = tomllib.load(f)
+        return Pack(
+            name=data.get("name", path.name),
+            version=data.get("version", "0.1"),
+            mount=data.get("mount"),
+        )
+
+    def _repository_sources(self) -> list[str]:
+        """The Context's repositories as inline specs (empty without a Context)."""
+        if self._context is None:
+            return []
+        from y5n.apps.yak.resolver.install import expand_repository_specs
+
+        return expand_repository_specs(list(self._context.repository_sources))
 
     def _make_available(
         self,
@@ -427,7 +529,7 @@ class InstallationManager:
                 mount=mount,
                 package=f"y5n-packs-{name}",
             )
-            source = self._pack_structure(name)
+            source = component.source or self._pack_structure(name)
             if source is not None and source.is_dir():
                 replace = force or self._staging_mismatch(staged, mode="source")
                 self._stage_structure(path, name, source, copy=False, replace=replace)
@@ -473,26 +575,6 @@ class InstallationManager:
             src = pack_dir / "structure"
             if src.is_dir():
                 return src
-        return None
-
-    def _resolve_platform_component(self, name: str) -> _Component | None:
-        """Resolve the platform namespaces root and boot as components."""
-        if name == "root" and self._packs_root is not None:
-            src = self._packs_root / "y5n-packs-root" / "structure"
-            if src.is_dir():
-                return _Component(
-                    kind="pack",
-                    name="root",
-                    pack=Pack(name="root", version="0.1", mount="/"),
-                )
-        if name == "boot" and self._runtime_root is not None:
-            src = self._runtime_root / "y5n-runtime-boot" / "structure"
-            if src.is_dir():
-                return _Component(
-                    kind="pack",
-                    name="boot",
-                    pack=Pack(name="boot", version="0.1", mount="/boot"),
-                )
         return None
 
     @staticmethod
@@ -1111,11 +1193,12 @@ class InstallationManager:
         Neither provides commands — root defines the tree root and its
         ``.yak/path`` command paths; boot is the Python host namespace.
         Both are staged through the same ``_ensure_component`` mechanism
-        as any other component.
+        as any other component; they resolve like every component (ADR-8):
+        a mapped development source first, then the artifact repositories.
         """
         components: list[Component] = []
         for name in ("root", "boot"):
-            component = self._resolve_platform_component(name)
+            component = self._resolve_component(name, naming=False)
             if component is not None:
                 components.append(self._ensure_component(path, name, component))
         return components

@@ -40,6 +40,7 @@ def _build_manager() -> InstallationManager:
     return InstallationManager(
         repo,
         artifacts,
+        context=ctx,
         sdk_path=repo_root / "sdk" / "y5n-sdk-python",
         apps_root=repo_root / "apps",
         runtime_root=repo_root / "runtime",
