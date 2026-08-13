@@ -19,7 +19,6 @@ name = "{name}"
 version = "0.1.0"
 requires-python = ">=3.13"
 license = {{ text = "Apache-2.0" }}
-dependencies = ["y5n-runtime-api", "y5n-sdk-python"]
 
 [tool.setuptools]
 package-dir = {{"" = "src"}}
