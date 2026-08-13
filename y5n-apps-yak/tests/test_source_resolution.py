@@ -162,19 +162,39 @@ def test_d_platform_is_ordinary(monkeypatch):
         root = Path(tmp)
         home = root / "home"
         monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
-        _write_artifact(home, "root", "0.1.0", "sha256:root", "root-content", mount="/")
         _write_artifact(
-            home, "boot", "0.1.0", "sha256:boot", "boot-content", mount="/boot"
+            home, "y5n-packs-root", "0.1.0", "sha256:root", "root-content", mount="/"
         )
-
-        mgr = _empty_mgr()
+        _write_artifact(
+            home,
+            "y5n-runtime-boot",
+            "0.1.0",
+            "sha256:boot",
+            "boot-content",
+            mount="/boot",
+        )
+        env_dir = home / ".yak" / "artifacts" / "environments"
+        env_dir.mkdir(parents=True, exist_ok=True)
+        (env_dir / "test.yml").write_text(
+            "name: test\ncomponents:\n  - y5n-packs-root\n  - y5n-runtime-boot\n"
+        )
+        ctx = Context(path=root, environment="test")
+        mgr = InstallationManager(
+            FileRepository(), DirectoryArtifactStore(), context=ctx
+        )
         inst = mgr.install(root / "inst")
 
-        assert [str(p) for p in inst.packs] == ["root", "boot"]
+        assert [str(p) for p in inst.packs] == [
+            "y5n-packs-root",
+            "y5n-runtime-boot",
+        ]
         state = mgr.load(inst.root)
         assert state is not None
-        assert [c.name for c in state.components] == ["root", "boot"]
+        assert [c.name for c in state.components] == [
+            "y5n-packs-root",
+            "y5n-runtime-boot",
+        ]
         assert all(c.mode == "artifact" for c in state.components)
-        for name in ("root", "boot"):
+        for name in ("y5n-packs-root", "y5n-runtime-boot"):
             staged = inst.root / ".yak" / "components" / name / "structure"
             assert staged.is_dir() and not staged.is_symlink()

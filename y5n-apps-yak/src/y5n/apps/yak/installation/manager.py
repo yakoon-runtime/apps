@@ -24,7 +24,7 @@ from y5n.apps.yak.installation.deployment import (
 from y5n.apps.yak.installation.deployment import load_installation, to_dict
 from y5n.apps.yak.installation.models import Component, Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer
-from y5n.apps.yak.pack.models import Mount, Pack, PackName, ToolReference
+from y5n.apps.yak.pack.models import Mount, Pack, PackName
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import Artifact
@@ -33,15 +33,14 @@ from y5n.apps.yak.workspace.materializer import Materializer
 
 @dataclass(frozen=True)
 class _Component:
-    """A resolved installable: a source component, a pack, an artifact or a
-    tool (host app). ``source`` is the structure directory of an explicitly
-    mapped development source (ADR-8)."""
+    """A resolved installable: a source component, a pack or an artifact.
+    ``source`` is the structure directory of an explicitly mapped
+    development source (ADR-8)."""
 
     kind: str
     name: str
     pack: Pack | None = None
     artifact: Artifact | None = None
-    tool: ToolReference | None = None
     source: Path | None = None
 
 
@@ -68,19 +67,14 @@ class InstallationManager:
         artifact_store: ArtifactStore,
         *,
         sdk_path: Path | None = None,
-        apps_root: Path | None = None,
         runtime_root: Path | None = None,
-        packs_root: Path | None = None,
         context=None,
     ) -> None:
         self._repo = repository
         self._artifacts = artifact_store
         self._materializer = Materializer()
-        self._installer = Installer(
-            artifact_store, apps_root=apps_root, runtime_root=runtime_root
-        )
+        self._installer = Installer(artifact_store, runtime_root=runtime_root)
         self._sdk_path = sdk_path
-        self._packs_root = packs_root
         self._runtime_root = runtime_root
         self._context = context
 
@@ -112,10 +106,11 @@ class InstallationManager:
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
             manifest = self._resolve_install_environment()
-            if manifest is not None:
-                platform = self._materialize_environment(root, manifest)
-            else:
-                platform = self._platform_components(root)
+            platform = (
+                self._materialize_environment(root, manifest)
+                if manifest is not None
+                else []
+            )
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
                 structure_dir,
@@ -137,9 +132,7 @@ class InstallationManager:
         self._write_state(inst)
 
         with self._step(ui, "Installing"):
-            from y5n.apps.yak.installer.installer import PLATFORM_TOOLS
-
-            self._installer.install(inst, tools=PLATFORM_TOOLS, sdk_path=self._sdk_path)
+            self._installer.install(inst, sdk_path=self._sdk_path)
 
         with self._step(ui, "Environment"):
             touch(
@@ -313,12 +306,7 @@ class InstallationManager:
             if pack is not None:
                 return _Component(kind="pack", name=pack.name, pack=pack)
 
-        from y5n.apps.yak.installer.installer import resolve_tool
         from y5n.apps.yak.resolver.install import find_artifact
-
-        tool = resolve_tool(target)
-        if tool is not None:
-            return _Component(kind="tool", name=target, tool=tool)
 
         artifact = find_artifact(
             target,
@@ -331,29 +319,20 @@ class InstallationManager:
 
     # ── Context source mapping (ADR-8) ──
 
-    @staticmethod
-    def _short_name(name: str) -> str:
-        """Strip the family prefix from a fully-qualified component name."""
-        for prefix in ("y5n-packs-", "y5n-runtime-", "y5n-apps-", "y5n-sdk-"):
-            if name.startswith(prefix):
-                return name[len(prefix) :]
-        return name
-
     def _source_component(self, name: str) -> _Component | None:
         """Resolve an explicitly located component to a source component.
 
-        The location is either the Context's ``[sources]`` mapping (ADR-8)
-        or a transition root for the platform namespaces. The component's
-        mount comes from its own ``pack.toml``; the transition roots carry
-        the platform mounts they always had.
+        The location is the Context's ``[sources]`` mapping (ADR-8). The
+        component's mount comes from its own ``pack.toml``; without one the
+        namespace mount defaults to ``/<name>``.
         """
-        path, default_mount = self._source_location(name)
+        path = self._context_source_path(name)
         if path is None:
             return None
         pack = self._read_pack(path)
         if pack is None:
-            pack = Pack(name=name, version="0.1", mount=default_mount)
-        mount = pack.mount or default_mount or f"/{name}"
+            pack = Pack(name=name, version="0.1", mount=None)
+        mount = pack.mount or f"/{name}"
         structure = path / "structure"
         source = structure if structure.is_dir() else path
         return _Component(
@@ -363,23 +342,11 @@ class InstallationManager:
             source=source,
         )
 
-    def _source_location(self, name: str) -> tuple[Path | None, str | None]:
-        """(path, mount) of an explicit component location, if any."""
-        context_path = self._context_source_path(name)
-        if context_path is not None:
-            return context_path, None
-        if name == "root" and self._packs_root is not None:
-            return self._packs_root / "y5n-packs-root", "/"
-        if name == "boot" and self._runtime_root is not None:
-            return self._runtime_root / "y5n-runtime-boot", "/boot"
-        return None, None
-
     def _context_source_path(self, name: str) -> Path | None:
-        """The Context's mapped path for a component (short or qualified)."""
+        """The Context's mapped path for a component (full name only)."""
         if self._context is None:
             return None
-        sources = self._context.component_sources
-        key = sources.get(name) or sources.get(self._short_name(name))
+        key = self._context.component_sources.get(name)
         if key is None:
             return None
         p = Path(key)
@@ -440,37 +407,9 @@ class InstallationManager:
             return self._make_pack_available(
                 component, target, path, existing_packs, force
             )
-        if component.kind == "tool":
-            return self._make_tool_available(component, path, existing_packs)
         return self._make_artifact_available(
             component, target, path, existing_packs, force, sources
         )
-
-    def _make_tool_available(
-        self,
-        component: _Component,
-        path: Path,
-        existing_packs: list,
-    ) -> tuple[list, list, list] | None:
-        """Install a host app (shell, web, ...) into the installation's venv."""
-        tool = component.tool
-        assert tool is not None
-        if PackName(tool.name) in existing_packs:
-            return None
-
-        inst = Installation(
-            name=tool.name,
-            root=path.resolve(),
-            packs=existing_packs + [PackName(tool.name)],
-        )
-        if self._installer.has_tool_source(tool.name):
-            self._installer.install(inst, tools=[tool], sdk_path=self._sdk_path)
-        else:
-            # Released: a host app is an ordinary artifact — its wheel comes
-            # from the repositories, not from a source checkout.
-            self._install_artifact(f"y5n-apps-{tool.name}", path)
-        records = [self._ensure_component(path, tool.name, component)]
-        return existing_packs + [PackName(tool.name)], [], records
 
     def _make_pack_available(
         self,
@@ -515,7 +454,7 @@ class InstallationManager:
                 root=path.resolve(),
                 packs=all_packs,
             )
-            self._installer.install(inst, tools=pack.tools, sdk_path=self._sdk_path)
+            self._installer.install(inst, sdk_path=self._sdk_path)
         except Exception:
             for record in records:
                 self._cleanup_component(path, record)
@@ -581,9 +520,6 @@ class InstallationManager:
         """
         staged = self._component_structure(path, name)
 
-        if component.kind == "tool":
-            return Component(name=name, mode="tool", package=f"y5n-apps-{name}")
-
         if component.kind == "pack":
             pack = component.pack
             mount = (pack.mount or f"/{name}") if pack is not None else f"/{name}"
@@ -591,7 +527,7 @@ class InstallationManager:
                 name=name,
                 mode="source",
                 mount=mount,
-                package=f"y5n-packs-{name}",
+                package=name,
             )
             source = component.source or self._pack_structure(name)
             if source is not None and source.is_dir():
@@ -625,15 +561,7 @@ class InstallationManager:
         return record
 
     def _pack_structure(self, name: str) -> Path | None:
-        """The structure dir of a source-pack component, incl. platform."""
-        if name == "root" and self._packs_root is not None:
-            src = self._packs_root / "y5n-packs-root" / "structure"
-            if src.is_dir():
-                return src
-        if name == "boot" and self._runtime_root is not None:
-            src = self._runtime_root / "y5n-runtime-boot" / "structure"
-            if src.is_dir():
-                return src
+        """The structure dir of a source-pack component."""
         pack_dir = self._repo.resolve_pack_dir(name)
         if pack_dir is not None:
             src = pack_dir / "structure"
@@ -650,9 +578,7 @@ class InstallationManager:
 
     @staticmethod
     def _record_mode(component: _Component) -> str:
-        return {"pack": "source", "artifact": "artifact", "tool": "tool"}[
-            component.kind
-        ]
+        return {"pack": "source", "artifact": "artifact"}[component.kind]
 
     def _cleanup_component(self, path: Path, record: Component) -> None:
         """Remove a component's staged namespace and installed payload."""
@@ -861,7 +787,7 @@ class InstallationManager:
                             f"✘ Component     {component.name}: staged structure missing"
                         )
                 else:
-                    issues.append(f"✓ Component     {component.name} (tool)")
+                    issues.append(f"✓ Component     {component.name}")
 
         # Orphans: staged components that are not desired (SOLL).
         if env:
@@ -1248,22 +1174,6 @@ class InstallationManager:
         else:
             target.symlink_to(source_dir.absolute(), target_is_directory=True)
         return target
-
-    def _platform_components(self, path: Path) -> list[Component]:
-        """The platform's own namespace components: root at / and boot at /boot.
-
-        Neither provides commands — root defines the tree root and its
-        ``.yak/path`` command paths; boot is the Python host namespace.
-        Both are staged through the same ``_ensure_component`` mechanism
-        as any other component; they resolve like every component (ADR-8):
-        a mapped development source first, then the artifact repositories.
-        """
-        components: list[Component] = []
-        for name in ("root", "boot"):
-            component = self._resolve_component(name, naming=False)
-            if component is not None:
-                components.append(self._ensure_component(path, name, component))
-        return components
 
     def _component_mounts(self, path: Path, components: list[Component]) -> list:
         """The mounts a set of components materializes in the workspace."""

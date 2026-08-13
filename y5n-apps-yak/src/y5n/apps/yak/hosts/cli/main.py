@@ -48,9 +48,7 @@ def _build_manager() -> InstallationManager:
         artifacts,
         context=ctx,
         sdk_path=_source_dir("sdk", "y5n-sdk-python"),
-        apps_root=_source_dir("apps"),
         runtime_root=_source_dir("runtime"),
-        packs_root=_source_dir("packs"),
     )
 
 

@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.publisher.publish import deploy_artifact, publish_local
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -257,12 +258,24 @@ def test_non_python_component_lifecycle(monkeypatch):
         # Real platform namespaces (root with .yak/path) so the workspace
         # tree has a root.
         repo_root = Path(__file__).resolve().parents[3]
+        env_dir = home / ".yak" / "artifacts" / "environments"
+        env_dir.mkdir(parents=True, exist_ok=True)
+        (env_dir / "test.yml").write_text(
+            "name: test\ncomponents:\n  - y5n-packs-root\n  - y5n-runtime-boot\n"
+        )
+        ctx_obj = Context(
+            path=ctx,
+            environment="test",
+            component_sources={
+                "y5n-packs-root": str(repo_root / "packs" / "y5n-packs-root"),
+                "y5n-runtime-boot": str(repo_root / "runtime" / "y5n-runtime-boot"),
+            },
+        )
 
         mgr = InstallationManager(
             FileRepository(),
             DirectoryArtifactStore(ctx / ".yak" / "artifacts"),
-            packs_root=repo_root / "packs",
-            runtime_root=repo_root / "runtime",
+            context=ctx_obj,
         )
         inst = root / "inst"
         mgr.install(inst)

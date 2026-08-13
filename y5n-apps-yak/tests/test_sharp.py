@@ -24,9 +24,9 @@ def test_sharp_install():
         inst = mgr.install(root / "installations" / "crm")
         assert inst.packs == []
 
-        added = mgr.add("crm", inst.root)
+        added = mgr.add("y5n-packs-crm", inst.root)
         assert added is not None
-        assert "crm" in added.packs
+        assert "y5n-packs-crm" in added.packs
 
         print(f"Name:         {inst.name}")
         print(f"Status:       {inst.status.value}")

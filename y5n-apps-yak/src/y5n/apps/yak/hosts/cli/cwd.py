@@ -84,9 +84,7 @@ def _load_context(root: Path) -> Context:
         path=root,
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
-        environment=str(
-            data.get("environment") or ctx_data.get("environment") or ""
-        ),
+        environment=str(data.get("environment") or ctx_data.get("environment") or ""),
         source_dirs=source_dirs,
         component_sources=component_sources,
         repository_sources=repository_sources,

@@ -8,8 +8,8 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 def _make_env(root, pack_name="test-pack"):
     repos = root / "repos"
-    (repos / f"y5n-packs-{pack_name}" / "structure").mkdir(parents=True)
-    (repos / f"y5n-packs-{pack_name}" / "pack.toml").write_text(
+    (repos / pack_name / "structure").mkdir(parents=True)
+    (repos / pack_name / "pack.toml").write_text(
         f'name = "{pack_name}"\nversion = "0.1"\n'
     )
     return repos
@@ -128,7 +128,7 @@ def test_doctor_reports_missing_pack():
 
         import shutil
 
-        shutil.rmtree(repos / "y5n-packs-test-pack")
+        shutil.rmtree(repos / "test-pack")
 
         issues = mgr.doctor(inst_path)
         assert any("test-pack" in i for i in issues)

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from y5n.apps.yak.environment.io import load as load_env
+from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.pack.models import Mount, PackName
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -21,8 +22,12 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 from y5n.apps.yak.workspace.materializer import Materializer
 
 
-def _platform_mgr(root: Path, *, with_system: bool = True) -> InstallationManager:
-    """A manager with source packs, root and boot platform components."""
+def _platform_mgr(
+    root: Path, monkeypatch, *, with_system: bool = True
+) -> InstallationManager:
+    """A manager with source packs and the runtime-namespace components."""
+    home = root / "home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
     repos = root / "repos"
     if with_system:
         (repos / "y5n-packs-system" / "structure" / "bin").mkdir(parents=True)
@@ -30,18 +35,36 @@ def _platform_mgr(root: Path, *, with_system: bool = True) -> InstallationManage
             "echo hi\n"
         )
         (repos / "y5n-packs-system" / "pack.toml").write_text(
-            'name = "system"\nversion = "0.1"\nmount = "/usr/bin"\n'
+            'name = "y5n-packs-system"\nversion = "0.1"\nmount = "/usr/bin"\n'
         )
     packs_root = root / "packs"
     runtime_root = root / "runtime"
     (packs_root / "y5n-packs-root" / "structure" / ".yak").mkdir(parents=True)
+    (packs_root / "y5n-packs-root" / "pack.toml").write_text(
+        'name = "y5n-packs-root"\nversion = "0.1"\nmount = "/"\n'
+    )
     (packs_root / "y5n-packs-root" / "structure" / "usr").mkdir(parents=True)
     (runtime_root / "y5n-runtime-boot" / "structure" / "python").mkdir(parents=True)
+    (runtime_root / "y5n-runtime-boot" / "pack.toml").write_text(
+        'name = "y5n-runtime-boot"\nversion = "0.1"\nmount = "/boot"\n'
+    )
+    env_dir = home / ".yak" / "artifacts" / "environments"
+    env_dir.mkdir(parents=True, exist_ok=True)
+    (env_dir / "test.yml").write_text(
+        "name: test\ncomponents:\n  - y5n-packs-root\n  - y5n-runtime-boot\n"
+    )
+    ctx = Context(
+        path=root,
+        environment="test",
+        component_sources={
+            "y5n-packs-root": str(packs_root / "y5n-packs-root"),
+            "y5n-runtime-boot": str(runtime_root / "y5n-runtime-boot"),
+        },
+    )
     return InstallationManager(
         FileRepository(repos),
         DirectoryArtifactStore(repos),
-        packs_root=packs_root,
-        runtime_root=runtime_root,
+        context=ctx,
     )
 
 
@@ -63,38 +86,44 @@ def _write_artifact(
     return store
 
 
-def test_install_stages_platform_components():
+def test_install_stages_platform_components(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        mgr = _platform_mgr(root)
+        mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
         mgr.install(inst)
 
-        for name in ("root", "boot"):
+        for name in ("y5n-packs-root", "y5n-runtime-boot"):
             staged = inst / ".yak" / "components" / name / "structure"
             assert staged.is_symlink()
 
         env = load_env(inst)
         assert env is not None
-        assert env.components == [PackName("root"), PackName("boot")]
+        assert env.components == [
+            PackName("y5n-packs-root"),
+            PackName("y5n-runtime-boot"),
+        ]
         assert all(
             m.source.startswith(str(inst / ".yak" / "components")) for m in env.mounts
         )
 
         state = mgr.load(inst)
         assert state is not None
-        assert [c.name for c in state.components] == ["root", "boot"]
+        assert [c.name for c in state.components] == [
+            "y5n-packs-root",
+            "y5n-runtime-boot",
+        ]
 
 
-def test_add_source_pack_is_source_linked():
+def test_add_source_pack_is_source_linked(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        mgr = _platform_mgr(root)
+        mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
         mgr.install(inst)
-        mgr.add("system", inst)
+        mgr.add("y5n-packs-system", inst)
 
-        staged = inst / ".yak" / "components" / "system" / "structure"
+        staged = inst / ".yak" / "components" / "y5n-packs-system" / "structure"
         assert staged.is_symlink()
         assert (
             staged.resolve()
@@ -117,18 +146,18 @@ def test_add_source_pack_is_source_linked():
 
         state = mgr.load(inst)
         assert state is not None
-        record = next(c for c in state.components if c.name == "system")
+        record = next(c for c in state.components if c.name == "y5n-packs-system")
         assert record.mode == "source"
         assert record.source == str(root / "repos" / "y5n-packs-system" / "structure")
 
 
-def test_workspace_points_at_component_store_only():
+def test_workspace_points_at_component_store_only(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        mgr = _platform_mgr(root)
+        mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
         mgr.install(inst)
-        mgr.add("system", inst)
+        mgr.add("y5n-packs-system", inst)
 
         prefix = str(inst / ".yak" / "components")
         for entry in (inst / "structure").rglob("*"):
@@ -146,7 +175,7 @@ def test_artifact_component_survives_store_deletion(monkeypatch):
         monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
         _write_artifact(home, "erp", "1.0.0", "sha256:abc", "content")
 
-        mgr = _platform_mgr(root, with_system=False)
+        mgr = _platform_mgr(root, monkeypatch, with_system=False)
         inst = root / "inst"
         mgr.install(inst)
         mgr.add("erp", inst)
@@ -167,13 +196,13 @@ def test_artifact_component_survives_store_deletion(monkeypatch):
         assert any("erp" in i and "✓" in i for i in issues)
 
 
-def test_doctor_detects_dangling_source_component():
+def test_doctor_detects_dangling_source_component(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        mgr = _platform_mgr(root)
+        mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
         mgr.install(inst)
-        mgr.add("system", inst)
+        mgr.add("y5n-packs-system", inst)
 
         shutil.rmtree(root / "repos" / "y5n-packs-system" / "structure")
 
@@ -191,7 +220,7 @@ def test_update_artifact_refreshes_component(monkeypatch):
         monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
         _write_artifact(home, "erp", "1.0.0", "sha256:old", "v1")
 
-        mgr = _platform_mgr(root, with_system=False)
+        mgr = _platform_mgr(root, monkeypatch, with_system=False)
         inst = root / "inst"
         mgr.install(inst)
         mgr.add("erp", inst)
@@ -216,10 +245,10 @@ def test_update_artifact_refreshes_component(monkeypatch):
         assert record.mount == "/opt/erp"
 
 
-def test_install_and_bootstrap_share_installation_structure():
+def test_install_and_bootstrap_share_installation_structure(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        mgr = _platform_mgr(root)
+        mgr = _platform_mgr(root, monkeypatch)
         installed = root / "installed"
         bootstrapped = root / "source-checkout"
         mgr.install(installed)
@@ -232,12 +261,12 @@ def test_install_and_bootstrap_share_installation_structure():
         assert sorted(
             p.name for p in (installed / ".yak" / "components").iterdir()
         ) == [
-            "boot",
-            "root",
+            "y5n-packs-root",
+            "y5n-runtime-boot",
         ]
         assert sorted(
             p.name for p in (bootstrapped / ".yak" / "components").iterdir()
-        ) == ["boot", "root"]
+        ) == ["y5n-packs-root", "y5n-runtime-boot"]
 
         # Same SOLL/IST; only the workspace layout differs.
         env_inst = load_env(installed)
@@ -247,8 +276,8 @@ def test_install_and_bootstrap_share_installation_structure():
             env_inst.components
             == env_boot.components
             == [
-                PackName("root"),
-                PackName("boot"),
+                PackName("y5n-packs-root"),
+                PackName("y5n-runtime-boot"),
             ]
         )
         assert env_inst.workspace_path == "structure"
@@ -257,8 +286,14 @@ def test_install_and_bootstrap_share_installation_structure():
         st_inst = mgr.load(installed)
         st_boot = mgr.load(bootstrapped)
         assert st_inst is not None and st_boot is not None
-        assert [c.name for c in st_inst.components] == ["root", "boot"]
-        assert [c.name for c in st_boot.components] == ["root", "boot"]
+        assert [c.name for c in st_inst.components] == [
+            "y5n-packs-root",
+            "y5n-runtime-boot",
+        ]
+        assert [c.name for c in st_boot.components] == [
+            "y5n-packs-root",
+            "y5n-runtime-boot",
+        ]
         assert all(c.mode == "source" for c in st_boot.components)
 
 

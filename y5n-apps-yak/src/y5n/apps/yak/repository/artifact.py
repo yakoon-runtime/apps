@@ -18,16 +18,15 @@ class DirectoryArtifactStore:
         self._roots = list(roots)
 
     def get_artifact(self, name: PackName) -> Path | None:
+        """A root that is, or holds, the component's folder (folder == name).
+
+        Identities are opaque: no family prefix is ever constructed from a
+        name. ``cool-shell`` is looked up exactly as ``cool-shell``.
+        """
         for root in self._roots:
             if root.name == name and root.is_dir():
                 return root
             candidate = root / name
-            if candidate.is_dir():
-                return candidate
-            candidate = root / f"y5n-packs-{name}"
-            if candidate.is_dir():
-                return candidate
-            candidate = root / f"y5n-runtime-{name}"
             if candidate.is_dir():
                 return candidate
         return None
