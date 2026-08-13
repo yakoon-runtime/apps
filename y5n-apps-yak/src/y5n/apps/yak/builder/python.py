@@ -44,8 +44,8 @@ class PythonBuildProvider:
         if info is None:
             return None
 
-        # A pack is identified by its pack.toml name and mount, not its
-        # Python distribution name ("system", not "y5n-packs-system").
+        # A component's artifact name comes from its own pack.toml
+        # (folder == name), not from its Python distribution name.
         pack_manifest = project_dir / "pack.toml"
         if pack_manifest.exists():
             import tomllib

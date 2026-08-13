@@ -15,7 +15,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "y5n-packs-{name}"
+name = "{name}"
 version = "0.1.0"
 requires-python = ">=3.13"
 license = {{ text = "Apache-2.0" }}
