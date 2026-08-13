@@ -16,6 +16,7 @@ class Context:
     path: Path
     name: str = ""
     schema: str = "1"
+    environment: str = ""
     source_dirs: list[Path] = field(default_factory=list)
     component_sources: dict[str, str] = field(default_factory=dict)
     repository_sources: list[str] = field(default_factory=list)
@@ -67,15 +68,25 @@ def _load_context(root: Path) -> Context:
 
     named_repositories: dict[str, dict] = {}
     for name, spec in repos_section.items():
-        if name == "sources" or not isinstance(spec, dict):
+        if name == "sources" or not isinstance(name, str):
             continue
-        if spec.get("type"):
-            named_repositories[name] = spec
+        if isinstance(spec, dict):
+            if spec.get("type"):
+                named_repositories[name] = spec
+        elif isinstance(spec, str) and spec.startswith("github:"):
+            # A bare spec is a repository whose type the spec implies.
+            named_repositories[name] = {
+                "type": "github",
+                "repo": spec.removeprefix("github:"),
+            }
 
     return Context(
         path=root,
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
+        environment=str(
+            data.get("environment") or ctx_data.get("environment") or ""
+        ),
         source_dirs=source_dirs,
         component_sources=component_sources,
         repository_sources=repository_sources,

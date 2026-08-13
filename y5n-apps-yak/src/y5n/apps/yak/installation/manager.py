@@ -94,14 +94,14 @@ class InstallationManager:
         ui=None,
         workspace_path: str = "structure",
     ) -> Installation:
-        """Install the minimal Yakoon platform into ``path``.
+        """Materialize the environment the Context points at (ADR-8).
 
-        The platform is the runtime, the SDK and the host apps only — no
-        packs. What the installation can do is decided afterwards with
-        ``yak add``. The platform's own namespaces (root, boot) are
-        staged into ``.yak/components/`` and the workspace materializes
-        exclusively from there. ``workspace_path`` is the workspace
-        layout: ``structure/`` for a regular installation,
+        ``install`` reads the Context's ``environment`` reference, resolves
+        the manifest through the repositories and materializes every
+        declared component — root and boot included, with no special
+        status. Without a resolvable environment it falls back to the
+        minimal platform namespaces (transition). ``workspace_path`` is
+        the workspace layout: ``structure/`` for a regular installation,
         ``workspace/structure/`` when bootstrapping inside a source
         checkout.
         """
@@ -111,7 +111,11 @@ class InstallationManager:
         structure_dir = root / workspace_path
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            platform = self._platform_components(root)
+            manifest = self._resolve_install_environment()
+            if manifest is not None:
+                platform = self._materialize_environment(root, manifest)
+            else:
+                platform = self._platform_components(root)
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
                 structure_dir,
@@ -150,6 +154,36 @@ class InstallationManager:
         inst.updated = datetime.now(UTC)
         self._write_state(inst)
         return inst
+
+    def _resolve_install_environment(self):
+        """Resolve the Context's environment reference, if any."""
+        if self._context is None or not self._context.environment:
+            return None
+        from y5n.apps.yak.resolver.install import resolve_environment
+
+        return resolve_environment(
+            self._context.environment, sources=self._repository_sources()
+        )
+
+    def _materialize_environment(self, path: Path, manifest) -> list[Component]:
+        """Reconcile a manifest into staged components (ADR-8).
+
+        Yak knows no component names: every entry of the manifest is
+        resolved through the ordinary resolver, its wheel (if any) is
+        installed, and its namespace staged — exactly like any component
+        added later with ``yak add``.
+        """
+        components: list[Component] = []
+        for name in manifest.components:
+            comp = self._resolve_component(str(name), naming=False)
+            if comp is None:
+                continue
+            if comp.kind == "artifact":
+                from y5n.apps.yak.resolver.install import install_artifact
+
+                install_artifact(str(name), target_root=path)
+            components.append(self._ensure_component(path, str(name), comp))
+        return components
 
     # ── Add ──
 
@@ -359,12 +393,23 @@ class InstallationManager:
         )
 
     def _repository_sources(self) -> list[str]:
-        """The Context's repositories as inline specs (empty without a Context)."""
+        """The Context's repositories as inline specs (empty without a Context).
+
+        Both the ``sources`` list and every named GitHub repository are
+        read sources — ``official = "github:yakoon-runtime/apps"`` is a
+        valid resolution source, not only a deploy target.
+        """
         if self._context is None:
             return []
         from y5n.apps.yak.resolver.install import expand_repository_specs
 
-        return expand_repository_specs(list(self._context.repository_sources))
+        specs = list(self._context.repository_sources)
+        specs.extend(
+            name
+            for name, cfg in self._context.named_repositories.items()
+            if cfg.get("type") == "github"
+        )
+        return expand_repository_specs(specs)
 
     def _make_available(
         self,

@@ -81,6 +81,25 @@ def find_artifact(
     return None
 
 
+def resolve_environment(
+    name: str,
+    sources: list[str] | None = None,
+    *,
+    exclusive: bool = False,
+):
+    """Resolve an environment manifest by name from all configured sources.
+
+    Repositories answer "do you know environment X?" exactly as they answer
+    "do you know artifact X?" — the manifest is a plain resource, not an
+    artifact.
+    """
+    for source in _all_sources(sources, exclusive=exclusive):
+        candidate = source.resolve_environment(name)
+        if candidate is not None:
+            return candidate
+    return None
+
+
 def repository_for(spec: str):
     """Resolve a repository name or inline spec to a client.
 

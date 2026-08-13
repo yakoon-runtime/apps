@@ -26,6 +26,8 @@ def _init(root: Path) -> None:
     roots = [d for d in known_dirs if (root / d).is_dir()]
 
     ctx_lines = [
+        f'environment = "yakoon:platform"',
+        "",
         f"[context]",
         f'name = "{root.name}"',
         f'created = "{now}"',
@@ -35,6 +37,7 @@ def _init(root: Path) -> None:
         ctx_lines.append("")
         ctx_lines.append("[sources]")
         ctx_lines.append(f'dirs = [{", ".join(repr(r) for r in roots)}]')
+    ctx_lines.extend(["", "[repositories]", 'official = "github:yakoon-runtime/apps"'])
     ctx_lines.extend(["", "[logs]", 'path = ".yak/logs"', ""])
 
     (yak_dir / "context.toml").write_text("\n".join(ctx_lines))

@@ -121,6 +121,43 @@ class GithubReleaseRepository:
                 path=cached,
             )
 
+    def resolve_environment(self, name: str):
+        """Resolve an environment manifest from the latest release's assets.
+
+        Environments are plain resources — release assets named
+        ``environments/<name>.yml`` (with ``:`` mapped to ``-``) — not
+        artifacts. The repository answers "do you know environment X?",
+        the same question it answers for artifacts.
+        """
+        from y5n.apps.yak.resolver.artifact import load_remote_environment
+
+        asset_name = f"environments/{name.replace(':', '-')}.yml"
+        url = f"https://api.github.com/repos/{self._repo}/releases/latest"
+        try:
+            with urlopen(url) as resp:
+                release = json.loads(resp.read().decode())
+        except Exception:
+            return None
+        asset_url = next(
+            (
+                a["browser_download_url"]
+                for a in release.get("assets", [])
+                if a["name"] == asset_name
+            ),
+            None,
+        )
+        if asset_url is None:
+            return None
+        try:
+            with urlopen(asset_url) as resp:
+                data = resp.read().decode()
+        except Exception:
+            return None
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / asset_name
+            p.write_text(data)
+            return load_remote_environment(p)
+
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
         """Ship an artifact into this repository as a release asset.
 

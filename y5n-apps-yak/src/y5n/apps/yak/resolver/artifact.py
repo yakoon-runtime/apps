@@ -62,6 +62,34 @@ class Artifact:
 class ArtifactSource(Protocol):
     def resolve(self, name: str) -> Artifact | None: ...
 
+    def resolve_environment(self, name: str) -> "Environment | None": ...
+
+
+def load_remote_environment(path: Path) -> "Environment | None":
+    """Parse an environment manifest (a plain YAML resource, not an artifact).
+
+    The manifest declares the desired installation: a name and the
+    components it materializes. It holds no infrastructure and no
+    resolution logic — the resolver decides how each component is met.
+    """
+    from y5n.apps.yak.environment.models import Environment
+    from y5n.apps.yak.pack.models import PackName
+
+    try:
+        import yaml
+
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        return None
+    components = data.get("components", [])
+    if not isinstance(components, list):
+        return None
+    return Environment(
+        name=str(data.get("name", path.stem)),
+        schema=str(data.get("schema", "1")),
+        components=[PackName(c) for c in components],
+    )
+
 
 @runtime_checkable
 class WritableRepository(Protocol):
@@ -100,6 +128,13 @@ class DirectorySource:
                     mount=meta.get("mount"),
                 )
         return None
+
+    def resolve_environment(self, name: str):
+        """Resolve an environment manifest from ``environments/<name>.yml``."""
+        env_file = self._root / "environments" / f"{name.replace(':', '-')}.yml"
+        if not env_file.exists():
+            return None
+        return load_remote_environment(env_file)
 
     def list_artifacts(self) -> list[tuple[str, str]]:
         """List the artifacts in this root as (name, kind version)."""
