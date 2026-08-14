@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_runtime_root
+from y5n.apps.yak.runtime.service import RuntimeService
 
 
 def run(args, mgr) -> None:
@@ -19,16 +20,17 @@ def run(args, mgr) -> None:
             print("Run 'yak install <name>' or 'yak init' first.")
             return
 
+    svc = RuntimeService()
     match args.action:
         case "start":
-            _start(mgr, path)
+            _start(svc, path)
         case "stop":
-            _stop(mgr, path)
+            _stop(svc, path)
         case "status":
-            _status(mgr, path)
+            _status(svc, path)
         case "restart":
-            _stop(mgr, path)
-            _start(mgr, path)
+            _stop(svc, path)
+            _start(svc, path)
 
 
 def _copy_config(env_file: str, path: Path) -> None:
@@ -37,14 +39,14 @@ def _copy_config(env_file: str, path: Path) -> None:
     shutil.copy2(env_file, path / "yakoon-runtime.yml")
 
 
-def _start(mgr, path: Path) -> None:
-    running = mgr.runtime_status(path)
+def _start(svc: RuntimeService, path: Path) -> None:
+    running = svc.status(path)
     if running is not None:
         print(f"Runtime already running (pid {running})")
         return
 
     try:
-        pid = mgr.run_runtime(path)
+        pid = svc.run(path)
     except RuntimeError as exc:
         print("Runtime start failed.")
         print(str(exc))
@@ -56,27 +58,27 @@ def _start(mgr, path: Path) -> None:
     print(f"Logs     : {path / '.yak' / 'logs' / 'runtime.log'}")
 
 
-def _stop(mgr, path: Path) -> None:
-    pid = mgr.stop_runtime(path)
+def _stop(svc: RuntimeService, path: Path) -> None:
+    pid = svc.stop(path)
     if pid is None:
         print("Runtime not running")
     else:
         print(f"Runtime stopped (pid {pid})")
-    _report_untracked(mgr, path, tracked=pid)
+    _report_untracked(svc, path, tracked=pid)
 
 
-def _status(mgr, path: Path) -> None:
-    pid = mgr.runtime_status(path)
+def _status(svc: RuntimeService, path: Path) -> None:
+    pid = svc.status(path)
     if pid is None:
         print("Runtime not running")
     else:
         print(f"Runtime running (pid {pid})")
-    _report_untracked(mgr, path, tracked=pid)
+    _report_untracked(svc, path, tracked=pid)
 
 
-def _report_untracked(mgr, path: Path, *, tracked: int | None) -> None:
+def _report_untracked(svc: RuntimeService, path: Path, *, tracked: int | None) -> None:
     """Warn about a listener that is not the tracked runtime."""
-    occupant = mgr.runtime_occupant(path)
+    occupant = svc.occupant(path)
     if occupant is None or occupant.pid == tracked:
         return
     kind = " (yakoon-runtime)" if occupant.yakoon else ""

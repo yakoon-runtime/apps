@@ -8,9 +8,11 @@ from pathlib import Path
 class Context:
     """A YakContext — describes a development environment.
 
-    Loaded from .yak/context.toml. Provides two independent concerns:
-    - Sources: where source code is developed (build, create)
-    - Repositories: where published artifacts are consumed (install, sync)
+    Loaded from .yak/context.toml. ``sources`` is the flat ADR-20 source
+    set (catalog locations); ``install`` is the bootstrap's desired
+    component set. ``source_dirs`` is a transition: the local monorepo
+    folders the installer resolves build roots against until the repo
+    split.
     """
 
     path: Path
@@ -19,9 +21,6 @@ class Context:
     install: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     source_dirs: list[Path] = field(default_factory=list)
-    component_sources: dict[str, str] = field(default_factory=dict)
-    repository_sources: list[str] = field(default_factory=list)
-    named_repositories: dict[str, dict] = field(default_factory=dict)
 
     def resolve_sources(self) -> list[Path]:
         paths = list(self.source_dirs)
@@ -51,39 +50,15 @@ def _load_context(root: Path) -> Context:
         data = tomllib.load(f)
 
     ctx_data = data.get("context", {})
-    # The flat ``sources = [...]`` list is the ADR-20 source set. The old
-    # ``[sources]`` table (dirs, per-component mapping) is superseded; it is
-    # still read when a context carries it, and ignored otherwise.
+    # ``[sources]`` is a transition table: ``dirs`` lists the local
+    # monorepo folders the installer resolves build roots against. The
+    # flat ``sources = [...]`` list is the ADR-20 source set and is
+    # independent of it.
     sources_section = data.get("sources", {})
     source_dirs: list[Path] = []
-    component_sources: dict[str, str] = {}
     if isinstance(sources_section, dict):
         raw_dirs = sources_section.get("dirs", [])
         source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
-        for key, value in sources_section.items():
-            if key == "dirs" or not isinstance(key, str):
-                continue
-            path = _location_path(value)
-            if path is not None:
-                component_sources[key] = path
-
-    repos_section = data.get("repositories", {})
-    raw_repos = repos_section.get("sources", [])
-    repository_sources = list(raw_repos) if isinstance(raw_repos, list) else []
-
-    named_repositories: dict[str, dict] = {}
-    for name, spec in repos_section.items():
-        if name == "sources" or not isinstance(name, str):
-            continue
-        if isinstance(spec, dict):
-            if spec.get("type"):
-                named_repositories[name] = spec
-        elif isinstance(spec, str) and spec.startswith("github:"):
-            # A bare spec is a repository whose type the spec implies.
-            named_repositories[name] = {
-                "type": "github",
-                "repo": spec.removeprefix("github:"),
-            }
 
     return Context(
         path=root,
@@ -92,9 +67,6 @@ def _load_context(root: Path) -> Context:
         install=_string_list(data.get("install")),
         sources=_string_list(data.get("sources")),
         source_dirs=source_dirs,
-        component_sources=component_sources,
-        repository_sources=repository_sources,
-        named_repositories=named_repositories,
     )
 
 
@@ -102,20 +74,6 @@ def _string_list(raw) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(item) for item in raw]
-
-
-def _location_path(value) -> str | None:
-    """The path of a component location: a bare string or ``{path = ...}``.
-
-    Git/URL locations have no local path and are not materialized yet;
-    they are parsed and stored as None so the schema stays open.
-    """
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        path = value.get("path")
-        return path if isinstance(path, str) else None
-    return None
 
 
 def find_context_root() -> Path | None:
