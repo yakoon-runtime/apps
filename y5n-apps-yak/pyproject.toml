@@ -23,3 +23,8 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 namespaces = true
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: full install/materialize cycle (venv + pip); skip with -m 'not slow'",
+]

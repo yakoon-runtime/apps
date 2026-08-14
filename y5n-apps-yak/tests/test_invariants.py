@@ -48,6 +48,7 @@ def _erp_source(root: Path, content: str = "data") -> Path:
     return repo
 
 
+@pytest.mark.slow
 def test_update_heals_deleted_artifact_structure(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -70,6 +71,7 @@ def test_update_heals_deleted_artifact_structure(monkeypatch):
         assert (staged / "payload.txt").read_text() == "data"
 
 
+@pytest.mark.slow
 def test_update_heals_deleted_platform_component(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -87,6 +89,7 @@ def test_update_heals_deleted_platform_component(monkeypatch):
         ).exists()
 
 
+@pytest.mark.slow
 def test_mode_switch_replaces_component(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -140,6 +143,7 @@ def test_mode_switch_replaces_component(monkeypatch):
         assert next(c for c in state.components if c.name == "erp").mode == "artifact"
 
 
+@pytest.mark.slow
 def test_update_removes_orphan_components(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -159,6 +163,7 @@ def test_update_removes_orphan_components(monkeypatch):
         assert not any("Orphan" in i for i in issues)
 
 
+@pytest.mark.slow
 def test_add_rolls_back_partial_staging(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

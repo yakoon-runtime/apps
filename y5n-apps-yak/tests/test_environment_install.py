@@ -11,6 +11,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
 from conftest import artifact as make_artifact
 from conftest import make_source
 from y5n.apps.yak.environment.io import load as load_env
@@ -39,6 +40,7 @@ def _mgr(root: Path, repo: Path, install: list[str]) -> InstallationManager:
     )
 
 
+@pytest.mark.slow
 def test_install_materializes_declared_components():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -59,6 +61,7 @@ def test_install_materializes_declared_components():
         assert sorted(str(c) for c in env.components) == ["bar", "baz", "foo"]
 
 
+@pytest.mark.slow
 def test_update_converges_to_changed_desired_set():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

@@ -25,7 +25,7 @@ def run(args, mgr) -> None:
         issues.append(f"✓ Environment:  {env_yml}")
     else:
         issues.append("— Environment:  none")
-        issues.append("  Run 'yak sync' to create one")
+        issues.append("  Run 'yak install' (fresh) or 'yak bootstrap' (development)")
 
     from y5n.apps.yak.environment.io import load as load_env
 
@@ -43,7 +43,7 @@ def run(args, mgr) -> None:
             issues.append(f"✓ Workspace:    {structure_dir}")
         else:
             issues.append("— Workspace:    not materialized")
-            issues.append("  Run 'yak sync' to materialize")
+            issues.append("  Run 'yak update' to materialize")
 
     errors = [r for r in issues if r.startswith("✘")]
     for line in issues:

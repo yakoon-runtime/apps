@@ -1,6 +1,7 @@
 import tempfile
 from pathlib import Path
 
+import pytest
 from conftest import make_source, source_pack
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
@@ -20,6 +21,7 @@ def _mgr(root, repo):
     return InstallationManager(FileRepository(), DirectoryArtifactStore(), context=ctx)
 
 
+@pytest.mark.slow
 def test_install_creates_platform_installation():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -43,6 +45,7 @@ def test_install_creates_platform_installation():
         assert set(deployment.stores) == {"runtime"}
 
 
+@pytest.mark.slow
 def test_add_extends_the_platform():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -59,6 +62,7 @@ def test_add_extends_the_platform():
         assert mgr.add("test-pack", inst_path) is None
 
 
+@pytest.mark.slow
 def test_add_unknown_component_raises():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -74,6 +78,7 @@ def test_add_unknown_component_raises():
             mgr.add("nonexistent", inst_path)
 
 
+@pytest.mark.slow
 def test_load_from_path():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -98,6 +103,7 @@ def test_load_returns_none_for_invalid_path():
         assert mgr.load(root / "nonexistent") is None
 
 
+@pytest.mark.slow
 def test_update_reconciles():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -115,6 +121,7 @@ def test_update_reconciles():
         assert "test-pack" in loaded.packs
 
 
+@pytest.mark.slow
 def test_doctor_reports_missing_pack():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

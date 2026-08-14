@@ -12,6 +12,7 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -235,6 +236,7 @@ def _tree_resolves(structure: Path) -> bool:
     return asyncio.run(run())
 
 
+@pytest.mark.slow
 def test_non_python_component_lifecycle(monkeypatch):
     fake = FakeGithub()
     monkeypatch.setattr("y5n.apps.yak.resolver.github.urlopen", fake.urlopen)

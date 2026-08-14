@@ -4,12 +4,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import pytest
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
 
 
+@pytest.mark.slow
 def test_sharp_install():
     """Install the minimal platform, then add the crm pack."""
     root = Path(tempfile.mkdtemp(prefix="yak-sharp-"))

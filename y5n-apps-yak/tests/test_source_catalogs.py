@@ -66,6 +66,7 @@ def _mgr(ctx: Context) -> InstallationManager:
     return InstallationManager(FileRepository(), DirectoryArtifactStore(), context=ctx)
 
 
+@pytest.mark.slow
 def test_a_official_resolves_artifact():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -91,6 +92,7 @@ def test_a_official_resolves_artifact():
         assert staged.is_dir() and not staged.is_symlink()
 
 
+@pytest.mark.slow
 def test_b_third_party_uses_the_same_mechanism():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -113,6 +115,7 @@ def test_b_third_party_uses_the_same_mechanism():
         assert record.mount == "/opt/cool"
 
 
+@pytest.mark.slow
 def test_c_local_source_first_wins():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -147,6 +150,7 @@ def test_c_local_source_first_wins():
         assert staged.resolve() == (dev_crm / "crm" / "structure").resolve()
 
 
+@pytest.mark.slow
 def test_d_removing_local_source_returns_to_released():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -292,6 +296,7 @@ def test_g_github_is_transport_no_release_scan(monkeypatch):
         assert component.artifact.mount == "/usr/sbin/ident"
 
 
+@pytest.mark.slow
 def test_h_from_is_exclusive():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -314,6 +319,7 @@ def test_h_from_is_exclusive():
         assert record.mount == "/opt/acme"
 
 
+@pytest.mark.slow
 def test_i_from_miss_is_an_error():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

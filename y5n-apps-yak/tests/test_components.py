@@ -63,6 +63,7 @@ def _platform_mgr(
     )
 
 
+@pytest.mark.slow
 def test_install_stages_platform_components(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -92,6 +93,7 @@ def test_install_stages_platform_components(monkeypatch):
         ]
 
 
+@pytest.mark.slow
 def test_add_source_pack_is_source_linked(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -130,6 +132,7 @@ def test_add_source_pack_is_source_linked(monkeypatch):
         )
 
 
+@pytest.mark.slow
 def test_workspace_points_at_component_store_only(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -144,6 +147,7 @@ def test_workspace_points_at_component_store_only(monkeypatch):
                 assert str(entry.readlink()).startswith(prefix), entry
 
 
+@pytest.mark.slow
 def test_artifact_component_survives_store_deletion(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -177,6 +181,7 @@ def test_artifact_component_survives_store_deletion(monkeypatch):
         assert any("erp" in i and "✓" in i for i in issues)
 
 
+@pytest.mark.slow
 def test_doctor_detects_dangling_source_component(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -191,6 +196,7 @@ def test_doctor_detects_dangling_source_component(monkeypatch):
         assert any("dangling" in i for i in issues)
 
 
+@pytest.mark.slow
 def test_update_artifact_refreshes_component(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -228,6 +234,7 @@ def test_update_artifact_refreshes_component(monkeypatch):
         assert record.mount == "/opt/erp"
 
 
+@pytest.mark.slow
 def test_install_and_bootstrap_share_installation_structure(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
