@@ -157,12 +157,9 @@ def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
         cache_root.mkdir(parents=True, exist_ok=True)
         cached = cache_root / name
         if not cached.exists():
-            source = next(
-                (d for d in Path(tmp).iterdir() if d.is_dir() and d.name == name),
-                None,
-            )
+            source = _find_artifact_dir(Path(tmp))
             if source is None:
-                raise CatalogError(f"no {name} in {url}")
+                raise CatalogError(f"no artifact for {name} in {url}")
             shutil.copytree(source, cached)
         return cached
 
