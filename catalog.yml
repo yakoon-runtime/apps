@@ -1,0 +1,11 @@
+components:
+  y5n-apps-console:
+    location: y5n-apps-console
+  y5n-apps-runtime:
+    location: y5n-apps-runtime
+  y5n-apps-shell:
+    location: y5n-apps-shell
+  y5n-apps-web:
+    location: y5n-apps-web
+  y5n-apps-yak:
+    location: y5n-apps-yak

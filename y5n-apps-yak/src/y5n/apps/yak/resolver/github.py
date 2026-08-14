@@ -38,67 +38,6 @@ class GithubReleaseRepository:
     def __init__(self, repo: str) -> None:
         self._repo = repo.removeprefix("github:")
 
-    def deploy_resource(
-        self, asset_name: str, file_path: Path, *, version: str = "0.1"
-    ) -> bool:
-        """Publish a plain resource (e.g. an environment manifest).
-
-        Resources are release assets in their own per-resource release, so
-        ``resolve_environment`` can find them. Requires GITHUB_TOKEN or
-        YAK_GITHUB_TOKEN.
-        """
-        token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
-        if not token:
-            print("  GITHUB_TOKEN not set")
-            return False
-
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github+json",
-            "Content-Type": "application/json",
-        }
-        tag = f"{asset_name}-v{version}"
-        release = self._release_by_tag(tag, headers)
-        if release is None:
-            release_data = {"tag_name": tag, "name": f"{asset_name} {version}"}
-            req = Request(
-                f"https://api.github.com/repos/{self._repo}/releases",
-                data=json.dumps(release_data).encode(),
-                headers=headers,
-                method="POST",
-            )
-            try:
-                with urlopen(req) as resp:
-                    release = json.loads(resp.read().decode())
-            except HTTPError as exc:
-                print(f"  GitHub API error: {exc}")
-                return False
-            except Exception as exc:
-                print(f"  GitHub API error: {exc}")
-                return False
-
-        self._delete_asset(release["id"], asset_name, headers)
-        upload_url = release.get("upload_url", "").split("{")[0]
-        asset_data = file_path.read_bytes()
-        asset_headers = {
-            **headers,
-            "Content-Type": "text/yaml",
-            "Content-Length": str(len(asset_data)),
-        }
-        upload_req = Request(
-            f"{upload_url}?name={asset_name}",
-            data=asset_data,
-            headers=asset_headers,
-            method="POST",
-        )
-        try:
-            with urlopen(upload_req) as resp:
-                print(f"  Deployed resource {asset_name} to {self._repo} release {tag}")
-                return True
-        except Exception as exc:
-            print(f"  Failed to upload asset: {exc}")
-            return False
-
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
         """Publish a resource and its catalog entry (ADR-20).
 

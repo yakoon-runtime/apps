@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import yaml
-from y5n.apps.yak.environment.models import Environment
-from y5n.apps.yak.pack.models import PackName
 
 
 class Artifact:
@@ -65,27 +63,6 @@ class Artifact:
 
 class ArtifactSource(Protocol):
     def resolve(self, name: str) -> Artifact | None: ...
-
-
-def load_remote_environment(path: Path) -> Environment | None:
-    """Parse an environment manifest (a plain YAML resource, not an artifact).
-
-    The manifest declares the desired installation: a name and the
-    components it materializes. It holds no infrastructure and no
-    resolution logic — the resolver decides how each component is met.
-    """
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        return None
-    components = data.get("components", [])
-    if not isinstance(components, list):
-        return None
-    return Environment(
-        name=str(data.get("name", path.stem)),
-        schema=str(data.get("schema", "1")),
-        components=[PackName(c) for c in components],
-    )
 
 
 @runtime_checkable

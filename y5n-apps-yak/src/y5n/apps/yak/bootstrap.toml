@@ -1,6 +1,21 @@
-environment = "yakoon:platform"
+sources = [
+    "github:yakoon-runtime/yakoon:packs/catalog.yml",
+    "github:yakoon-runtime/yakoon:runtime/catalog.yml",
+    "github:yakoon-runtime/yakoon:sdk/catalog.yml",
+    "github:yakoon-runtime/yakoon:apps/catalog.yml",
+]
 
-sources = ["github:yakoon-runtime/apps:catalogs/official.yml"]
+install = [
+    "y5n-packs-root",
+    "y5n-runtime-boot",
+    "y5n-runtime-api",
+    "y5n-runtime-engine",
+    "y5n-runtime-store",
+    "y5n-runtime-transport",
+    "y5n-runtime-llm",
+    "y5n-sdk-python",
+    "y5n-apps-runtime",
+]
 
 [logs]
 path = ".yak/logs"

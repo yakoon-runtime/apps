@@ -8,29 +8,18 @@ from pathlib import Path
 def make_source(
     path: Path,
     components: dict | None = None,
-    environments: dict | None = None,
-    sub_sources: list[str] | None = None,
 ) -> Path:
     """Create a source directory with a declared catalog.yml."""
     path.mkdir(parents=True, exist_ok=True)
-    lines: list[str] = []
-    if sub_sources:
-        lines.append("sources:")
-        for sub in sub_sources:
-            lines.append(f"  - {sub!r}")
     components = components or {}
+    lines = ["components:"]
     if components:
-        lines.append("components:")
         for name, entry in components.items():
             lines.append(f"  {name}:")
             lines.append(f"    version: {entry.get('version', '0.1')!r}")
             lines.append(f"    location: {entry['location']!r}")
     else:
-        lines.append("components: {}")
-    if environments:
-        lines.append("environments:")
-        for name, location in environments.items():
-            lines.append(f"  {name}: {location!r}")
+        lines.append("  {}")
     (path / "catalog.yml").write_text("\n".join(lines) + "\n")
     return path
 
@@ -63,16 +52,5 @@ def artifact(
         "host: python\n"
         "mount: " + mount + "\n"
         "fingerprint: sha256:" + (fingerprint or name) + "\n"
-    )
-    return path
-
-
-def environment(source: Path, name: str, components: list[str]) -> Path:
-    """An environment manifest resource inside a source."""
-    env_dir = source / "environments"
-    env_dir.mkdir(parents=True, exist_ok=True)
-    path = env_dir / f"{name}.yml"
-    path.write_text(
-        "name: " + name + "\ncomponents:\n" + "".join(f"  - {c}\n" for c in components)
     )
     return path

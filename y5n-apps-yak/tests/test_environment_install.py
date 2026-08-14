@@ -1,9 +1,9 @@
-"""ADR-20 gold test: Yak materializes the environment the source index offers.
+"""ADR-20 gold test: Yak materializes the components the bootstrap declares.
 
-Yak knows no component names. A source catalog provides the artifacts of
-an environment; ``install`` materializes them and a reconciled ``update``
-converges to a changed desired state — with no installer change, because
-the environment is fully declarative.
+Yak knows no component names. A source catalog provides component
+locations; the Context's ``install`` list names what to install. Both
+``install`` and a reconciled ``update`` converge to the declared set —
+with no installer change, because the desired set is fully declarative.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import tempfile
 from pathlib import Path
 
 from conftest import artifact as make_artifact
-from conftest import environment as make_environment
 from conftest import make_source
 from y5n.apps.yak.environment.io import load as load_env
 from y5n.apps.yak.environment.io import touch
@@ -22,18 +21,17 @@ from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
 
 
-def _build_repo(root: Path, names: list[str], env_components: list[str]) -> Path:
+def _build_repo(root: Path, names: list[str]) -> Path:
     repo = root / "repo"
     components = {name: {"location": f"artifacts/{name}-art"} for name in names}
     for name in names:
         make_artifact(repo / "artifacts" / f"{name}-art", name, f"/opt/{name}")
-    make_environment(repo, "fake", env_components)
-    make_source(repo, components, environments={"fake": "environments/fake.yml"})
+    make_source(repo, components)
     return repo
 
 
-def _mgr(root: Path, repo: Path) -> InstallationManager:
-    ctx = Context(path=root, sources=[str(repo)], environment="fake")
+def _mgr(root: Path, repo: Path, install: list[str]) -> InstallationManager:
+    ctx = Context(path=root, sources=[str(repo)], install=install)
     return InstallationManager(
         FileRepository(),
         DirectoryArtifactStore(),
@@ -41,11 +39,11 @@ def _mgr(root: Path, repo: Path) -> InstallationManager:
     )
 
 
-def test_install_materializes_arbitrary_environment():
+def test_install_materializes_declared_components():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repo = _build_repo(root, ["foo", "bar", "baz"], ["foo", "bar", "baz"])
-        mgr = _mgr(root, repo)
+        repo = _build_repo(root, ["foo", "bar", "baz"])
+        mgr = _mgr(root, repo, ["foo", "bar", "baz"])
         inst = mgr.install(root / "inst")
 
         state = mgr.load(inst.root)
@@ -61,14 +59,14 @@ def test_install_materializes_arbitrary_environment():
         assert sorted(str(c) for c in env.components) == ["bar", "baz", "foo"]
 
 
-def test_update_converges_to_changed_environment():
+def test_update_converges_to_changed_desired_set():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repo = _build_repo(root, ["foo", "bar", "baz"], ["foo", "bar", "baz"])
-        mgr = _mgr(root, repo)
+        repo = _build_repo(root, ["foo", "bar", "baz"])
+        mgr = _mgr(root, repo, ["foo", "bar", "baz"])
         inst = mgr.install(root / "inst")
 
-        # The desired state changes to foo + quux: the source grows quux,
+        # The desired set changes to foo + quux: the source grows quux,
         # and the materialized SOLL is edited accordingly.
         make_artifact(repo / "artifacts" / "quux-art", "quux", "/opt/quux")
         make_source(
@@ -77,12 +75,10 @@ def test_update_converges_to_changed_environment():
                 "foo": {"location": "artifacts/foo-art"},
                 "quux": {"location": "artifacts/quux-art"},
             },
-            environments={"fake": "environments/fake.yml"},
         )
-        make_environment(repo, "fake", ["foo", "quux"])
         touch(inst.root, name="fake", components=["foo", "quux"])
 
-        mgr2 = _mgr(root, repo)
+        mgr2 = _mgr(root, repo, ["foo", "quux"])
         mgr2.update(inst.root)
 
         state = mgr2.load(inst.root)

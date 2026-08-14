@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 from conftest import artifact as make_artifact
-from conftest import environment as make_environment
 from conftest import make_source, source_pack
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
@@ -29,13 +28,12 @@ def _platform_mgr(
     source_pack(repo / "packs" / "y5n-packs-root", "y5n-packs-root", "/")
     source_pack(repo / "runtime" / "y5n-runtime-boot", "y5n-runtime-boot", "/boot")
     components.update(extra_components or {})
-    make_environment(repo, "test", ["y5n-packs-root", "y5n-runtime-boot"])
-    make_source(
-        repo,
-        components,
-        environments={"test": "environments/test.yml"},
+    make_source(repo, components)
+    ctx = Context(
+        path=root,
+        sources=[str(repo)],
+        install=["y5n-packs-root", "y5n-runtime-boot"],
     )
-    ctx = Context(path=root, sources=[str(repo)], environment="test")
     return InstallationManager(
         FileRepository(),
         DirectoryArtifactStore(),
@@ -46,12 +44,7 @@ def _platform_mgr(
 def _erp_source(root: Path, content: str = "data") -> Path:
     repo = root / "repo"
     make_artifact(repo / "artifacts" / "erp-art", "erp", "/opt/erp", content)
-    make_environment(repo, "test", [])
-    make_source(
-        repo,
-        {"erp": {"location": "artifacts/erp-art"}},
-        environments={"test": "environments/test.yml"},
-    )
+    make_source(repo, {"erp": {"location": "artifacts/erp-art"}})
     return repo
 
 
@@ -59,7 +52,7 @@ def test_update_heals_deleted_artifact_structure(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repo = _erp_source(root)
-        ctx = Context(path=root, sources=[str(repo)], environment="test")
+        ctx = Context(path=root, sources=[str(repo)], install=["erp"])
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
@@ -99,13 +92,11 @@ def test_mode_switch_replaces_component(monkeypatch):
         root = Path(tmp)
         official = root / "official"
         make_artifact(official / "erp-art", "erp", "/opt/erp", "data")
-        make_environment(official, "test", [])
         make_source(
             official,
             {"erp": {"location": "erp-art"}},
-            environments={"test": "environments/test.yml"},
         )
-        ctx_art = Context(path=root, sources=[str(official)], environment="test")
+        ctx_art = Context(path=root, sources=[str(official)])
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx_art
         )
@@ -124,9 +115,7 @@ def test_mode_switch_replaces_component(monkeypatch):
         dev = root / "dev"
         source_pack(dev / "erp", "erp", "/opt/erp")
         make_source(dev, {"erp": {"location": "erp"}})
-        ctx_src = Context(
-            path=root, sources=[str(dev), str(official)], environment="test"
-        )
+        ctx_src = Context(path=root, sources=[str(dev), str(official)])
         mgr2 = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx_src
         )
@@ -139,7 +128,7 @@ def test_mode_switch_replaces_component(monkeypatch):
         assert next(c for c in state.components if c.name == "erp").mode == "source"
 
         # The local source disappears again → update switches back to artifact.
-        ctx_rel = Context(path=root, sources=[str(official)], environment="test")
+        ctx_rel = Context(path=root, sources=[str(official)])
         mgr3 = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx_rel
         )

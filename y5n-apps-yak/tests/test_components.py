@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 from conftest import artifact as make_artifact
-from conftest import environment as make_environment
 from conftest import make_source, source_pack
 from y5n.apps.yak.environment.io import load as load_env
 from y5n.apps.yak.hosts.cli.cwd import Context
@@ -51,13 +50,12 @@ def _platform_mgr(
     components["y5n-packs-root"] = {"location": "packs/y5n-packs-root"}
     components["y5n-runtime-boot"] = {"location": "runtime/y5n-runtime-boot"}
     components.update(extra_components or {})
-    make_environment(repo, "test", ["y5n-packs-root", "y5n-runtime-boot"])
-    make_source(
-        repo,
-        components,
-        environments={"test": "environments/test.yml"},
+    make_source(repo, components)
+    ctx = Context(
+        path=root,
+        sources=[str(repo)],
+        install=["y5n-packs-root", "y5n-runtime-boot"],
     )
-    ctx = Context(path=root, sources=[str(repo)], environment="test")
     return InstallationManager(
         FileRepository(),
         DirectoryArtifactStore(),
@@ -154,10 +152,8 @@ def test_artifact_component_survives_store_deletion(monkeypatch):
         make_source(
             repo,
             {"erp": {"location": "artifacts/erp-art"}},
-            environments={"test": "environments/test.yml"},
         )
-        make_environment(repo, "test", [])
-        ctx = Context(path=root, sources=[str(repo)], environment="test")
+        ctx = Context(path=root, sources=[str(repo)])
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
@@ -203,10 +199,8 @@ def test_update_artifact_refreshes_component(monkeypatch):
         make_source(
             repo,
             {"erp": {"location": "artifacts/erp-art"}},
-            environments={"test": "environments/test.yml"},
         )
-        make_environment(repo, "test", [])
-        ctx = Context(path=root, sources=[str(repo)], environment="test")
+        ctx = Context(path=root, sources=[str(repo)])
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )

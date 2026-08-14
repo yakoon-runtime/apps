@@ -5,10 +5,10 @@
 - C  Development: a local source first in the list wins over the release.
 - D  Fallback: removing the local source returns to the released artifact.
 - E  Two sources offer the same identity — the first wins.
-- F  A → B → C → A is a clear cycle error.
 - G  GitHub is transport: catalog + location → artifact, no release scan.
 - H  --from is exclusive: ACME wins, nothing else is consulted.
 - I  --from miss is an error, never a fallback.
+- O  Official: the flat bootstrap source list resolves across one repo.
 """
 
 from __future__ import annotations
@@ -25,25 +25,18 @@ from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
-from y5n.apps.yak.resolver.catalog import CatalogCycleError, build_index
+from y5n.apps.yak.resolver.catalog import build_index
 
 
-def _write_catalog(
-    source: Path, components: dict, *, sub_sources: list[str] | None = None
-) -> None:
-    lines = []
-    for sub in sub_sources or []:
-        lines.append(f"  - {sub!r}")
-    if lines:
-        lines.insert(0, "sources:")
+def _write_catalog(source: Path, components: dict) -> None:
     if not components:
-        lines.append("components: {}")
+        lines = ["components: {}"]
     else:
-        lines.append("components:")
-    for name, entry in components.items():
-        lines.append(f"  {name}:")
-        lines.append(f'    version: {entry.get("version", "")!r}')
-        lines.append(f'    location: {entry["location"]!r}')
+        lines = ["components:"]
+        for name, entry in components.items():
+            lines.append(f"  {name}:")
+            lines.append(f'    version: {entry.get("version", "")!r}')
+            lines.append(f'    location: {entry["location"]!r}')
     (source / "catalog.yml").write_text("\n".join(lines) + "\n")
 
 
@@ -219,18 +212,6 @@ def test_e_first_source_wins():
         assert ref.location == "one-artifact"
 
 
-def test_f_cycle_is_an_error():
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        for name, subs in (("a", ["b"]), ("b", ["c"]), ("c", ["a"])):
-            source = root / name
-            source.mkdir()
-            _write_catalog(source, {}, sub_sources=subs)
-
-        with pytest.raises(CatalogCycleError):
-            build_index([str(root / "a")], root)
-
-
 class _FakeResp:
     def __init__(self, payload: bytes) -> None:
         self._payload = payload
@@ -351,27 +332,24 @@ def test_i_from_miss_is_an_error():
 
 
 def test_official_source_graph(monkeypatch):
-    """The official source list walks the ownership-split catalog graph."""
+    """The bootstrap source list is a flat catalog set in one repository."""
     from y5n.apps.yak.resolver import catalog as catalog_module
 
     catalogs = {
-        "catalogs/official.yml": (
-            "sources:\n"
-            "  - github:yakoon-runtime/apps:catalogs/runtime.yml\n"
-            "  - github:yakoon-runtime/apps:catalogs/sdk.yml\n"
-            "  - github:yakoon-runtime/apps:catalogs/apps.yml\n"
+        "packs/catalog.yml": (
+            "components:\n"
+            "  y5n-packs-system:\n    location: system-v1/system.tar.gz\n"
+            "  y5n-packs-ident:\n    location: ident-v1/ident.tar.gz\n"
         ),
-        "catalogs/runtime.yml": (
+        "runtime/catalog.yml": (
             "components:\n"
             "  y5n-packs-root:\n    location: root-v1/root.tar.gz\n"
             "  y5n-runtime-boot:\n    location: boot-v1/boot.tar.gz\n"
-            "environments:\n"
-            "  yakoon:platform:\n    location: environments/p.yml\n"
         ),
-        "catalogs/sdk.yml": (
+        "sdk/catalog.yml": (
             "components:\n" "  y5n-sdk-python:\n    location: sdk-v1/sdk.tar.gz\n"
         ),
-        "catalogs/apps.yml": (
+        "apps/catalog.yml": (
             "components:\n" "  y5n-apps-runtime:\n    location: rt-v1/rt.tar.gz\n"
         ),
     }
@@ -384,9 +362,16 @@ def test_official_source_graph(monkeypatch):
 
     monkeypatch.setattr(catalog_module, "urlopen", fake)
     index = build_index(
-        ["github:yakoon-runtime/apps:catalogs/official.yml"], Path("/tmp/x")
+        [
+            "github:yakoon-runtime/yakoon:packs/catalog.yml",
+            "github:yakoon-runtime/yakoon:runtime/catalog.yml",
+            "github:yakoon-runtime/yakoon:sdk/catalog.yml",
+            "github:yakoon-runtime/yakoon:apps/catalog.yml",
+        ],
+        Path("/tmp/x"),
     )
+    assert index.resolve("y5n-packs-system") is not None
+    assert index.resolve("y5n-packs-ident") is not None
     assert index.resolve("y5n-packs-root") is not None
     assert index.resolve("y5n-sdk-python") is not None
     assert index.resolve("y5n-apps-runtime") is not None
-    assert index.resolve_environment("yakoon:platform") is not None

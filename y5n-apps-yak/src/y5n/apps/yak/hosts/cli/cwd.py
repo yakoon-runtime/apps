@@ -16,7 +16,7 @@ class Context:
     path: Path
     name: str = ""
     schema: str = "1"
-    environment: str = ""
+    install: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     source_dirs: list[Path] = field(default_factory=list)
     component_sources: dict[str, str] = field(default_factory=dict)
@@ -89,7 +89,7 @@ def _load_context(root: Path) -> Context:
         path=root,
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
-        environment=str(data.get("environment") or ctx_data.get("environment") or ""),
+        install=_string_list(data.get("install")),
         sources=_string_list(data.get("sources")),
         source_dirs=source_dirs,
         component_sources=component_sources,

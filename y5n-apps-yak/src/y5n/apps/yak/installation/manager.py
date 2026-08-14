@@ -33,7 +33,6 @@ from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import (
     Artifact,
     _parse_manifest,
-    load_remote_environment,
     load_workspace_manifest,
 )
 from y5n.apps.yak.resolver.catalog import (
@@ -41,7 +40,6 @@ from y5n.apps.yak.resolver.catalog import (
     Index,
     build_index,
     fetch_github_artifact,
-    fetch_github_file,
 )
 from y5n.apps.yak.workspace.materializer import Materializer
 
@@ -115,16 +113,13 @@ class InstallationManager:
         ui=None,
         workspace_path: str = "structure",
     ) -> Installation:
-        """Materialize the environment the Context points at (ADR-8).
+        """Materialize the bootstrap installation the Context declares (ADR-8).
 
-        ``install`` reads the Context's ``environment`` reference, resolves
-        the manifest through the repositories and materializes every
-        declared component — root and boot included, with no special
-        status. Without a resolvable environment it falls back to the
-        minimal platform namespaces (transition). ``workspace_path`` is
-        the workspace layout: ``structure/`` for a regular installation,
-        ``workspace/structure/`` when bootstrapping inside a source
-        checkout.
+        ``install`` reads the Context's ``install`` list — the component
+        identities the bootstrap wants — and resolves each through the
+        source index. Root and boot have no special status. ``workspace_path``
+        is the workspace layout: ``structure/`` for a regular installation,
+        ``workspace/structure/`` when bootstrapping inside a source checkout.
         """
         now = datetime.now(UTC)
         root = path.resolve()
@@ -132,12 +127,7 @@ class InstallationManager:
         structure_dir = root / workspace_path
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            manifest = self._resolve_install_environment()
-            platform = (
-                self._materialize_environment(root, manifest)
-                if manifest is not None
-                else []
-            )
+            platform = self._materialize_install(root)
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
                 structure_dir,
@@ -175,19 +165,33 @@ class InstallationManager:
         self._write_state(inst)
         return inst
 
-    def _resolve_install_environment(self):
-        """Resolve the Context's environment reference through the index."""
-        if self._context is None or not self._context.environment:
-            return None
-        hit = self._index().resolve_environment(self._context.environment)
-        if hit is None:
-            return None
-        catalog, location = hit
-        if catalog.base is not None:
-            path = catalog.base / location
-        else:
-            path = fetch_github_file(catalog.spec, location)
-        return load_remote_environment(path)
+    def _materialize_install(self, path: Path) -> list[Component]:
+        """Reconcile the bootstrap's ``install`` list into staged components.
+
+        Yak knows no component names: every identity the bootstrap
+        declares is resolved through the source index, its wheel (if any)
+        is installed, and its namespace staged — exactly like any
+        component added later with ``yak add``.
+        """
+        components: list[Component] = []
+        wheels: list[Path] = []
+        for name in self._install_names():
+            comp = self._resolve_component(str(name))
+            if comp is None:
+                continue
+            if comp.kind == "artifact" and comp.artifact is not None:
+                wheel = comp.artifact.package_file
+                if wheel is not None and wheel.exists():
+                    wheels.append(wheel)
+            components.append(self._ensure_component(path, str(name), comp))
+        self._install_wheels(wheels, path)
+        return components
+
+    def _install_names(self) -> list[str]:
+        """The component identities the Context's bootstrap wants installed."""
+        if self._context is None:
+            return []
+        return list(self._context.install)
 
     def _install_artifact(self, artifact, path: Path, *, force: bool = False) -> bool:
         """Install a single resolved artifact's wheel (with dependencies).
@@ -666,12 +670,14 @@ class InstallationManager:
         asker: StoreAsker | None = None,
         ui=None,
     ) -> Installation:
-        """Reconcile the installation (IST) against the environment (SOLL).
+        """Reconcile the installation (IST) against its desired state.
 
-        Desired components not yet installed are made available; installed
-        components no longer desired are removed; artifact components whose
-        fingerprint changed are re-staged. The workspace is then
-        re-materialized from the staged component store only.
+        The desired set is the installation's own declared state (the
+        ``.yak/environment.yml`` record); it converges with the source
+        index. Components no longer desired are removed; artifact
+        components whose fingerprint changed are re-staged. The
+        workspace is then re-materialized from the staged component
+        store only.
         """
         with self._step(ui, "Resolving"):
             inst = self.load(path)

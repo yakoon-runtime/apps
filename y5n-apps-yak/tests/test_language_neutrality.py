@@ -264,10 +264,8 @@ def test_non_python_component_lifecycle(monkeypatch):
             repo_root / "runtime" / "y5n-runtime-boot", target_is_directory=True
         )
         _dotnet_artifact(source)
-        from conftest import environment as make_environment
         from conftest import make_source
 
-        make_environment(source, "test", ["y5n-packs-root", "y5n-runtime-boot"])
         make_source(
             source,
             {
@@ -275,12 +273,11 @@ def test_non_python_component_lifecycle(monkeypatch):
                 "y5n-runtime-boot": {"location": "runtime/y5n-runtime-boot"},
                 "acme-test": {"location": "acme-test-1.0.0.dotnet.artifact"},
             },
-            environments={"test": "environments/test.yml"},
         )
         ctx_obj = Context(
             path=ctx,
             sources=[str(source)],
-            environment="test",
+            install=["y5n-packs-root", "y5n-runtime-boot"],
         )
 
         mgr = InstallationManager(
