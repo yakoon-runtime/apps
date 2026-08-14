@@ -351,7 +351,7 @@ def test_i_from_miss_is_an_error():
 
 
 def test_official_source_graph(monkeypatch):
-    """yakoon:official walks the ownership-split catalog graph."""
+    """The official source list walks the ownership-split catalog graph."""
     from y5n.apps.yak.resolver import catalog as catalog_module
 
     catalogs = {
@@ -383,7 +383,9 @@ def test_official_source_graph(monkeypatch):
         raise AssertionError(f"unexpected request: {url}")
 
     monkeypatch.setattr(catalog_module, "urlopen", fake)
-    index = build_index(["yakoon:official"], Path("/tmp/x"))
+    index = build_index(
+        ["github:yakoon-runtime/apps:catalogs/official.yml"], Path("/tmp/x")
+    )
     assert index.resolve("y5n-packs-root") is not None
     assert index.resolve("y5n-sdk-python") is not None
     assert index.resolve("y5n-apps-runtime") is not None

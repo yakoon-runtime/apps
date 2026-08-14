@@ -17,6 +17,9 @@ yak = "y5n.apps.yak.hosts.cli.main:main"
 [tool.setuptools]
 package-dir = {"" = "src"}
 
+[tool.setuptools.package-data]
+"y5n.apps.yak" = ["bootstrap.toml"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 namespaces = true

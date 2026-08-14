@@ -1,4 +1,10 @@
-"""yak init — create a Yak context in the current directory."""
+"""yak init — create a Yak context in the current directory.
+
+``init`` is deliberately dumb: it copies the packaged ``bootstrap.toml``
+(where the world starts) into ``.yak/context.toml`` and stamps the local
+identity. Everything else reads that file. Yak knows mechanisms, not
+deployments — the bootstrap is data.
+"""
 
 from __future__ import annotations
 
@@ -21,25 +27,31 @@ def _init(root: Path) -> None:
     now = datetime.now(UTC).isoformat()
     (yak_dir / "logs").mkdir(exist_ok=True)
 
-    # Detect known subdirectories for roots
+    # The bootstrap configuration ships with the tool — data, not code.
+    packaged = Path(__file__).resolve().parents[3] / "bootstrap.toml"
+    default = packaged.read_text() if packaged.exists() else ""
+
+    # Detect known subdirectories for build-time roots (transition).
     known_dirs = ("packs", "runtime", "apps", "sdk")
     roots = [d for d in known_dirs if (root / d).is_dir()]
 
-    ctx_lines = [
-        'environment = "yakoon:platform"',
-        "",
-        'sources = ["yakoon:official"]',
-        "",
-        f"[context]",
-        f'name = "{root.name}"',
-        f'created = "{now}"',
-        f'schema = "1"',
-    ]
+    ctx_lines = [default.rstrip()]
     if roots:
         ctx_lines.append("")
         ctx_lines.append("[sources]")
         ctx_lines.append(f'dirs = [{", ".join(repr(r) for r in roots)}]')
-    ctx_lines.extend(["", "[logs]", 'path = ".yak/logs"', ""])
+    ctx_lines.extend(
+        [
+            "",
+            "[context]",
+            f'name = "{root.name}"',
+            f'created = "{now}"',
+            'schema = "1"',
+            "",
+        ]
+    )
+    if not ctx_lines[0]:
+        ctx_lines = ctx_lines[1:]
 
     (yak_dir / "context.toml").write_text("\n".join(ctx_lines))
 

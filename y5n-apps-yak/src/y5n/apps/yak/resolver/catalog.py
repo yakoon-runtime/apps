@@ -80,11 +80,12 @@ def _split_spec(spec: str) -> tuple[str, str, str]:
     """(kind, location, catalog-path) of a source spec.
 
     - ``github:owner/repo[:path/to/catalog.yml]``
-    - ``yakoon:official`` → the official source list (bootstrap pointer)
     - a local path
+
+    The spec is always an explicit location — no aliases, no product
+    knowledge. A bootstrap pointer is configuration data (the packaged
+    default context), never code.
     """
-    if spec == "yakoon:official":
-        return "github", "github:yakoon-runtime/apps", "catalogs/official.yml"
     if spec.startswith("github:"):
         rest = spec.removeprefix("github:")
         if ":" in rest:

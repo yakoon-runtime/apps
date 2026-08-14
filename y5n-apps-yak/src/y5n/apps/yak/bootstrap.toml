@@ -1,0 +1,6 @@
+environment = "yakoon:platform"
+
+sources = ["github:yakoon-runtime/apps:catalogs/official.yml"]
+
+[logs]
+path = ".yak/logs"
