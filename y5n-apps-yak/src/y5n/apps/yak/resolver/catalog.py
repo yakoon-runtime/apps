@@ -30,9 +30,16 @@ class CatalogIdentityError(CatalogError):
 
 @dataclass(frozen=True)
 class ComponentRef:
-    """One component offered by a source: its location relative to the catalog."""
+    """One component offered by a source.
+
+    ``location`` is the source-relative path of the component's source;
+    ``release`` optionally names the published release the component
+    offers (an opaque release identifier, e.g. a tag — the transport
+    knows how to turn it into an artifact address).
+    """
 
     location: str
+    release: str | None = None
 
 
 @dataclass(frozen=True)
@@ -117,6 +124,49 @@ def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
     return _parse_catalog(spec, None, data)
 
 
+def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
+    """Fetch a component's published release asset from a GitHub source.
+
+    The catalog says *which* release (``release`` is an opaque release
+    identifier, e.g. the tag); this adapter knows the asset convention
+    (``{name}.artifact.tar.gz``) and the download address shape. There is
+    no release scan and no search — the address is fully deterministic.
+    """
+    repo = github_repo(spec)
+    url = (
+        f"https://github.com/{repo}/releases/download/"
+        f"{release}/{name}.artifact.tar.gz"
+    )
+    cache_root = Path.home() / ".yak" / "cache" / "github" / repo / f"{name}-{release}"
+    artifact_dir = _find_artifact_dir(cache_root)
+    if artifact_dir is not None:
+        return artifact_dir
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tarpath = Path(tmp) / f"{name}.artifact.tar.gz"
+        try:
+            with urlopen(url) as resp:
+                tarpath.write_bytes(resp.read())
+        except Exception as exc:
+            raise CatalogError(f"cannot fetch {url}: {exc}") from exc
+        try:
+            with tarfile.open(tarpath, "r:gz") as tar:
+                tar.extractall(path=tmp, filter="data")
+        except Exception as exc:
+            raise CatalogError(f"cannot extract {url}: {exc}") from exc
+        cache_root.mkdir(parents=True, exist_ok=True)
+        cached = cache_root / name
+        if not cached.exists():
+            source = next(
+                (d for d in Path(tmp).iterdir() if d.is_dir() and d.name == name),
+                None,
+            )
+            if source is None:
+                raise CatalogError(f"no {name} in {url}")
+            shutil.copytree(source, cached)
+        return cached
+
+
 def fetch_github_artifact(spec: str, location: str) -> Path | None:
     """Fetch a source-relative location from a GitHub source.
 
@@ -193,7 +243,14 @@ def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:
     for name, entry in raw_components.items():
         if not isinstance(entry, dict) or not isinstance(entry.get("location"), str):
             raise CatalogError(f"catalog '{spec}': component '{name}' needs a location")
-        components[str(name)] = ComponentRef(location=entry["location"])
+        release = entry.get("release")
+        if release is not None and not isinstance(release, str):
+            raise CatalogError(
+                f"catalog '{spec}': component '{name}' release must be a string"
+            )
+        components[str(name)] = ComponentRef(
+            location=entry["location"], release=release
+        )
     return Catalog(spec=spec, base=base, components=components)
 
 

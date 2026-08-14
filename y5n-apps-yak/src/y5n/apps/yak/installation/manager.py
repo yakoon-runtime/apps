@@ -29,13 +29,14 @@ from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import (
     Artifact,
     _parse_manifest,
-    load_workspace_manifest,
 )
 from y5n.apps.yak.resolver.catalog import (
+    CatalogError,
     CatalogIdentityError,
     Index,
     build_index,
     fetch_github_artifact,
+    fetch_github_release,
 )
 from y5n.apps.yak.workspace.materializer import Materializer
 
@@ -101,6 +102,7 @@ class InstallationManager:
         asker: StoreAsker | None = None,
         ui=None,
         workspace_path: str = "structure",
+        mode: str = "artifact",
     ) -> Installation:
         """Materialize the bootstrap installation the Context declares (ADR-8).
 
@@ -109,6 +111,9 @@ class InstallationManager:
         source index. Root and boot have no special status. ``workspace_path``
         is the workspace layout: ``structure/`` for a regular installation,
         ``workspace/structure/`` when bootstrapping inside a source checkout.
+        ``mode`` decides how each component is obtained: ``artifact``
+        (released, via ``release``) for ``yak install``, ``source`` (local
+        checkout, via ``location``) for ``yak bootstrap``.
         """
         now = datetime.now(UTC)
         root = path.resolve()
@@ -116,7 +121,7 @@ class InstallationManager:
         structure_dir = root / workspace_path
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            platform = self._materialize_install(root)
+            platform = self._materialize_install(root, mode=mode)
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
                 structure_dir,
@@ -154,7 +159,9 @@ class InstallationManager:
         self._write_state(inst)
         return inst
 
-    def _materialize_install(self, path: Path) -> list[Component]:
+    def _materialize_install(
+        self, path: Path, *, mode: str = "artifact"
+    ) -> list[Component]:
         """Reconcile the bootstrap's ``install`` list into staged components.
 
         Yak knows no component names: every identity the bootstrap
@@ -165,7 +172,7 @@ class InstallationManager:
         components: list[Component] = []
         wheels: list[Path] = []
         for name in self._install_names():
-            comp = self._resolve_component(str(name))
+            comp = self._resolve_component(str(name), mode=mode)
             if comp is None:
                 continue
             if comp.artifact is not None and comp.mode == "artifact":
@@ -249,7 +256,9 @@ class InstallationManager:
                 raise RuntimeError(f"No installation found at {path}")
             existing = list(env.components)
 
-            component = self._resolve_component(target, index=exclusive_index)
+            component = self._resolve_component(
+                target, index=exclusive_index, mode="artifact"
+            )
             if component is None:
                 raise ValueError(f"Unknown component: {target}")
 
@@ -318,30 +327,47 @@ class InstallationManager:
         sources: list[str] | None = None,
         sources_exclusive: bool = False,
         naming: bool = True,
+        mode: str = "source",
     ) -> _Component | None:
         """Resolve a component through the source index (ADR-20).
 
         ``index.resolve(name)`` returns the first exact hit in source
-        order; the located resource becomes a source pack or an artifact.
-        There is no search, no name interpretation, and no fallback: an
-        unknown identity resolves to nothing. ``index`` overrides the
-        Context index (used by an exclusive ``--from`` source).
+        order. The desired mode decides how the resource is obtained:
+        ``source`` resolves the catalog ``location`` (a checkout), while
+        ``artifact`` resolves the catalog ``release`` (a published
+        artifact) and fails when no release is declared. There is no
+        search, no name interpretation, and no fallback: an unknown
+        identity resolves to nothing. ``index`` overrides the Context
+        index (used by an exclusive ``--from`` source).
         """
         hit = (index if index is not None else self._index()).resolve(target)
         if hit is None:
             return None
         catalog, ref = hit
-        return self._component_from_ref(target, catalog, ref)
+        return self._component_from_ref(target, catalog, ref, mode=mode)
 
-    def _component_from_ref(self, name: str, catalog, ref) -> _Component | None:
-        """Resolve a catalog entry to a source or an artifact component.
+    def _component_from_ref(
+        self, name: str, catalog, ref, *, mode: str = "source"
+    ) -> _Component | None:
+        """Resolve a catalog entry in the requested mode.
 
-        The resolver does not classify: a local resource is a source
-        (``mode="source"``), a fetched artifact is an artifact. Pack
+        The caller decides source vs artifact — never the shape of a
+        temporary resource. ``source`` uses ``location`` (a checkout),
+        ``artifact`` uses ``release`` (a published artifact). Pack
         metadata is read only when present, to carry its mount — it never
-        decides the mode. The catalog's declared identity must equal the
-        component's own identity — otherwise the load is an error.
+        decides the mode.
         """
+        if mode == "artifact":
+            if ref.release is None:
+                raise CatalogError(
+                    f"component '{name}' has no release — use a local source "
+                    f"or 'yak bootstrap' instead"
+                )
+            resource = self._materialize_release(catalog, name, ref.release)
+            if resource is None:
+                return None
+            return _Component(name=name, mode="artifact", source=resource)
+
         resource = self._materialize_location(catalog, ref.location)
         if resource is None:
             return None
@@ -361,19 +387,16 @@ class InstallationManager:
                 source=resource,
                 structure=structure_dir,
             )
-        artifact = self._parse_artifact(resource)
-        if artifact is not None:
-            if artifact.name != name:
-                raise CatalogIdentityError(
-                    f"catalog declares '{name}' but the artifact is "
-                    f"'{artifact.name}' at {resource}"
-                )
-            return _Component(name=name, mode="artifact", artifact=artifact)
-        if resource.is_dir():
-            return _Component(
-                name=name, mode="source", source=resource, structure=structure_dir
-            )
-        return None
+        return _Component(
+            name=name, mode="source", source=resource, structure=structure_dir
+        )
+
+    def _materialize_release(self, catalog, name: str, release: str) -> Path | None:
+        """Resolve a catalog's release declaration to a local artifact."""
+        if catalog.base is None:
+            return fetch_github_release(catalog.spec, name, release)
+        path = catalog.base / release
+        return path if path.exists() else None
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
         """Resolve a source-relative catalog location to a local resource."""
@@ -457,11 +480,14 @@ class InstallationManager:
         force: bool,
         index=None,
     ) -> tuple[list, list, list] | None:
-        """Link a source pack into the installation (editable)."""
-        pack = component.pack
-        assert pack is not None
-        # A pack is one unit; its mounts name the packs it depends on.
-        packs = [PackName(m.source) for m in pack.mounts]
+        """Link a source component into the installation (editable)."""
+        # A pack declares the packs it depends on via its mounts; a plain
+        # source (e.g. a Python library or app) has no pack.toml.
+        packs = (
+            [PackName(m.source) for m in component.pack.mounts]
+            if component.pack
+            else []
+        )
         if not packs:
             packs = [PackName(target)]
         added = [p for p in packs if p not in existing_packs]
@@ -520,18 +546,9 @@ class InstallationManager:
         all_packs = existing_packs + [PackName(target)]
         record = self._ensure_component(path, target, component, force=force)
         mounts: list[Mount] = []
-        artifact = component.artifact
-        if artifact is not None and artifact.is_meta():
-            # A meta-artifact declares workspace mounts and contributes
-            # no namespace of its own.
-            if artifact.manifest is not None:
-                ws = load_workspace_manifest(artifact.manifest)
-                if ws is not None:
-                    mounts = self.resolve_mount_sources(ws.mounts)
-        else:
-            staged = self._component_structure(path, target)
-            if record.mount and staged.exists():
-                mounts.append(Mount(source=str(staged), target=record.mount))
+        staged = self._component_structure(path, target)
+        if record.mount and staged.exists():
+            mounts.append(Mount(source=str(staged), target=record.mount))
         return all_packs, mounts, [record]
 
     def _ensure_component(
@@ -544,26 +561,29 @@ class InstallationManager:
     ) -> Component:
         """Stage ``.yak/components/<name>`` to match the resolved component.
 
-        Source components become a symlink (editable), artifact components
-        a local copy (self-contained). The staged object is replaced when
-        it is missing, of the wrong kind (mode change) or ``force`` is
-        set. Returns the IST ``Component`` record.
+        A component with a local ``source`` becomes an editable link;
+        an artifact (released, fetched) becomes a self-contained copy.
+        Only the component's ``structure/`` contribution is staged — a
+        pure library without ``structure/`` is installed into the venv and
+        staged nothing. The staged object is replaced when it is missing,
+        of the wrong mode or ``force`` is set.
         """
         staged = self._component_structure(path, name)
 
-        if component.mode == "source":
+        if component.source is not None:
             pack = component.pack
             mount = pack.mount if pack is not None else None
             structure = component.structure
+            copy = component.mode == "artifact"
             if structure is not None and structure.is_dir():
-                replace = force or self._staging_mismatch(staged, mode="source")
-                self._stage_structure(
-                    path, name, structure, copy=False, replace=replace
+                replace = force or self._staging_mismatch(
+                    staged, mode="artifact" if copy else "source"
                 )
+                self._stage_structure(path, name, structure, copy=copy, replace=replace)
             return Component(
                 name=name,
-                mode="source",
-                source=str(component.source) if component.source is not None else "",
+                mode=component.mode,
+                source=str(component.source),
                 mount=mount,
                 package=name,
             )
@@ -664,7 +684,11 @@ class InstallationManager:
 
         with self._step(ui, "Reconciling"):
             for name in desired:
-                component = self._resolve_component(name)
+                existing_record = merged.get(name)
+                mode = (
+                    existing_record.mode if existing_record is not None else "artifact"
+                )
+                component = self._resolve_component(name, mode=mode)
                 if component is None:
                     continue
                 record = merged.get(name)

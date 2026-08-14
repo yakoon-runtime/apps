@@ -133,19 +133,20 @@ class GithubReleaseRepository:
 
             # Catalog entry is the last step: the resource becomes
             # resolvable only once the catalog knows it. The entry is
-            # minimal — the component's relative location in the repo.
-            if not self._upsert_catalog(name, headers):
+            # minimal — the component's relative location plus the release
+            # it just published.
+            if not self._upsert_catalog(name, tag, headers):
                 print(f"  Deploy failed: catalog not updated for {name}")
                 return False
             return True
 
-    def _upsert_catalog(self, name: str, headers: dict) -> bool:
-        """Ensure the component's minimal entry in the repository's catalog.yml.
+    def _upsert_catalog(self, name: str, release: str, headers: dict) -> bool:
+        """Ensure the component's entry in the repository's catalog.yml.
 
         Reads the current catalog from the default branch, adds or
-        replaces ``name → name`` (the component's relative location) and
-        commits it back. Existing entries are preserved. The catalog is a
-        dumb Name → Location map — no versions, no fingerprints.
+        replaces ``name → {location, release}`` and commits it back.
+        Existing entries are preserved. The catalog is a dumb
+        Name → {Location, Release} map — no versions, no fingerprints.
         """
         url = f"https://api.github.com/repos/{self._repo}/contents/{self._catalog_path}"
         existing = None
@@ -173,7 +174,12 @@ class GithubReleaseRepository:
             catalog = {}
 
         components = catalog.setdefault("components", {})
-        components[name] = {"location": name}
+        existing = components.get(name)
+        entry = {"location": name}
+        if isinstance(existing, dict) and "location" in existing:
+            entry["location"] = existing["location"]
+        entry["release"] = release
+        components[name] = entry
         new_content = yaml.safe_dump(catalog, default_flow_style=False, sort_keys=False)
         put_data = {
             "message": f"catalog: upsert {name}",

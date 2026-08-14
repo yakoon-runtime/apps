@@ -40,7 +40,7 @@ def run(args, mgr) -> None:
     ui.title("Bootstrapping Yakoon")
 
     bootstrap_mgr = _bootstrap_manager(root)
-    bootstrap_mgr.install(root, ui=ui)
+    bootstrap_mgr.install(root, ui=ui, mode="source")
     print(f"  Yakoon ready for development at {root}")
 
 
