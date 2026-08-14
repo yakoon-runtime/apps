@@ -336,7 +336,7 @@ def test_i_from_miss_is_an_error():
 
 
 def test_official_source_graph(monkeypatch):
-    """The bootstrap source list is a flat catalog set in one repository."""
+    """The bootstrap source list is a flat catalog set."""
     from y5n.apps.yak.resolver import catalog as catalog_module
 
     catalogs = {
@@ -350,7 +350,7 @@ def test_official_source_graph(monkeypatch):
             "  y5n-packs-root:\n    location: root-v1/root.tar.gz\n"
             "  y5n-runtime-boot:\n    location: boot-v1/boot.tar.gz\n"
         ),
-        "sdk/catalog.yml": (
+        "catalog.yml": (
             "components:\n" "  y5n-sdk-python:\n    location: sdk-v1/sdk.tar.gz\n"
         ),
         "apps/catalog.yml": (
@@ -369,7 +369,7 @@ def test_official_source_graph(monkeypatch):
         [
             "github:yakoon-runtime/yakoon:packs/catalog.yml",
             "github:yakoon-runtime/yakoon:runtime/catalog.yml",
-            "github:yakoon-runtime/yakoon:sdk/catalog.yml",
+            "github:yakoon-runtime/sdk",
             "github:yakoon-runtime/yakoon:apps/catalog.yml",
         ],
         Path("/tmp/x"),
