@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 from urllib.error import HTTPError
 
+from conftest import make_source
 from y5n.apps.yak.publisher.publish import deploy_artifact
 from y5n.apps.yak.resolver.github import GithubReleaseRepository
 
@@ -53,6 +54,7 @@ class FakeGithub:
         self.catalog_content: bytes | None = None
         self.catalog_sha = "sha-catalog"
         self.fail_catalog = False
+        self.catalog_path: str | None = None
 
     def _release(self, repo: str) -> dict | None:
         return self.releases.get(repo)
@@ -187,7 +189,8 @@ class FakeGithub:
             repo = full.split("/repos/", 1)[1].split("/contents/", 1)[0]
             path = full.split("/contents/", 1)[1]
             contents_url = f"https://api.github.com/repos/{repo}/contents/{path}"
-            if path != "catalog.yml" or method == "GET":
+            is_catalog = path.endswith("catalog.yml")
+            if not is_catalog or method == "GET":
                 if self.catalog_content is None:
                     raise HTTPError(contents_url, 404, "Not Found", {}, None)
                 return _FakeResp(
@@ -204,6 +207,7 @@ class FakeGithub:
                 raise HTTPError(contents_url, 500, "Internal Server Error", {}, None)
             self.catalog_content = base64.b64decode(body["content"])
             self.catalog_sha = f"sha-{len(self.catalog_content)}"
+            self.catalog_path = path
             return _FakeResp(
                 json.dumps({"path": path, "sha": self.catalog_sha}).encode()
             )
@@ -272,6 +276,42 @@ def test_deploy_artifact_requires_published(monkeypatch):
         home = _mock_home(monkeypatch, tmp)
         result = deploy_artifact("crm", "github:acme/packs")
         assert result is None
+
+
+def test_deploy_spec_with_catalog_path_writes_that_catalog(monkeypatch):
+    """A source spec carrying a catalog path deploys into that catalog."""
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        repo = GithubReleaseRepository("github:acme/packs:packs/catalog.yml")
+        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
+        assert fake.catalog_path == "packs/catalog.yml"
+        assert set(_catalog_entries(fake)) == {"ident"}
+        assert _catalog_entries(fake)["ident"] == {"location": "ident"}
+
+
+def test_catalog_source_is_the_components_home(monkeypatch):
+    """Without --to, deploy targets the source whose catalog offers it."""
+    from y5n.apps.yak.hosts.cli.commands.deploy import _catalog_source
+    from y5n.apps.yak.hosts.cli.cwd import Context
+    from y5n.apps.yak.installation.manager import InstallationManager
+    from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
+    from y5n.apps.yak.repository.file_repo import FileRepository
+
+    _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        repo = root / "repo"
+        make_source(
+            repo,
+            {"cool-shell": {"location": "cool-shell"}},
+        )
+        ctx = Context(path=root, sources=[str(repo)])
+        mgr = InstallationManager(
+            FileRepository(), DirectoryArtifactStore(), context=ctx
+        )
+        assert _catalog_source(mgr, "cool-shell") == str(repo)
+        assert _catalog_source(mgr, "nope") is None
 
 
 def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Path:

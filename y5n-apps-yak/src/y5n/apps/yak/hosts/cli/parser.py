@@ -125,13 +125,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "deploy",
-        help="Make a published artifact available in a remote repository",
+        help="Deploy a published artifact to the source its catalog offers",
     )
     p.add_argument("name", help="Component name (e.g. crm)")
     p.add_argument(
         "--to",
-        required=True,
-        help="Repository name or spec (e.g. acme, github:owner/repo)",
+        help="Source spec (e.g. github:owner/repo) — only for a new component",
     )
     p.set_defaults(func=_deploy.run)
 

@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import yaml
+from y5n.apps.yak.resolver.catalog import _split_spec
 
 
 class GithubReleaseRepository:
@@ -26,8 +27,10 @@ class GithubReleaseRepository:
     writes version, fingerprint or release paths into the catalog.
     """
 
-    def __init__(self, repo: str) -> None:
-        self._repo = repo.removeprefix("github:")
+    def __init__(self, spec: str) -> None:
+        _, location, catalog_path = _split_spec(spec)
+        self._repo = location.removeprefix("github:")
+        self._catalog_path = catalog_path
 
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
         """Publish a resource and its catalog entry (ADR-20).
@@ -144,7 +147,7 @@ class GithubReleaseRepository:
         commits it back. Existing entries are preserved. The catalog is a
         dumb Name → Location map — no versions, no fingerprints.
         """
-        url = f"https://api.github.com/repos/{self._repo}/contents/catalog.yml"
+        url = f"https://api.github.com/repos/{self._repo}/contents/{self._catalog_path}"
         existing = None
         try:
             with urlopen(Request(url, headers=headers)) as resp:
