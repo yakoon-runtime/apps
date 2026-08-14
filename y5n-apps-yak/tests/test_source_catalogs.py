@@ -288,7 +288,7 @@ def test_g_github_is_transport_no_release_scan(monkeypatch):
         mgr = _mgr(Context(path=root, sources=["github:acme/packs"]))
         component = mgr._component_from_ref("y5n-packs-ident", catalog, ref)
         assert component is not None
-        assert component.kind == "artifact"
+        assert component.mode == "artifact"
         assert component.artifact is not None
         assert component.artifact.name == "y5n-packs-ident"
         assert component.artifact.mount == "/usr/sbin/ident"

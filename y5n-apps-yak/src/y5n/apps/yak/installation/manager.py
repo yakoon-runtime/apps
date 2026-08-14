@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import tomllib
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import tomllib
 import yaml
 from y5n.apps.yak.environment.io import load as load_env
 from y5n.apps.yak.environment.io import touch
@@ -42,12 +42,16 @@ from y5n.apps.yak.workspace.materializer import Materializer
 
 @dataclass(frozen=True)
 class _Component:
-    """A resolved installable: a source component, a pack or an artifact.
-    ``source`` is the structure directory of an explicitly mapped
-    development source (ADR-8)."""
+    """A resolved installable.
 
-    kind: str
+    ``source`` is the local resource resolved from the catalog (a
+    checkout, pack or library); ``artifact`` is a fetched released
+    artifact. Exactly one of them is set. ``mode`` mirrors which one:
+    ``"source"`` or ``"artifact"``.
+    """
+
     name: str
+    mode: str
     pack: Pack | None = None
     artifact: Artifact | None = None
     source: Path | None = None
@@ -62,16 +66,12 @@ class InstallationManager:
         repository: Repository,
         artifact_store: ArtifactStore,
         *,
-        sdk_path: Path | None = None,
-        runtime_root: Path | None = None,
         context=None,
     ) -> None:
         self._repo = repository
         self._artifacts = artifact_store
         self._materializer = Materializer()
-        self._installer = Installer(artifact_store, runtime_root=runtime_root)
-        self._sdk_path = sdk_path
-        self._runtime_root = runtime_root
+        self._installer = Installer()
         self._context = context
         self._index_cache = None
         from y5n.apps.yak.runtime.service import RuntimeService
@@ -135,7 +135,7 @@ class InstallationManager:
         self._write_state(inst)
 
         with self._step(ui, "Installing"):
-            self._installer.install(inst, sdk_path=self._sdk_path)
+            self._installer.install(inst)
 
         with self._step(ui, "Environment"):
             touch(
@@ -165,7 +165,7 @@ class InstallationManager:
             comp = self._resolve_component(str(name))
             if comp is None:
                 continue
-            if comp.kind == "artifact" and comp.artifact is not None:
+            if comp.artifact is not None and comp.mode == "artifact":
                 wheel = comp.artifact.package_file
                 if wheel is not None and wheel.exists():
                     wheels.append(wheel)
@@ -331,12 +331,13 @@ class InstallationManager:
         return self._component_from_ref(target, catalog, ref)
 
     def _component_from_ref(self, name: str, catalog, ref) -> _Component | None:
-        """Materialize a catalog entry into a source pack or an artifact.
+        """Resolve a catalog entry to a source or an artifact component.
 
-        The located resource decides its own kind by its metadata
-        (``pack.toml`` → source pack, ``artifact.yml`` → artifact). The
-        catalog's declared identity must equal the component's own
-        identity — otherwise the load is an error.
+        The resolver does not classify: a local resource is a source
+        (``mode="source"``), a fetched artifact is an artifact. Pack
+        metadata is read only when present, to carry its mount — it never
+        decides the mode. The catalog's declared identity must equal the
+        component's own identity — otherwise the load is an error.
         """
         resource = self._materialize_location(catalog, ref.location)
         if resource is None:
@@ -351,8 +352,8 @@ class InstallationManager:
             structure = resource / "structure"
             source = structure if structure.is_dir() else resource
             return _Component(
-                kind="pack",
                 name=pack.name,
+                mode="source",
                 pack=Pack(name=pack.name, version=pack.version, mount=pack.mount),
                 source=source,
             )
@@ -363,7 +364,9 @@ class InstallationManager:
                     f"catalog declares '{name}' but the artifact is "
                     f"'{artifact.name}' at {resource}"
                 )
-            return _Component(kind="artifact", name=name, artifact=artifact)
+            return _Component(name=name, mode="artifact", artifact=artifact)
+        if resource.is_dir():
+            return _Component(name=name, mode="source", source=resource)
         return None
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
@@ -431,7 +434,7 @@ class InstallationManager:
         ``update`` share the same mechanism; on failure any partially
         staged components are cleaned up before re-raising.
         """
-        if component.kind == "pack":
+        if component.mode == "source":
             return self._make_pack_available(
                 component, target, path, existing_packs, force, index=index
             )
@@ -470,7 +473,7 @@ class InstallationManager:
                     comp = self._resolve_component(
                         str(name), index=index
                     ) or _Component(
-                        kind="pack",
+                        mode="source",
                         name=str(name),
                         pack=Pack(name=str(name), version="0.1"),
                     )
@@ -485,7 +488,7 @@ class InstallationManager:
                 root=path.resolve(),
                 packs=all_packs,
             )
-            self._installer.install(inst, sdk_path=self._sdk_path)
+            self._installer.install(inst)
         except Exception:
             for record in records:
                 self._cleanup_component(path, record)
@@ -542,15 +545,9 @@ class InstallationManager:
         """
         staged = self._component_structure(path, name)
 
-        if component.kind == "pack":
+        if component.mode == "source":
             pack = component.pack
-            mount = (pack.mount or f"/{name}") if pack is not None else f"/{name}"
-            record = Component(
-                name=name,
-                mode="source",
-                mount=mount,
-                package=name,
-            )
+            mount = pack.mount if pack is not None else None
             source = component.source
             if source is not None and source.is_dir():
                 replace = force or self._staging_mismatch(staged, mode="source")
@@ -560,9 +557,9 @@ class InstallationManager:
                     mode="source",
                     source=str(source),
                     mount=mount,
-                    package=record.package,
+                    package=name,
                 )
-            return record
+            return Component(name=name, mode="source", mount=mount, package=name)
 
         artifact = component.artifact
         if artifact is None:
@@ -572,7 +569,7 @@ class InstallationManager:
             mode="artifact",
             version=artifact.version,
             fingerprint=artifact.fingerprint,
-            mount=artifact.mount or f"/{name}",
+            mount=artifact.mount,
             package=self._wheel_dist(artifact.package_file),
         )
         if not artifact.is_meta() and artifact.structure is not None:
@@ -591,7 +588,7 @@ class InstallationManager:
 
     @staticmethod
     def _record_mode(component: _Component) -> str:
-        return {"pack": "source", "artifact": "artifact"}[component.kind]
+        return component.mode
 
     def _cleanup_component(self, path: Path, record: Component) -> None:
         """Remove a component's staged namespace and installed payload."""
@@ -666,7 +663,7 @@ class InstallationManager:
                 record = merged.get(name)
                 fingerprint_drift = (
                     record is not None
-                    and component.kind == "artifact"
+                    and component.mode == "artifact"
                     and component.artifact is not None
                     and component.artifact.fingerprint
                     and component.artifact.fingerprint != record.fingerprint
@@ -714,7 +711,7 @@ class InstallationManager:
         self._write_state(inst)
 
         with self._step(ui, "Installing"):
-            self._installer.install(inst, sdk_path=self._sdk_path)
+            self._installer.install(inst)
 
         with self._step(ui, "Environment"):
             touch(

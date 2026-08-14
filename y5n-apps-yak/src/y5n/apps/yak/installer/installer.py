@@ -6,51 +6,33 @@ from pathlib import Path
 
 from y5n.apps.yak.installation.models import Installation
 from y5n.apps.yak.installer.venv import ensure_venv, upgrade_pip
-from y5n.apps.yak.repository.artifact import ArtifactStore
-
-
-def _has_project_file(directory: Path) -> bool:
-    return (
-        (directory / "pyproject.toml").exists()
-        or (directory / "setup.py").exists()
-        or (directory / "setup.cfg").exists()
-    )
 
 
 class Installer:
-    def __init__(
-        self,
-        artifact_store: ArtifactStore,
-        runtime_root: Path | None = None,
-    ) -> None:
-        self._artifacts = artifact_store
-        self._runtime_root = runtime_root
-
-    def install(
-        self,
-        installation: Installation,
-        sdk_path: Path | None = None,
-    ) -> None:
+    def install(self, installation: Installation) -> None:
         venv_dir = installation.root / ".venv"
         python = self._ensure_venv(venv_dir)
 
         projects: list[Path] = []
-        if sdk_path is not None and self._has_project_file(sdk_path):
-            projects.append(sdk_path)
-
-        for pack in installation.packs:
-            artifact = self._artifacts.get_artifact(pack)
-            if artifact is None:
+        for component in installation.components:
+            if component.mode != "source":
                 continue
-            projects.extend(self._find_projects(artifact))
+            if not component.source:
+                continue
+            projects.extend(self._find_projects(Path(component.source)))
 
-        # Include all runtime projects (api, engine, store, etc.) to satisfy
-        # dependencies declared by packs like boot.
-        if self._runtime_root is not None:
-            projects.extend(self._find_projects(self._runtime_root))
+        # Deduplicate while keeping order.
+        seen: set[Path] = set()
+        unique: list[Path] = []
+        for proj in projects:
+            resolved = proj.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            unique.append(resolved)
 
-        if projects:
-            self._pip_install_all(python, projects)
+        if unique:
+            self._pip_install_all(python, unique)
 
     def _ensure_venv(self, path: Path) -> Path:
         python = ensure_venv(path)
@@ -62,6 +44,12 @@ class Installer:
             return []
         if self._has_project_file(pack_dir):
             return [pack_dir]
+        # The source may be a content directory (``structure/``) inside a
+        # project whose own project file lives at the parent (e.g. a pack
+        # that is also a Python package).
+        parent = pack_dir.parent
+        if parent.is_dir() and self._has_project_file(parent):
+            return [parent]
         projects: list[Path] = []
         for child in sorted(pack_dir.iterdir()):
             if child.is_dir() and self._has_project_file(child):

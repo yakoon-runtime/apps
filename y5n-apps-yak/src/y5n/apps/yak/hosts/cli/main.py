@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.parser import build_parser
 from y5n.apps.yak.installation.manager import InstallationManager
@@ -32,24 +31,9 @@ def _build_manager() -> InstallationManager:
     # configured repositories.
     roots = ctx.resolve_sources() if ctx is not None else []
 
-    # Monorepo paths for the installer (source projects it installs from).
-    # On a released install there is no monorepo — parents[8] resolves into
-    # the venv and the paths do not exist; the installer then gets None.
-    repo_root = Path(__file__).resolve().parents[8]
-
-    def _source_dir(*parts: str) -> Path | None:
-        candidate = repo_root.joinpath(*parts)
-        return candidate if candidate.is_dir() else None
-
     repo = FileRepository(*roots)
     artifacts = DirectoryArtifactStore(*roots)
-    return InstallationManager(
-        repo,
-        artifacts,
-        context=ctx,
-        sdk_path=_source_dir("sdk", "y5n-sdk-python"),
-        runtime_root=_source_dir("runtime"),
-    )
+    return InstallationManager(repo, artifacts, context=ctx)
 
 
 def main() -> None:
