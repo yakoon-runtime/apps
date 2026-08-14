@@ -359,6 +359,10 @@ def test_official_source_graph(monkeypatch):
     }
 
     def fake(url: str):
+        if "yakoon-runtime/sdk/" in url:
+            return _FakeResp(catalogs["catalog.yml"].encode())
+        if "yakoon-runtime/apps/" in url:
+            return _FakeResp(catalogs["apps/catalog.yml"].encode())
         for path, body in catalogs.items():
             if f"/HEAD/{path}" in url:
                 return _FakeResp(body.encode())
@@ -370,7 +374,7 @@ def test_official_source_graph(monkeypatch):
             "github:yakoon-runtime/yakoon:packs/catalog.yml",
             "github:yakoon-runtime/yakoon:runtime/catalog.yml",
             "github:yakoon-runtime/sdk",
-            "github:yakoon-runtime/yakoon:apps/catalog.yml",
+            "github:yakoon-runtime/apps:catalog.yml",
         ],
         Path("/tmp/x"),
     )
