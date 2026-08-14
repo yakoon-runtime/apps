@@ -144,7 +144,7 @@ def test_c_local_source_first_wins():
         assert state is not None
         record = next(c for c in state.components if c.name == "y5n-packs-crm")
         assert record.mode == "source"
-        assert record.source == str(dev_crm / "crm" / "structure")
+        assert record.source == str(dev_crm / "crm")
         staged = inst.root / ".yak" / "components" / "y5n-packs-crm" / "structure"
         assert staged.is_symlink()
         assert staged.resolve() == (dev_crm / "crm" / "structure").resolve()

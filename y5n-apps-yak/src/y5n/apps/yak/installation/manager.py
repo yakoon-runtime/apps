@@ -47,7 +47,9 @@ class _Component:
     ``source`` is the local resource resolved from the catalog (a
     checkout, pack or library); ``artifact`` is a fetched released
     artifact. Exactly one of them is set. ``mode`` mirrors which one:
-    ``"source"`` or ``"artifact"``.
+    ``"source"`` or ``"artifact"``. ``structure`` is the optional
+    ``<source>/structure`` contribution — the only part that is ever
+    materialized into the workspace tree.
     """
 
     name: str
@@ -55,6 +57,7 @@ class _Component:
     pack: Pack | None = None
     artifact: Artifact | None = None
     source: Path | None = None
+    structure: Path | None = None
 
 
 COMPONENTS_DIR = "components"
@@ -342,6 +345,8 @@ class InstallationManager:
         resource = self._materialize_location(catalog, ref.location)
         if resource is None:
             return None
+        structure = resource / "structure"
+        structure_dir = structure if structure.is_dir() else None
         pack = self._read_pack(resource)
         if pack is not None:
             if pack.name != name:
@@ -349,13 +354,12 @@ class InstallationManager:
                     f"catalog declares '{name}' but the component is "
                     f"'{pack.name}' at {resource}"
                 )
-            structure = resource / "structure"
-            source = structure if structure.is_dir() else resource
             return _Component(
                 name=pack.name,
                 mode="source",
                 pack=Pack(name=pack.name, version=pack.version, mount=pack.mount),
-                source=source,
+                source=resource,
+                structure=structure_dir,
             )
         artifact = self._parse_artifact(resource)
         if artifact is not None:
@@ -366,7 +370,9 @@ class InstallationManager:
                 )
             return _Component(name=name, mode="artifact", artifact=artifact)
         if resource.is_dir():
-            return _Component(name=name, mode="source", source=resource)
+            return _Component(
+                name=name, mode="source", source=resource, structure=structure_dir
+            )
         return None
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
@@ -548,18 +554,19 @@ class InstallationManager:
         if component.mode == "source":
             pack = component.pack
             mount = pack.mount if pack is not None else None
-            source = component.source
-            if source is not None and source.is_dir():
+            structure = component.structure
+            if structure is not None and structure.is_dir():
                 replace = force or self._staging_mismatch(staged, mode="source")
-                self._stage_structure(path, name, source, copy=False, replace=replace)
-                return Component(
-                    name=name,
-                    mode="source",
-                    source=str(source),
-                    mount=mount,
-                    package=name,
+                self._stage_structure(
+                    path, name, structure, copy=False, replace=replace
                 )
-            return Component(name=name, mode="source", mount=mount, package=name)
+            return Component(
+                name=name,
+                mode="source",
+                source=str(component.source) if component.source is not None else "",
+                mount=mount,
+                package=name,
+            )
 
         artifact = component.artifact
         if artifact is None:

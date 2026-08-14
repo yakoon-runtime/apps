@@ -127,9 +127,7 @@ def test_add_source_pack_is_source_linked(monkeypatch):
         assert state is not None
         record = next(c for c in state.components if c.name == "y5n-packs-system")
         assert record.mode == "source"
-        assert record.source == str(
-            root / "repo" / "packs" / "y5n-packs-system" / "structure"
-        )
+        assert record.source == str(root / "repo" / "packs" / "y5n-packs-system")
 
 
 @pytest.mark.slow
