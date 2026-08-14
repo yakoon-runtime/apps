@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from y5n.apps.yak.pack.models import Mount
@@ -52,7 +52,7 @@ class Materializer:
                 if not target.exists():
                     target.symlink_to(source.absolute(), target_is_directory=True)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         workspace_root = structure_dir.parent
         self._write_manifest(workspace_root, now)

@@ -12,13 +12,10 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
-from y5n.apps.yak.publisher.publish import deploy_artifact, publish_local
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
-from y5n.apps.yak.resolver.github import GithubReleaseRepository
 
 
 def _dotnet_artifact(staging: Path) -> Path:

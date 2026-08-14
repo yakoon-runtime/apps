@@ -38,7 +38,7 @@ def run(args, mgr) -> None:
 
 
 def _check(root: Path) -> None:
-    print(f"  Repo        ✓" if root else "  Repo        ✘")
+    print("  Repo        ✓" if root else "  Repo        ✘")
     print(
         "  .venv       ✓"
         if (root / ".venv" / "bin" / "python").exists()

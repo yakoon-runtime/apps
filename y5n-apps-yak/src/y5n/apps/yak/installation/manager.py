@@ -569,7 +569,7 @@ class InstallationManager:
                 mount=mount,
                 package=name,
             )
-            source = component.source or self._pack_structure(name)
+            source = component.source
             if source is not None and source.is_dir():
                 replace = force or self._staging_mismatch(staged, mode="source")
                 self._stage_structure(path, name, source, copy=False, replace=replace)
@@ -599,15 +599,6 @@ class InstallationManager:
                 path, name, artifact.structure, copy=True, replace=replace
             )
         return record
-
-    def _pack_structure(self, name: str) -> Path | None:
-        """The structure dir of a source-pack component."""
-        pack_dir = self._repo.resolve_pack_dir(name)
-        if pack_dir is not None:
-            src = pack_dir / "structure"
-            if src.is_dir():
-                return src
-        return None
 
     @staticmethod
     def _staging_mismatch(staged: Path, *, mode: str) -> bool:
@@ -870,17 +861,6 @@ class InstallationManager:
                     )
                 elif target.is_symlink() and not target.resolve().exists():
                     issues.append(f"✘ Symlink       {mount.source}: broken at {target}")
-
-        # Fingerprint check (compare installed vs current artifact)
-        from y5n.apps.yak.resolver.install import _fingerprint_matches
-
-        for pack in inst.packs:
-            artifact = self._artifacts.get_artifact(pack)
-            if artifact is not None:
-                if _fingerprint_matches(artifact, root):
-                    issues.append(f"✓ Fingerprint   {pack} current")
-                else:
-                    issues.append(f"✘ Fingerprint   {pack} outdated — run 'yak update'")
 
         # Runtime
         pid = self.runtime_status(root)

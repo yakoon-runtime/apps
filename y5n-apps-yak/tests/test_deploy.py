@@ -11,14 +11,14 @@ GitHub is mocked at the HTTP layer.
 
 from __future__ import annotations
 
+import base64
 import json
 import tempfile
 from pathlib import Path
+from urllib.error import HTTPError
 
-from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.publisher.publish import deploy_artifact
 from y5n.apps.yak.resolver.github import GithubReleaseRepository
-from y5n.apps.yak.resolver.install import expand_repository_specs, repository_for
 
 
 class _FakeResp:
@@ -50,6 +50,9 @@ class FakeGithub:
         self.releases: dict[str, dict] = {}
         self.uploaded_assets: list[str] = []
         self._next_id = 1
+        self.catalog_content: bytes | None = None
+        self.catalog_sha = "sha-catalog"
+        self.fail_catalog = False
 
     def _release(self, repo: str) -> dict | None:
         return self.releases.get(repo)
@@ -59,7 +62,7 @@ class FakeGithub:
 
     def urlopen(self, url):
         full = url.full_url if hasattr(url, "full_url") else str(url)
-        method = getattr(url, "method", "GET")
+        method = getattr(url, "method", "GET") or "GET"
         data = getattr(url, "data", None)
 
         if "/releases?" in full:
@@ -180,6 +183,31 @@ class FakeGithub:
                     return _FakeResp(release["assets"][name][1])
             raise OSError("asset not found")
 
+        if "/contents/" in full:
+            repo = full.split("/repos/", 1)[1].split("/contents/", 1)[0]
+            path = full.split("/contents/", 1)[1]
+            contents_url = f"https://api.github.com/repos/{repo}/contents/{path}"
+            if path != "catalog.yml" or method == "GET":
+                if self.catalog_content is None:
+                    raise HTTPError(contents_url, 404, "Not Found", {}, None)
+                return _FakeResp(
+                    json.dumps(
+                        {
+                            "path": path,
+                            "content": base64.b64encode(self.catalog_content).decode(),
+                            "sha": self.catalog_sha,
+                        }
+                    ).encode()
+                )
+            body = json.loads((data or b"").decode())
+            if self.fail_catalog:
+                raise HTTPError(contents_url, 500, "Internal Server Error", {}, None)
+            self.catalog_content = base64.b64decode(body["content"])
+            self.catalog_sha = f"sha-{len(self.catalog_content)}"
+            return _FakeResp(
+                json.dumps({"path": path, "sha": self.catalog_sha}).encode()
+            )
+
         raise AssertionError(f"unexpected request: {full}")
 
 
@@ -213,24 +241,6 @@ def _mock_github(monkeypatch) -> FakeGithub:
     return fake
 
 
-def test_deploy_then_resolve_roundtrip(monkeypatch):
-    fake = _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        store = _published_artifact(home)
-
-        repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("crm", store) is True
-        assert fake.uploaded_assets == ["crm.artifact.tar.gz"]
-
-        artifact = repo.resolve("crm")
-        assert artifact is not None
-        assert artifact.path is not None
-        assert artifact.fingerprint == "abc123"
-        assert artifact.version == "1.0.0"
-        assert (artifact.path / "structure" / "x.txt").read_text() == "data"
-
-
 def test_deploy_is_not_draft(monkeypatch):
     fake = _mock_github(monkeypatch)
     with tempfile.TemporaryDirectory() as tmp:
@@ -260,36 +270,79 @@ def test_deploy_artifact_requires_published(monkeypatch):
     _mock_github(monkeypatch)
     with tempfile.TemporaryDirectory() as tmp:
         home = _mock_home(monkeypatch, tmp)
-        result = deploy_artifact("crm", "acme/packs")
+        result = deploy_artifact("crm", "github:acme/packs")
         assert result is None
 
 
-def test_repository_for_named_from_context(monkeypatch):
-    ctx = Context(
-        path=Path("/tmp/x"),
-        named_repositories={"acme": {"type": "github", "repo": "acme/packs"}},
+def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Path:
+    store = home / ".yak" / "artifacts" / f"{name}-{version}.python.artifact"
+    (store / "structure").mkdir(parents=True, exist_ok=True)
+    (store / "structure" / "x.txt").write_text("data")
+    (store / "artifact.yml").write_text(
+        "name: " + name + "\n"
+        "version: " + version + "\n"
+        "kind: package\n"
+        "builder: python\n"
+        "host: python\n"
+        "mount: " + mount + "\n"
+        "fingerprint: sha256:" + version + "\n"
     )
-    monkeypatch.setattr(
-        "y5n.apps.yak.hosts.cli.cwd.Context.current", staticmethod(lambda: ctx)
-    )
-    repo = repository_for("acme")
-    assert repo is not None
-    assert repo._repo == "acme/packs"
+    return store
 
-    inline = repository_for("github:other/repo")
-    assert inline is not None
-    assert inline._repo == "other/repo"
+
+def _catalog_entries(fake) -> dict:
+    if fake.catalog_content is None:
+        return {}
+    import yaml
+
+    return (yaml.safe_load(fake.catalog_content) or {}).get("components", {})
 
 
-def test_expand_repository_specs(monkeypatch):
-    ctx = Context(
-        path=Path("/tmp/x"),
-        named_repositories={"acme": {"type": "github", "repo": "acme/packs"}},
-    )
-    monkeypatch.setattr(
-        "y5n.apps.yak.hosts.cli.cwd.Context.current", staticmethod(lambda: ctx)
-    )
-    assert expand_repository_specs(["acme", "github:other/repo"]) == [
-        "github:acme/packs",
-        "github:other/repo",
-    ]
+def test_j_deploy_preserves_existing_catalog_entries(monkeypatch):
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        repo = GithubReleaseRepository("acme/packs")
+        assert repo.deploy("system", _published(home, "system", "1.0.0")) is True
+        assert set(_catalog_entries(fake)) == {"system"}
+        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
+        assert set(_catalog_entries(fake)) == {"system", "ident"}
+
+
+def test_k_redeploy_is_idempotent(monkeypatch):
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        repo = GithubReleaseRepository("acme/packs")
+        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
+        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
+        entries = _catalog_entries(fake)
+        assert list(entries) == ["ident"]
+        assert entries["ident"]["version"] == "1.0.0"
+
+
+def test_l_new_version_updates_the_single_entry(monkeypatch):
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        repo = GithubReleaseRepository("acme/packs")
+        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
+        assert repo.deploy("ident", _published(home, "ident", "2.0.0")) is True
+        entries = _catalog_entries(fake)
+        assert list(entries) == ["ident"]
+        assert entries["ident"]["version"] == "2.0.0"
+        assert entries["ident"]["location"] == "ident-v2.0.0/ident.artifact.tar.gz"
+
+
+def test_m_failed_catalog_update_keeps_old_catalog_valid(monkeypatch):
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        repo = GithubReleaseRepository("acme/packs")
+        assert repo.deploy("system", _published(home, "system", "1.0.0")) is True
+        assert "system" in _catalog_entries(fake)
+
+        fake.fail_catalog = True
+        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is False
+        # The old catalog stays valid — it never points at the new artifact.
+        assert set(_catalog_entries(fake)) == {"system"}

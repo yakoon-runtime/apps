@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from y5n.apps.yak.pack.models import Mount, Pack, PackName, ToolReference
+from y5n.apps.yak.pack.models import Mount, Pack, ToolReference
 
 
 class FileRepository:

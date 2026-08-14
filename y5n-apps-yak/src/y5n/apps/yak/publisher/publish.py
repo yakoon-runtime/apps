@@ -1,4 +1,9 @@
-"""Publish artifacts to local store or remote repositories."""
+"""Deploy helper — a writable repository receives a resource (ADR-20).
+
+The read side resolves through catalogs and an index; this module only
+serves the write side: publishing a local artifact and deploying it as
+one atomic repository operation (resource + catalog).
+"""
 
 from __future__ import annotations
 
@@ -41,21 +46,21 @@ def deploy_artifact(name: str, target: str) -> bool | None:
     """Deploy a published artifact to a remote repository.
 
     Reads only from the system-wide store (``~/.yak/artifacts/``) — an
-    artifact must be published first (``yak publish``). Returns None when
-    the artifact is not published, otherwise the deploy result.
+    artifact must be published first (``yak publish``). The repository
+    receives the artifact and updates its catalog, so the resource is
+    immediately resolvable (ADR-20). Returns None when the artifact is
+    not published, otherwise the deploy result.
     """
-    from y5n.apps.yak.resolver.install import repository_for
+    from y5n.apps.yak.resolver.github import GithubReleaseRepository
 
-    repository = repository_for(target)
-    if repository is None:
+    if not target.startswith("github:"):
         raise RuntimeError(
             f"Unknown repository: {target}\n"
-            "Define it in .yak/context.toml under [repositories.<name>]\n"
-            "or use an inline spec like 'github:owner/repo'."
+            "Use an inline spec like 'github:owner/repo'."
         )
 
     published = DirectorySource(Path.home() / ".yak" / "artifacts").resolve(name)
     if published is None or published.path is None:
         return None
 
-    return repository.deploy(name, published.path)
+    return GithubReleaseRepository(target).deploy(name, published.path)

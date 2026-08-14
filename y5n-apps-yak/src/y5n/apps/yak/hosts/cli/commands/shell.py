@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 
 from y5n.apps.yak.hosts.cli.cwd import find_runtime_root
 

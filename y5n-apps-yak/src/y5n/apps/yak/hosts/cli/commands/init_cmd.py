@@ -26,12 +26,12 @@ def _init(root: Path) -> None:
     roots = [d for d in known_dirs if (root / d).is_dir()]
 
     ctx_lines = [
-        f'environment = "yakoon:platform"',
+        'environment = "yakoon:platform"',
         "",
-        f"[context]",
+        "[context]",
         f'name = "{root.name}"',
         f'created = "{now}"',
-        f'schema = "1"',
+        'schema = "1"',
     ]
     if roots:
         ctx_lines.append("")

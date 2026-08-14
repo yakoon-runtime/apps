@@ -113,7 +113,7 @@ def test_assemble_with_asker_binds_operator_backends():
         EVENT_STORE_FACTORY,
         assemble_installation,
     )
-    from y5n.runtime.engine.installation import RUNTIME_STORE, StoreBinding
+    from y5n.runtime.engine.installation import RUNTIME_STORE
 
     asker = _StubAsker({"crm": "postgres", "ident": "memory"})
     installation = assemble_installation(["crm", "ident"], asker=asker)

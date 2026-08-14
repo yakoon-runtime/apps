@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 from conftest import artifact as make_artifact
-from conftest import make_source, source_pack
+from conftest import make_source
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -273,11 +273,11 @@ def test_g_github_is_transport_no_release_scan(monkeypatch):
         artifact_dir = root / "ident-artifact"
         make_artifact(artifact_dir, "y5n-packs-ident", "/usr/sbin/ident")
         catalog_yml = (
-            "components:\n"
-            "  y5n-packs-ident:\n"
-            "    version: 0.8.0\n"
-            "    location: ident-v0.8.0/ident.artifact.tar.gz\n"
-        ).encode()
+            b"components:\n"
+            b"  y5n-packs-ident:\n"
+            b"    version: 0.8.0\n"
+            b"    location: ident-v0.8.0/ident.artifact.tar.gz\n"
+        )
         monkeypatch.setattr(
             catalog_module,
             "urlopen",

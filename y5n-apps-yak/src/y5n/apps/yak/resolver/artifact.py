@@ -62,10 +62,8 @@ class Artifact:
 class ArtifactSource(Protocol):
     def resolve(self, name: str) -> Artifact | None: ...
 
-    def resolve_environment(self, name: str) -> "Environment | None": ...
 
-
-def load_remote_environment(path: Path) -> "Environment | None":
+def load_remote_environment(path: Path) -> Environment | None:
     """Parse an environment manifest (a plain YAML resource, not an artifact).
 
     The manifest declares the desired installation: a name and the
@@ -128,13 +126,6 @@ class DirectorySource:
                     mount=meta.get("mount"),
                 )
         return None
-
-    def resolve_environment(self, name: str):
-        """Resolve an environment manifest from ``environments/<name>.yml``."""
-        env_file = self._root / "environments" / f"{name.replace(':', '-')}.yml"
-        if not env_file.exists():
-            return None
-        return load_remote_environment(env_file)
 
     def list_artifacts(self) -> list[tuple[str, str]]:
         """List the artifacts in this root as (name, kind version)."""

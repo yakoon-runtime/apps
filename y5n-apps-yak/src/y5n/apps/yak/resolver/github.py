@@ -4,148 +4,37 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import tarfile
 import tempfile
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from y5n.apps.yak.resolver.artifact import Artifact, _parse_manifest
+from y5n.apps.yak.resolver.artifact import _parse_manifest
+
+
+def _artifact_fingerprint(artifact_dir: Path) -> str:
+    """The fingerprint declared by an artifact's own artifact.yml."""
+    manifest = artifact_dir / "artifact.yml"
+    if not manifest.exists():
+        return ""
+    try:
+        meta = _parse_manifest(manifest)
+    except Exception:
+        return ""
+    return str(meta.get("fingerprint", ""))
 
 
 class GithubReleaseRepository:
-    """Resolve and deploy artifacts from a GitHub repository's releases.
+    """A GitHub source: serves a catalog and receives deployed resources.
 
-    Cache: ~/.yak/cache/github/<owner>/<repo>/<fingerprint>/<artifact_name>/
+    Resolution lives in the catalog/index (ADR-20); this adapter is
+    transport: it fetches the declared catalog and serves resources, and
+    on the write side it publishes an artifact plus its catalog entry.
     """
 
     def __init__(self, repo: str) -> None:
         self._repo = repo.removeprefix("github:")
-        self._cache_root = Path.home() / ".yak" / "cache" / "github" / self._repo
-
-    def _auth_headers(self) -> dict:
-        """Authorization header when a GitHub token is available.
-
-        Authenticated calls lift the anonymous rate limit and unlock
-        private repositories; resolution stays anonymous without a token.
-        """
-        token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
-        if not token:
-            return {}
-        return {"Authorization": f"token {token}"}
-
-    def _get(self, url: str):
-        return urlopen(Request(url, headers=self._auth_headers()))
-
-    def _find_artifact_dir(self, parent: Path, name: str) -> Path | None:
-        """Find the artifact subdirectory containing artifact.yml for `name`."""
-        for child in parent.iterdir():
-            if not child.is_dir():
-                continue
-            manifest = child / "artifact.yml"
-            if manifest.exists():
-                meta = _parse_manifest(manifest)
-                if meta is not None and meta.get("name") == name:
-                    return child
-        return None
-
-    def resolve(self, name: str) -> Artifact | None:
-        # Check cache first
-        if self._cache_root.is_dir():
-            for fp_dir in self._cache_root.iterdir():
-                if not fp_dir.is_dir():
-                    continue
-                artifact_dir = self._find_artifact_dir(fp_dir, name)
-                if artifact_dir is not None:
-                    meta = _parse_manifest(artifact_dir / "artifact.yml")
-                    fp = meta.get("fingerprint", "")
-                    if fp.startswith("sha256:"):
-                        fp = fp[7:]
-                    return Artifact(
-                        name=meta["name"],
-                        version=meta.get("version", "0"),
-                        kind=meta.get("kind", "package"),
-                        host=meta.get("host", "python"),
-                        builder=meta.get("builder", "python"),
-                        dependencies=meta.get("dependencies", []),
-                        fingerprint=fp,
-                        path=artifact_dir,
-                    )
-
-        # Find the release carrying this artifact. Artifacts live in their
-        # own per-component releases, so the single "latest" release is not
-        # enough — search across all releases.
-        asset_url = self._find_asset(f"{name}.artifact.tar.gz")
-        if asset_url is None:
-            return None
-
-        # Download asset
-        try:
-            with self._get(asset_url) as resp:
-                data = resp.read()
-        except Exception:
-            return None
-
-        # Extract and cache
-        with tempfile.TemporaryDirectory() as tmp:
-            tarpath = Path(tmp) / "artifact.tar.gz"
-            tarpath.write_bytes(data)
-            with tarfile.open(tarpath, "r:gz") as tar:
-                tar.extractall(path=tmp, filter="data")
-
-            # Find the artifact dir (contains artifact.yml)
-            artifact_dir = self._find_artifact_dir(Path(tmp), name)
-            if artifact_dir is None:
-                return None
-
-            meta = _parse_manifest(artifact_dir / "artifact.yml")
-            fp = meta.get("fingerprint", "")
-            if fp.startswith("sha256:"):
-                fp = fp[7:]
-
-            # Cache by fingerprint
-            cache_fp_dir = self._cache_root / (fp or name)
-            cache_fp_dir.mkdir(parents=True, exist_ok=True)
-            cached = cache_fp_dir / artifact_dir.name
-            if not cached.exists():
-                shutil.copytree(artifact_dir, cached)
-
-            return Artifact(
-                name=meta["name"],
-                version=meta.get("version", "0"),
-                kind=meta.get("kind", "package"),
-                host=meta.get("host", "python"),
-                builder=meta.get("builder", "python"),
-                dependencies=meta.get("dependencies", []),
-                fingerprint=fp,
-                path=cached,
-                mount=meta.get("mount"),
-            )
-
-    def resolve_environment(self, name: str):
-        """Resolve an environment manifest from the release assets.
-
-        Environments are plain resources — release assets named
-        ``<name>.yml`` (with ``:`` mapped to ``-``) — not artifacts. The
-        repository answers "do you know environment X?", the same question
-        it answers for artifacts.
-        """
-        from y5n.apps.yak.resolver.artifact import load_remote_environment
-
-        asset_name = f"{name.replace(':', '-')}.yml"
-        asset_url = self._find_asset(asset_name)
-        if asset_url is None:
-            return None
-        try:
-            with self._get(asset_url) as resp:
-                data = resp.read().decode()
-        except Exception:
-            return None
-        with tempfile.TemporaryDirectory() as tmp:
-            p = Path(tmp) / asset_name
-            p.write_text(data)
-            return load_remote_environment(p)
 
     def deploy_resource(
         self, asset_name: str, file_path: Path, *, version: str = "0.1"
@@ -208,39 +97,15 @@ class GithubReleaseRepository:
             print(f"  Failed to upload asset: {exc}")
             return False
 
-    def _find_asset(self, asset_name: str) -> str | None:
-        """The download URL of an asset in any release, or None.
-
-        Artifacts and environments live in their own per-component or
-        per-resource releases; the single "latest" release is not enough.
-        """
-        page = 1
-        while True:
-            url = (
-                f"https://api.github.com/repos/{self._repo}/releases"
-                f"?per_page=100&page={page}"
-            )
-            try:
-                with self._get(url) as resp:
-                    releases = json.loads(resp.read().decode())
-            except Exception:
-                return None
-            if not isinstance(releases, list) or not releases:
-                return None
-            for release in releases:
-                for asset in release.get("assets", []):
-                    if asset.get("name") == asset_name:
-                        return asset["browser_download_url"]
-            page += 1
-
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
-        """Ship an artifact into this repository as a release asset.
+        """Publish a resource and its catalog entry (ADR-20).
 
-        Packages ``artifact_dir`` as ``<name>.artifact.tar.gz`` and
-        publishes it (non-draft by default) so that ``resolve(name)`` can
-        retrieve it immediately. Deploying the same version again updates
-        the existing release (idempotent). Requires GITHUB_TOKEN or
-        YAK_GITHUB_TOKEN.
+        One repository operation: the artifact is fully published first,
+        then the catalog is updated as the last step. A successful deploy
+        means the resource is immediately resolvable through the catalog.
+        Failing the artifact upload leaves the old catalog valid; failing
+        the catalog update leaves the artifact unreferenced but the old
+        catalog valid. Requires GITHUB_TOKEN or YAK_GITHUB_TOKEN.
         """
         token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
         if not token:
@@ -326,10 +191,85 @@ class GithubReleaseRepository:
             try:
                 with urlopen(upload_req) as resp:
                     print(f"  Deployed {name} to {self._repo} release {tag}")
-                    return True
             except Exception as exc:
                 print(f"  Failed to upload asset: {exc}")
                 return False
+
+            # Catalog update is the last step: the resource becomes
+            # resolvable only once the catalog knows it. A failure here
+            # leaves the new artifact unreferenced but the old catalog
+            # valid.
+            entry = {
+                "version": version_part,
+                "location": f"{tag}/{name}.artifact.tar.gz",
+                "fingerprint": _artifact_fingerprint(artifact_dir),
+            }
+            if not self._upsert_catalog(name, entry, headers):
+                print(f"  Deploy failed: catalog not updated for {name}")
+                return False
+            return True
+
+    def _upsert_catalog(self, name: str, entry: dict, headers: dict) -> bool:
+        """Upsert a component entry in the repository's catalog.yml.
+
+        Reads the current catalog from the default branch, adds or
+        replaces the entry, and commits it back. Existing entries are
+        preserved.
+        """
+        import base64
+
+        import yaml
+
+        url = f"https://api.github.com/repos/{self._repo}/contents/catalog.yml"
+        existing = None
+        try:
+            with urlopen(Request(url, headers=headers)) as resp:
+                existing = json.loads(resp.read().decode())
+        except HTTPError as exc:
+            if exc.code != 404:
+                print(f"  GitHub API error: {exc}")
+                return False
+        except Exception as exc:
+            print(f"  GitHub API error: {exc}")
+            return False
+
+        if existing is not None:
+            try:
+                content = base64.b64decode(existing["content"]).decode()
+                catalog = yaml.safe_load(content) or {}
+            except Exception as exc:
+                print(f"  catalog.yml unreadable: {exc}")
+                return False
+            if not isinstance(catalog, dict):
+                catalog = {}
+        else:
+            catalog = {}
+
+        components = catalog.setdefault("components", {})
+        components[name] = entry
+        new_content = yaml.safe_dump(catalog, default_flow_style=False, sort_keys=False)
+        put_data = {
+            "message": f"catalog: upsert {name}",
+            "content": base64.b64encode(new_content.encode()).decode(),
+        }
+        if existing is not None and "sha" in existing:
+            put_data["sha"] = existing["sha"]
+        req = Request(
+            url,
+            data=json.dumps(put_data).encode(),
+            headers=headers,
+            method="PUT",
+        )
+        try:
+            with urlopen(req) as resp:
+                print(f"  Catalog updated: {name}")
+                return True
+        except HTTPError as exc:
+            print(f"  GitHub API error: {exc}")
+            return False
+        except Exception as exc:
+            print(f"  GitHub API error: {exc}")
+            return False
 
     def _release_by_tag(self, tag: str, headers: dict) -> dict | None:
         """Return the release for a tag, or None when it does not exist."""

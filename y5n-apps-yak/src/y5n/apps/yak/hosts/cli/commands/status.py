@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from y5n.apps.yak.environment.io import load as load_env
 from y5n.apps.yak.hosts.cli.cwd import find_context_root
 

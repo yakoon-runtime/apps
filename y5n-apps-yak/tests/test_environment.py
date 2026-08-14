@@ -5,7 +5,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
 from y5n.apps.yak.environment.io import env_path, load, save
 from y5n.apps.yak.environment.models import Environment
 from y5n.apps.yak.environment.sync import add_mount
