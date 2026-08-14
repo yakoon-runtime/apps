@@ -32,7 +32,7 @@ def _init(root: Path) -> None:
     default = packaged.read_text() if packaged.exists() else ""
 
     # Detect known subdirectories for build-time roots (transition).
-    known_dirs = ("packs", "runtime", "apps", "sdk")
+    known_dirs = ("packs", "packages")
     roots = [d for d in known_dirs if (root / d).is_dir()]
 
     ctx_lines = [default.rstrip()]
