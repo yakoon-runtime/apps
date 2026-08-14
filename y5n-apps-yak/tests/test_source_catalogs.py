@@ -230,13 +230,6 @@ class _FakeResp:
         return False
 
 
-def _tar_gz(artifact_dir: Path) -> bytes:
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
-        tar.add(artifact_dir, arcname=artifact_dir.name)
-    return buffer.getvalue()
-
-
 def _fake_urlopen(responses: list[tuple[str, bytes]]):
     def fake(url: str):
         for match, payload in responses:
@@ -245,6 +238,14 @@ def _fake_urlopen(responses: list[tuple[str, bytes]]):
         raise AssertionError(f"unexpected request: {url}")
 
     return fake
+
+
+def _repo_tar_gz(artifact_dir: Path, wrapper: str) -> bytes:
+    """A codeload-style repo archive: one top-level wrapper dir."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        tar.add(artifact_dir, arcname=f"{wrapper}/{artifact_dir.name}")
+    return buffer.getvalue()
 
 
 def test_g_github_is_transport_no_release_scan(monkeypatch):
@@ -258,10 +259,7 @@ def test_g_github_is_transport_no_release_scan(monkeypatch):
         artifact_dir = root / "ident-artifact"
         make_artifact(artifact_dir, "y5n-packs-ident", "/usr/sbin/ident")
         catalog_yml = (
-            b"components:\n"
-            b"  y5n-packs-ident:\n"
-            b"    version: 0.8.0\n"
-            b"    location: ident-v0.8.0/ident.artifact.tar.gz\n"
+            b"components:\n" b"  y5n-packs-ident:\n" b"    location: ident-artifact\n"
         )
         monkeypatch.setattr(
             catalog_module,
@@ -273,8 +271,8 @@ def test_g_github_is_transport_no_release_scan(monkeypatch):
                         catalog_yml,
                     ),
                     (
-                        "github.com/acme/packs/releases/download/ident-v0.8.0",
-                        _tar_gz(artifact_dir),
+                        "codeload.github.com/acme/packs/tar.gz/HEAD",
+                        _repo_tar_gz(artifact_dir, "acme-packs"),
                     ),
                 ]
             ),
@@ -285,7 +283,7 @@ def test_g_github_is_transport_no_release_scan(monkeypatch):
         assert hit is not None
         catalog, ref = hit
         assert catalog.base is None  # remote
-        assert ref.location == "ident-v0.8.0/ident.artifact.tar.gz"
+        assert ref.location == "ident-artifact"
 
         mgr = _mgr(Context(path=root, sources=["github:acme/packs"]))
         component = mgr._component_from_ref("y5n-packs-ident", catalog, ref)

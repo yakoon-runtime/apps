@@ -121,16 +121,17 @@ def fetch_github_artifact(spec: str, location: str) -> Path | None:
     """Fetch a source-relative location from a GitHub source.
 
     GitHub is transport only: the index already decided the location. A
-    github location is ``<tag>/<asset>`` and maps directly to the public
-    download endpoint — no release scan, no search.
+    location is a path inside the repository (the component's folder);
+    it is fetched from the repo archive and extracted — no release scan,
+    no search.
     """
     if location.startswith("releases/") or location.startswith("/"):
         raise CatalogError(
-            f"github source '{spec}': location must be '<tag>/<asset>', "
-            f"got '{location}'"
+            f"github source '{spec}': location must be a path inside the "
+            f"repository, got '{location}'"
         )
     repo = github_repo(spec)
-    url = f"https://github.com/{repo}/releases/download/{location}"
+    url = f"https://codeload.github.com/{repo}/tar.gz/HEAD"
 
     cache_root = (
         Path.home() / ".yak" / "cache" / "github" / repo / location.replace("/", "_")
@@ -139,28 +140,39 @@ def fetch_github_artifact(spec: str, location: str) -> Path | None:
     if artifact_dir is not None:
         return artifact_dir
 
-    try:
-        with urlopen(url) as resp:
-            data = resp.read()
-    except Exception as exc:
-        raise CatalogError(f"cannot fetch {url}: {exc}") from exc
-
     with tempfile.TemporaryDirectory() as tmp:
-        tarpath = Path(tmp) / "resource.tar.gz"
-        tarpath.write_bytes(data)
+        tarpath = Path(tmp) / "repo.tar.gz"
+        try:
+            with urlopen(url) as resp:
+                tarpath.write_bytes(resp.read())
+        except Exception as exc:
+            raise CatalogError(f"cannot fetch {url}: {exc}") from exc
         try:
             with tarfile.open(tarpath, "r:gz") as tar:
                 tar.extractall(path=tmp, filter="data")
         except Exception as exc:
             raise CatalogError(f"cannot extract {url}: {exc}") from exc
-        found = _find_artifact_dir(Path(tmp))
+        found = _find_location_dir(Path(tmp), location)
         if found is None:
-            raise CatalogError(f"no artifact in {url}")
+            raise CatalogError(f"no {location} in {url}")
         cache_root.mkdir(parents=True, exist_ok=True)
         cached = cache_root / found.name
         if not cached.exists():
             shutil.copytree(found, cached)
         return cached
+
+
+def _find_location_dir(parent: Path, location: str) -> Path | None:
+    """The repo-relative ``location`` inside an extracted repo archive.
+
+    codeload wraps the tree in a single top-level directory; the
+    location is resolved relative to that root.
+    """
+    roots = [d for d in parent.iterdir() if d.is_dir()]
+    if len(roots) != 1:
+        return None
+    candidate = roots[0] / location
+    return candidate if candidate.is_dir() else None
 
 
 def _find_artifact_dir(parent: Path) -> Path | None:
