@@ -50,15 +50,12 @@ def _load_context(root: Path) -> Context:
         data = tomllib.load(f)
 
     ctx_data = data.get("context", {})
-    # ``[sources]`` is a transition table: ``dirs`` lists the local
-    # monorepo folders the installer resolves build roots against. The
-    # flat ``sources = [...]`` list is the ADR-20 source set and is
-    # independent of it.
-    sources_section = data.get("sources", {})
-    source_dirs: list[Path] = []
-    if isinstance(sources_section, dict):
-        raw_dirs = sources_section.get("dirs", [])
-        source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
+    # ``source_dirs`` is a transition list: the local monorepo folders
+    # the installer resolves build roots against until the repo split.
+    # It lives top-level so it cannot collide with the flat
+    # ``sources = [...]`` (ADR-20) list.
+    raw_dirs = data.get("source_dirs", [])
+    source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
 
     return Context(
         path=root,

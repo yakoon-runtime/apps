@@ -60,6 +60,7 @@ def test_init_copies_packaged_default_context(monkeypatch):
         root = Path(tmp) / "proj"
         init_cmd._init(root)
         ctx = (root / ".yak" / "context.toml").read_text()
+        assert "github:yakoon-runtime/pack-system" in ctx
         assert "github:yakoon-runtime/yakoon:packs/catalog.yml" in ctx
         assert "github:yakoon-runtime/yakoon:runtime/catalog.yml" in ctx
         assert "github:yakoon-runtime/yakoon:sdk/catalog.yml" in ctx

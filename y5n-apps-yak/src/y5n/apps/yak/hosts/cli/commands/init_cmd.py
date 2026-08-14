@@ -38,8 +38,7 @@ def _init(root: Path) -> None:
     ctx_lines = [default.rstrip()]
     if roots:
         ctx_lines.append("")
-        ctx_lines.append("[sources]")
-        ctx_lines.append(f'dirs = [{", ".join(repr(r) for r in roots)}]')
+        ctx_lines.append(f"source_dirs = [{', '.join(repr(r) for r in roots)}]")
     ctx_lines.extend(
         [
             "",

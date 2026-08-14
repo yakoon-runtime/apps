@@ -1,4 +1,5 @@
 sources = [
+    "github:yakoon-runtime/pack-system",
     "github:yakoon-runtime/yakoon:packs/catalog.yml",
     "github:yakoon-runtime/yakoon:runtime/catalog.yml",
     "github:yakoon-runtime/yakoon:sdk/catalog.yml",
