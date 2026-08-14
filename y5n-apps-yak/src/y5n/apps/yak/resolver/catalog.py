@@ -60,22 +60,49 @@ class Catalog:
 def load_catalog(spec: str, context_root: Path) -> Catalog:
     """Load the catalog of a source spec.
 
-    A local path is read from ``<path>/catalog.yml``; a ``github:`` spec
-    fetches the catalog from the repository's default branch. The spec is
-    never interpreted beyond selecting the transport.
+    ``github:owner/repo`` serves ``catalog.yml``; a path suffix
+    ``github:owner/repo:path/to/catalog.yml`` selects another catalog in
+    the same repository. ``yakoon:official`` is the bootstrap pointer to
+    the official source list. A local path is read from
+    ``<path>/catalog.yml``. The spec is never interpreted beyond selecting
+    the transport and its catalog.
     """
-    if spec.startswith("github:"):
-        return _load_remote_catalog(spec)
-    path = Path(spec)
+    kind, _repo, catalog_path = _split_spec(spec)
+    if kind == "github":
+        return _load_remote_catalog(spec, catalog_path)
+    path = Path(_repo)
     if not path.is_absolute():
         path = context_root / path
-    return _load_local_catalog(spec, path)
+    return _load_local_catalog(spec, path, catalog_path)
 
 
-def _load_local_catalog(spec: str, root: Path) -> Catalog:
-    catalog_file = root / CATALOG_FILENAME
+def _split_spec(spec: str) -> tuple[str, str, str]:
+    """(kind, location, catalog-path) of a source spec.
+
+    - ``github:owner/repo[:path/to/catalog.yml]``
+    - ``yakoon:official`` → the official source list (bootstrap pointer)
+    - a local path
+    """
+    if spec == "yakoon:official":
+        return "github", "github:yakoon-runtime/apps", "catalogs/official.yml"
+    if spec.startswith("github:"):
+        rest = spec.removeprefix("github:")
+        if ":" in rest:
+            repo, catalog_path = rest.split(":", 1)
+            return "github", f"github:{repo}", catalog_path
+        return "github", spec, CATALOG_FILENAME
+    return "local", spec, CATALOG_FILENAME
+
+
+def github_repo(spec: str) -> str:
+    """The repository part of a github source spec (ignoring the path)."""
+    return _split_spec(spec)[1].removeprefix("github:")
+
+
+def _load_local_catalog(spec: str, root: Path, catalog_path: str) -> Catalog:
+    catalog_file = root / catalog_path
     if not catalog_file.exists():
-        raise CatalogError(f"source '{spec}' has no {CATALOG_FILENAME}")
+        raise CatalogError(f"source '{spec}' has no {catalog_path}")
     try:
         data = yaml.safe_load(catalog_file.read_text()) or {}
     except Exception as exc:
@@ -85,9 +112,9 @@ def _load_local_catalog(spec: str, root: Path) -> Catalog:
     return _parse_catalog(spec, root, data)
 
 
-def _load_remote_catalog(spec: str) -> Catalog:
-    repo = spec.removeprefix("github:")
-    url = f"https://raw.githubusercontent.com/{repo}/HEAD/{CATALOG_FILENAME}"
+def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
+    repo = github_repo(spec)
+    url = f"https://raw.githubusercontent.com/{repo}/HEAD/{catalog_path}"
     try:
         with urlopen(url) as resp:
             data = yaml.safe_load(resp.read().decode()) or {}
@@ -112,7 +139,7 @@ def fetch_github_artifact(
             f"github source '{spec}': location must be '<tag>/<asset>', "
             f"got '{location}'"
         )
-    repo = spec.removeprefix("github:")
+    repo = github_repo(spec)
     url = f"https://github.com/{repo}/releases/download/{location}"
 
     cache_root = (
@@ -146,6 +173,24 @@ def fetch_github_artifact(
         return cached
 
 
+def fetch_github_file(spec: str, location: str) -> Path:
+    """Fetch a git-tree resource (e.g. an environment manifest) from a source.
+
+    Environments are plain files in the repository's default branch, not
+    release assets; the location is the file path within the repo.
+    """
+    repo = github_repo(spec)
+    url = f"https://raw.githubusercontent.com/{repo}/HEAD/{location}"
+    try:
+        with urlopen(url) as resp:
+            data = resp.read()
+    except Exception as exc:
+        raise CatalogError(f"cannot fetch {url}: {exc}") from exc
+    path = Path(tempfile.mkdtemp()) / Path(location).name
+    path.write_bytes(data)
+    return path
+
+
 def _find_artifact_dir(parent: Path) -> Path | None:
     """The subdirectory holding an ``artifact.yml`` (by identity)."""
     if not parent.is_dir():
@@ -175,9 +220,14 @@ def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:
     raw_environments = data.get("environments", {})
     if not isinstance(raw_environments, dict):
         raise CatalogError(f"catalog '{spec}': 'environments' must be a mapping")
-    environments = {
-        str(name): str(location) for name, location in raw_environments.items()
-    }
+    environments: dict[str, str] = {}
+    for name, value in raw_environments.items():
+        location = value.get("location") if isinstance(value, dict) else value
+        if not isinstance(location, str) or not location:
+            raise CatalogError(
+                f"catalog '{spec}': environment '{name}' needs a location"
+            )
+        environments[str(name)] = location
     return Catalog(
         spec=spec,
         base=base,

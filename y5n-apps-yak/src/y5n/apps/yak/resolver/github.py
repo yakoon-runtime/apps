@@ -1,7 +1,8 @@
-"""GitHub Release repository — resolve and deploy artifacts."""
+"""GitHub Release repository — receive deployed resources (ADR-20)."""
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import tarfile
@@ -10,6 +11,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import yaml
 from y5n.apps.yak.resolver.artifact import _parse_manifest
 
 
@@ -216,10 +218,6 @@ class GithubReleaseRepository:
         replaces the entry, and commits it back. Existing entries are
         preserved.
         """
-        import base64
-
-        import yaml
-
         url = f"https://api.github.com/repos/{self._repo}/contents/catalog.yml"
         existing = None
         try:

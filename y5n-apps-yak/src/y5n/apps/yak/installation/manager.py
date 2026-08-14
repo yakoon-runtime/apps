@@ -6,12 +6,14 @@ import signal
 import socket
 import subprocess
 import time
+import tomllib
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
+from y5n.apps.yak.environment.io import load as load_env
 from y5n.apps.yak.environment.io import touch
 from y5n.apps.yak.installation.assemble import (
     StoreAsker,
@@ -24,10 +26,23 @@ from y5n.apps.yak.installation.deployment import (
 from y5n.apps.yak.installation.deployment import load_installation, to_dict
 from y5n.apps.yak.installation.models import Component, Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer
+from y5n.apps.yak.installer.venv import ensure_venv
 from y5n.apps.yak.pack.models import Mount, Pack, PackName
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
-from y5n.apps.yak.resolver.artifact import Artifact
+from y5n.apps.yak.resolver.artifact import (
+    Artifact,
+    _parse_manifest,
+    load_remote_environment,
+    load_workspace_manifest,
+)
+from y5n.apps.yak.resolver.catalog import (
+    CatalogIdentityError,
+    Index,
+    build_index,
+    fetch_github_artifact,
+    fetch_github_file,
+)
 from y5n.apps.yak.workspace.materializer import Materializer
 
 
@@ -83,14 +98,10 @@ class InstallationManager:
         """The merged source index (ADR-20), built from the Context sources."""
         if self._index_cache is None:
             if self._context is not None and self._context.sources:
-                from y5n.apps.yak.resolver.catalog import build_index
-
                 self._index_cache = build_index(
                     self._context.sources, self._context.path
                 )
             else:
-                from y5n.apps.yak.resolver.catalog import Index
-
                 self._index_cache = Index()
         return self._index_cache
 
@@ -172,17 +183,19 @@ class InstallationManager:
         if hit is None:
             return None
         catalog, location = hit
-        from y5n.apps.yak.resolver.artifact import load_remote_environment
-
-        path = self._materialize_location(catalog, location)
-        if path is None:
-            return None
+        if catalog.base is not None:
+            path = catalog.base / location
+        else:
+            path = fetch_github_file(catalog.spec, location)
         return load_remote_environment(path)
 
     def _install_artifact(self, artifact, path: Path, *, force: bool = False) -> bool:
-        """Install a resolved artifact's wheel into the installation venv."""
-        from y5n.apps.yak.installer.venv import ensure_venv
+        """Install a single resolved artifact's wheel (with dependencies).
 
+        The platform is already installed as a set, so pip resolves the
+        y5n-* dependencies from the installed wheels and fetches external
+        dependencies (e.g. ``textual``) from PyPI.
+        """
         wheel = artifact.package_file
         if wheel is None or not wheel.exists():
             return True
@@ -191,8 +204,24 @@ class InstallationManager:
         if force:
             cmd.append("--force-reinstall")
         cmd.append(str(wheel))
-        import subprocess
 
+        return subprocess.run(cmd, capture_output=True).returncode == 0
+
+    def _install_wheels(self, wheels: list, path: Path, *, force: bool = False) -> bool:
+        """Install a set of wheels in one command.
+
+        pip resolves the y5n-* dependencies among the local wheels and
+        fetches only external dependencies (e.g. ``websockets``) from PyPI
+        — the same contract as the old editable install of all platform
+        projects together.
+        """
+        if not wheels:
+            return True
+        python = ensure_venv(path / ".venv")
+        cmd = [str(python), "-m", "pip", "install"]
+        if force:
+            cmd.append("--force-reinstall")
+        cmd.extend(str(w) for w in wheels)
         return subprocess.run(cmd, capture_output=True).returncode == 0
 
     def _materialize_environment(self, path: Path, manifest) -> list[Component]:
@@ -204,13 +233,17 @@ class InstallationManager:
         added later with ``yak add``.
         """
         components: list[Component] = []
+        wheels: list[Path] = []
         for name in manifest.components:
             comp = self._resolve_component(str(name))
             if comp is None:
                 continue
             if comp.kind == "artifact" and comp.artifact is not None:
-                self._install_artifact(comp.artifact, path)
+                wheel = comp.artifact.package_file
+                if wheel is not None and wheel.exists():
+                    wheels.append(wheel)
             components.append(self._ensure_component(path, str(name), comp))
+        self._install_wheels(wheels, path)
         return components
 
     # ── Add ──
@@ -236,14 +269,10 @@ class InstallationManager:
         """
         exclusive_index = None
         if from_source is not None:
-            from y5n.apps.yak.resolver.catalog import build_index
-
             context_root = self._context.path if self._context is not None else path
             exclusive_index = build_index([from_source], context_root)
 
         with self._step(ui, "Resolving"):
-            from y5n.apps.yak.environment.io import load as load_env
-
             env = load_env(path)
             if env is None:
                 raise RuntimeError(f"No installation found at {path}")
@@ -341,8 +370,6 @@ class InstallationManager:
         catalog's declared identity must equal the component's own
         identity — otherwise the load is an error.
         """
-        from y5n.apps.yak.resolver.catalog import CatalogIdentityError
-
         resource = self._materialize_location(catalog, ref.location)
         if resource is None:
             return None
@@ -376,22 +403,12 @@ class InstallationManager:
         if catalog.base is not None:
             path = catalog.base / location
             return path if path.exists() else None
-        if catalog.spec.startswith("github:"):
-            from y5n.apps.yak.resolver.catalog import fetch_github_artifact
-
-            return fetch_github_artifact(catalog.spec, location)
-        from y5n.apps.yak.resolver.catalog import CatalogError
-
-        raise CatalogError(f"source '{catalog.spec}' has no materialization adapter")
+        # A remote catalog (base is None) is GitHub transport today.
+        return fetch_github_artifact(catalog.spec, location)
 
     @staticmethod
     def _parse_artifact(resource: Path):
         """Build an Artifact from a resolved ``artifact.yml`` directory."""
-        from y5n.apps.yak.resolver.artifact import (
-            Artifact,
-            _parse_manifest,
-        )
-
         manifest = resource / "artifact.yml"
         if not manifest.exists():
             return None
@@ -421,7 +438,6 @@ class InstallationManager:
         manifest = path / "pack.toml"
         if not manifest.exists():
             return None
-        import tomllib
 
         with open(manifest, "rb") as f:
             data = tomllib.load(f)
@@ -531,8 +547,6 @@ class InstallationManager:
         if artifact is not None and artifact.is_meta():
             # A meta-artifact declares workspace mounts and contributes
             # no namespace of its own.
-            from y5n.apps.yak.resolver.artifact import load_workspace_manifest
-
             if artifact.manifest is not None:
                 ws = load_workspace_manifest(artifact.manifest)
                 if ws is not None:
@@ -660,8 +674,6 @@ class InstallationManager:
         re-materialized from the staged component store only.
         """
         with self._step(ui, "Resolving"):
-            from y5n.apps.yak.environment.io import load as load_env
-
             inst = self.load(path)
             if inst is None:
                 raise ValueError(f"Installation not found: {path}")
@@ -788,8 +800,6 @@ class InstallationManager:
             issues.append("✓ State         .yak/state.toml")
 
         # Environment
-        from y5n.apps.yak.environment.io import load as load_env
-
         env = load_env(root)
         if env is None:
             issues.append("✘ Environment   .yak/environment.yml missing")
@@ -1197,8 +1207,6 @@ class InstallationManager:
 
     def _component_mounts(self, path: Path, components: list[Component]) -> list:
         """The mounts a set of components materializes in the workspace."""
-        from y5n.apps.yak.pack.models import Mount
-
         return [
             Mount(
                 source=str(self._component_structure(path, c.name)),
@@ -1330,8 +1338,6 @@ class InstallationManager:
         (state_dir / "state.toml").write_text("\n".join(lines))
 
     def _read_state(self, path: Path) -> Installation | None:
-        import tomllib
-
         with open(path, "rb") as f:
             data = tomllib.load(f)
         inst_data = data.get("installation", {})

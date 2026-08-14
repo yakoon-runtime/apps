@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 from y5n.apps.yak.pack.models import Mount, Pack, ToolReference
@@ -41,8 +42,6 @@ class FileRepository:
         return None
 
     def _parse(self, path: Path) -> Pack:
-        import tomllib
-
         with open(path, "rb") as f:
             data = tomllib.load(f)
         return Pack(

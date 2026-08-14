@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+import yaml
+
 
 class Artifact:
     """A resolved artifact — metadata + bytes on disk."""
@@ -74,8 +76,6 @@ def load_remote_environment(path: Path) -> Environment | None:
     from y5n.apps.yak.pack.models import PackName
 
     try:
-        import yaml
-
         data = yaml.safe_load(path.read_text()) or {}
     except Exception:
         return None
@@ -149,8 +149,6 @@ class DirectorySource:
 
 def _parse_manifest(path: Path) -> dict:
     try:
-        import yaml
-
         text = path.read_text()
         data = yaml.safe_load(text)
         if isinstance(data, dict):

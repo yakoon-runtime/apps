@@ -348,3 +348,43 @@ def test_i_from_miss_is_an_error():
 
         with pytest.raises(ValueError, match="Unknown component"):
             mgr.add("foo", inst.root, from_source=str(acme))
+
+
+def test_official_source_graph(monkeypatch):
+    """yakoon:official walks the ownership-split catalog graph."""
+    from y5n.apps.yak.resolver import catalog as catalog_module
+
+    catalogs = {
+        "catalogs/official.yml": (
+            "sources:\n"
+            "  - github:yakoon-runtime/apps:catalogs/runtime.yml\n"
+            "  - github:yakoon-runtime/apps:catalogs/sdk.yml\n"
+            "  - github:yakoon-runtime/apps:catalogs/apps.yml\n"
+        ),
+        "catalogs/runtime.yml": (
+            "components:\n"
+            "  y5n-packs-root:\n    location: root-v1/root.tar.gz\n"
+            "  y5n-runtime-boot:\n    location: boot-v1/boot.tar.gz\n"
+            "environments:\n"
+            "  yakoon:platform:\n    location: environments/p.yml\n"
+        ),
+        "catalogs/sdk.yml": (
+            "components:\n" "  y5n-sdk-python:\n    location: sdk-v1/sdk.tar.gz\n"
+        ),
+        "catalogs/apps.yml": (
+            "components:\n" "  y5n-apps-runtime:\n    location: rt-v1/rt.tar.gz\n"
+        ),
+    }
+
+    def fake(url: str):
+        for path, body in catalogs.items():
+            if f"/HEAD/{path}" in url:
+                return _FakeResp(body.encode())
+        raise AssertionError(f"unexpected request: {url}")
+
+    monkeypatch.setattr(catalog_module, "urlopen", fake)
+    index = build_index(["yakoon:official"], Path("/tmp/x"))
+    assert index.resolve("y5n-packs-root") is not None
+    assert index.resolve("y5n-sdk-python") is not None
+    assert index.resolve("y5n-apps-runtime") is not None
+    assert index.resolve_environment("yakoon:platform") is not None

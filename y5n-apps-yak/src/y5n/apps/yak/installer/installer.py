@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import warnings
 from pathlib import Path
 
 from y5n.apps.yak.installation.models import Installation
@@ -81,6 +82,4 @@ class Installer:
             cmd.extend(["-e", str(proj)])
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            import warnings
-
             warnings.warn(f"pip install failed:\n{result.stderr.strip()}")

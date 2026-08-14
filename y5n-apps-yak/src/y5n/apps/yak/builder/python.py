@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import shutil
 import subprocess
 import sys
+import tomllib
+import zipfile
 from pathlib import Path
 
 from y5n.apps.yak.builder.protocol import ArtifactInfo
@@ -35,8 +39,6 @@ class PythonBuildProvider:
             return None
 
         wheel = wheels[0]
-        import hashlib
-
         wheel_bytes = wheel.read_bytes()
         fingerprint = hashlib.sha256(wheel_bytes).hexdigest()
 
@@ -48,8 +50,6 @@ class PythonBuildProvider:
         # (folder == name), not from its Python distribution name.
         pack_manifest = project_dir / "pack.toml"
         if pack_manifest.exists():
-            import tomllib
-
             with open(pack_manifest, "rb") as f:
                 pack = tomllib.load(f)
             info.name = pack.get("name", info.name)
@@ -60,8 +60,6 @@ class PythonBuildProvider:
         artifact_dir.mkdir(parents=True, exist_ok=True)
 
         if info.mount:
-            import shutil
-
             structure = project_dir / "structure"
             if structure.is_dir():
                 shutil.copytree(
@@ -76,8 +74,6 @@ class PythonBuildProvider:
         return info
 
     def _parse_wheel(self, wheel: Path) -> ArtifactInfo | None:
-        import zipfile
-
         try:
             with zipfile.ZipFile(wheel) as zf:
                 names = [n for n in zf.namelist() if n.endswith("METADATA")]

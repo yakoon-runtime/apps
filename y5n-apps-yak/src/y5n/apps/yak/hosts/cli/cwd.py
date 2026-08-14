@@ -51,17 +51,21 @@ def _load_context(root: Path) -> Context:
         data = tomllib.load(f)
 
     ctx_data = data.get("context", {})
+    # The flat ``sources = [...]`` list is the ADR-20 source set. The old
+    # ``[sources]`` table (dirs, per-component mapping) is superseded; it is
+    # still read when a context carries it, and ignored otherwise.
     sources_section = data.get("sources", {})
-    raw_dirs = sources_section.get("dirs", [])
-    source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
-
+    source_dirs: list[Path] = []
     component_sources: dict[str, str] = {}
-    for key, value in sources_section.items():
-        if key == "dirs" or not isinstance(key, str):
-            continue
-        path = _location_path(value)
-        if path is not None:
-            component_sources[key] = path
+    if isinstance(sources_section, dict):
+        raw_dirs = sources_section.get("dirs", [])
+        source_dirs = [Path(r) for r in raw_dirs] if isinstance(raw_dirs, list) else []
+        for key, value in sources_section.items():
+            if key == "dirs" or not isinstance(key, str):
+                continue
+            path = _location_path(value)
+            if path is not None:
+                component_sources[key] = path
 
     repos_section = data.get("repositories", {})
     raw_repos = repos_section.get("sources", [])
