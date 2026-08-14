@@ -24,7 +24,13 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 def _build_repo(root: Path, names: list[str]) -> Path:
     repo = root / "repo"
-    components = {name: {"location": f"artifacts/{name}-art"} for name in names}
+    components = {
+        name: {
+            "location": f"artifacts/{name}-art",
+            "release": f"artifacts/{name}-art",
+        }
+        for name in names
+    }
     for name in names:
         make_artifact(repo / "artifacts" / f"{name}-art", name, f"/opt/{name}")
     make_source(repo, components)
@@ -75,8 +81,14 @@ def test_update_converges_to_changed_desired_set():
         make_source(
             repo,
             {
-                "foo": {"location": "artifacts/foo-art"},
-                "quux": {"location": "artifacts/quux-art"},
+                "foo": {
+                    "location": "artifacts/foo-art",
+                    "release": "artifacts/foo-art",
+                },
+                "quux": {
+                    "location": "artifacts/quux-art",
+                    "release": "artifacts/quux-art",
+                },
             },
         )
         touch(inst.root, name="fake", components=["foo", "quux"])

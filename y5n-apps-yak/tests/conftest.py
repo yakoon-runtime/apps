@@ -18,6 +18,9 @@ def make_source(
             lines.append(f"  {name}:")
             lines.append(f"    version: {entry.get('version', '0.1')!r}")
             lines.append(f"    location: {entry['location']!r}")
+            release = entry.get("release")
+            if release is not None:
+                lines.append(f"    release: {release!r}")
     else:
         lines.append("  {}")
     (path / "catalog.yml").write_text("\n".join(lines) + "\n")

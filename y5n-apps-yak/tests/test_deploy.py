@@ -287,7 +287,10 @@ def test_deploy_spec_with_catalog_path_writes_that_catalog(monkeypatch):
         assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
         assert fake.catalog_path == "packs/catalog.yml"
         assert set(_catalog_entries(fake)) == {"ident"}
-        assert _catalog_entries(fake)["ident"] == {"location": "ident"}
+        assert _catalog_entries(fake)["ident"] == {
+            "location": "ident",
+            "release": "ident-v1.0.0",
+        }
 
 
 def test_catalog_source_is_the_components_home(monkeypatch):
@@ -359,7 +362,7 @@ def test_k_redeploy_is_idempotent(monkeypatch):
         entries = _catalog_entries(fake)
         assert list(entries) == ["ident"]
         # The catalog stays a dumb Name → Location map.
-        assert entries["ident"] == {"location": "ident"}
+        assert entries["ident"] == {"location": "ident", "release": "ident-v1.0.0"}
 
 
 def test_l_new_version_updates_the_single_entry(monkeypatch):
@@ -371,8 +374,8 @@ def test_l_new_version_updates_the_single_entry(monkeypatch):
         assert repo.deploy("ident", _published(home, "ident", "2.0.0")) is True
         entries = _catalog_entries(fake)
         assert list(entries) == ["ident"]
-        # A new version never leaks into the catalog — it stays Name → Location.
-        assert entries["ident"] == {"location": "ident"}
+        # A new version updates the release entry to the latest tag.
+        assert entries["ident"] == {"location": "ident", "release": "ident-v2.0.0"}
 
 
 def test_m_failed_catalog_update_keeps_old_catalog_valid(monkeypatch):

@@ -235,6 +235,7 @@ class InstallationManager:
         ui=None,
         from_source: str | None = None,
         force: bool = False,
+        mode: str = "artifact",
     ) -> Installation | None:
         """Add a component (a pack or an artifact) to an installation.
 
@@ -242,8 +243,11 @@ class InstallationManager:
         materialize → discover requirements → reconcile deployment →
         persist. ``--from <source>`` builds an exclusive index from that
         single source (and its subgraph) — nothing else is consulted, and
-        a miss is an error, never a fallback. Returns None when the
-        component is already part of the installation.
+        a miss is an error, never a fallback. ``mode`` decides how the
+        component is obtained: ``artifact`` (released, via ``release``)
+        is the default, ``source`` (a local checkout, via ``location``)
+        is the development mode. Returns None when the component is
+        already part of the installation.
         """
         exclusive_index = None
         if from_source is not None:
@@ -257,7 +261,7 @@ class InstallationManager:
             existing = list(env.components)
 
             component = self._resolve_component(
-                target, index=exclusive_index, mode="artifact"
+                target, index=exclusive_index, mode=mode
             )
             if component is None:
                 raise ValueError(f"Unknown component: {target}")
@@ -366,7 +370,17 @@ class InstallationManager:
             resource = self._materialize_release(catalog, name, ref.release)
             if resource is None:
                 return None
-            return _Component(name=name, mode="artifact", source=resource)
+            artifact = self._parse_artifact(resource)
+            if artifact is not None:
+                return _Component(name=name, mode="artifact", artifact=artifact)
+            structure = resource / "structure"
+            structure_dir = structure if structure.is_dir() else None
+            return _Component(
+                name=name,
+                mode="artifact",
+                source=resource,
+                structure=structure_dir,
+            )
 
         resource = self._materialize_location(catalog, ref.location)
         if resource is None:
@@ -490,7 +504,7 @@ class InstallationManager:
         )
         if not packs:
             packs = [PackName(target)]
-        added = [p for p in packs if p not in existing_packs]
+        added = [p for p in packs if p not in existing_packs or force]
         if not added:
             return None
         all_packs = existing_packs + added

@@ -29,7 +29,7 @@ def test_install_creates_platform_installation():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        inst = mgr.install(inst_path)
+        inst = mgr.install(inst_path, mode="source")
 
         assert inst.name == "inst"
         assert inst.packs == []
@@ -53,13 +53,13 @@ def test_add_extends_the_platform():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path)
-        added = mgr.add("test-pack", inst_path)
+        mgr.install(inst_path, mode="source")
+        added = mgr.add("test-pack", inst_path, mode="source")
 
         assert added is not None
         assert "test-pack" in added.packs
         # Idempotent: adding again reports nothing new.
-        assert mgr.add("test-pack", inst_path) is None
+        assert mgr.add("test-pack", inst_path, mode="source") is None
 
 
 @pytest.mark.slow
@@ -70,12 +70,12 @@ def test_add_unknown_component_raises():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path)
+        mgr.install(inst_path, mode="source")
 
         import pytest
 
         with pytest.raises(ValueError, match="Unknown component"):
-            mgr.add("nonexistent", inst_path)
+            mgr.add("nonexistent", inst_path, mode="source")
 
 
 @pytest.mark.slow
@@ -86,7 +86,7 @@ def test_load_from_path():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path)
+        mgr.install(inst_path, mode="source")
 
         loaded = mgr.load(inst_path)
         assert loaded is not None
@@ -111,8 +111,8 @@ def test_update_reconciles():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path)
-        mgr.add("test-pack", inst_path)
+        mgr.install(inst_path, mode="source")
+        mgr.add("test-pack", inst_path, mode="source")
         mgr.update(inst_path)
 
         loaded = mgr.load(inst_path)
@@ -129,8 +129,8 @@ def test_doctor_reports_missing_pack():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path)
-        mgr.add("test-pack", inst_path)
+        mgr.install(inst_path, mode="source")
+        mgr.add("test-pack", inst_path, mode="source")
 
         import shutil
 

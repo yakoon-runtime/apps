@@ -13,18 +13,14 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 @pytest.mark.slow
 def test_sharp_install():
-    """Install the minimal platform, then add the crm pack."""
+    """Install the minimal platform, then add a component."""
     root = Path(tempfile.mkdtemp(prefix="yak-sharp-"))
     try:
-        repo_root = Path(__file__).resolve().parents[3]
-        source = root / "repo"
-        (source / "packs").mkdir(parents=True)
-        (source / "packs" / "y5n-packs-crm").symlink_to(
-            repo_root / "pack-crm", target_is_directory=True
-        )
-        from conftest import make_source
+        from conftest import make_source, source_pack
 
-        make_source(source, {"y5n-packs-crm": {"location": "packs/y5n-packs-crm"}})
+        source = root / "repo"
+        source_pack(source / "cool-shell", "cool-shell", "/opt/cool")
+        make_source(source, {"cool-shell": {"location": "cool-shell"}})
         ctx = Context(path=root, sources=[str(source)])
         mgr = InstallationManager(
             FileRepository(),
@@ -32,12 +28,12 @@ def test_sharp_install():
             context=ctx,
         )
 
-        inst = mgr.install(root / "installations" / "crm")
+        inst = mgr.install(root / "installations" / "cool", mode="source")
         assert inst.packs == []
 
-        added = mgr.add("y5n-packs-crm", inst.root)
+        added = mgr.add("cool-shell", inst.root, mode="source")
         assert added is not None
-        assert "y5n-packs-crm" in added.packs
+        assert "cool-shell" in added.packs
 
         print(f"Name:         {inst.name}")
         print(f"Status:       {inst.status.value}")

@@ -253,33 +253,29 @@ def test_non_python_component_lifecycle(monkeypatch):
         (ctx / ".yak" / "context.toml").write_text("[context]\nname = 'ctx'\n")
         monkeypatch.chdir(ctx)
 
-        # A source catalog: the real platform namespaces (so the workspace
+        # A source catalog: minimal platform namespaces (so the workspace
         # tree has a root) plus the language-neutral artifact.
-        repo_root = Path(__file__).resolve().parents[3]
-        source = root / "repo"
-        (source / "packs").mkdir(parents=True)
-        (source / "runtime").mkdir(parents=True)
-        (source / "packs" / "y5n-packs-root").symlink_to(
-            repo_root / "packs" / "y5n-packs-root", target_is_directory=True
-        )
-        (source / "runtime" / "y5n-runtime-boot").symlink_to(
-            repo_root / "runtime" / "y5n-runtime-boot", target_is_directory=True
-        )
-        _dotnet_artifact(source)
-        from conftest import make_source
+        from conftest import make_source, source_pack
 
+        source = root / "repo"
+        source_pack(source / "packs" / "acme-root", "acme-root", "/")
+        source_pack(source / "runtime" / "acme-boot", "acme-boot", "/boot")
+        _dotnet_artifact(source)
         make_source(
             source,
             {
-                "y5n-packs-root": {"location": "packs/y5n-packs-root"},
-                "y5n-runtime-boot": {"location": "runtime/y5n-runtime-boot"},
-                "acme-test": {"location": "acme-test-1.0.0.dotnet.artifact"},
+                "acme-root": {"location": "packs/acme-root"},
+                "acme-boot": {"location": "runtime/acme-boot"},
+                "acme-test": {
+                    "location": "acme-test-1.0.0.dotnet.artifact",
+                    "release": "acme-test-1.0.0.dotnet.artifact",
+                },
             },
         )
         ctx_obj = Context(
             path=ctx,
             sources=[str(source)],
-            install=["y5n-packs-root", "y5n-runtime-boot"],
+            install=["acme-root", "acme-boot"],
         )
 
         mgr = InstallationManager(
@@ -288,8 +284,8 @@ def test_non_python_component_lifecycle(monkeypatch):
             context=ctx_obj,
         )
         inst = root / "inst"
-        mgr.install(inst)
-        mgr.add("acme-test", inst)
+        mgr.install(inst, mode="source")
+        mgr.add("acme-test", inst, mode="artifact")
 
         # Namespace is staged and materialized — no wheel involved.
         staged = inst / ".yak" / "components" / "acme-test" / "structure"
