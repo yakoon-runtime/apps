@@ -339,47 +339,66 @@ def test_official_source_graph(monkeypatch):
     """The bootstrap source list is a flat catalog set."""
     from y5n.apps.yak.resolver import catalog as catalog_module
 
-    catalogs = {
-        "packs/catalog.yml": (
-            "components:\n"
-            "  y5n-packs-system:\n    location: system-v1/system.tar.gz\n"
-            "  y5n-packs-ident:\n    location: ident-v1/ident.tar.gz\n"
-        ),
-        "runtime/catalog.yml": (
-            "components:\n"
-            "  y5n-packs-root:\n    location: root-v1/root.tar.gz\n"
-            "  y5n-runtime-boot:\n    location: boot-v1/boot.tar.gz\n"
-        ),
-        "catalog.yml": (
-            "components:\n" "  y5n-sdk-python:\n    location: sdk-v1/sdk.tar.gz\n"
-        ),
-        "apps/catalog.yml": (
-            "components:\n" "  y5n-apps-runtime:\n    location: rt-v1/rt.tar.gz\n"
-        ),
-    }
+    pack_system = (
+        "components:\n  y5n-packs-system:\n    location: system-v1/system.tar.gz\n"
+    )
+    pack_ident = (
+        "components:\n  y5n-packs-ident:\n    location: ident-v1/ident.tar.gz\n"
+    )
+    pack_crm = "components:\n  y5n-packs-crm:\n    location: crm-v1/crm.tar.gz\n"
+    pack_luma = "components:\n  y5n-packs-luma:\n    location: luma-v1/luma.tar.gz\n"
+    pack_labs = "components:\n  y5n-packs-labs:\n    location: labs-v1/labs.tar.gz\n"
+    packs = "components:\n  y5n-packs-root:\n    location: root-v1/root.tar.gz\n"
+    runtime = (
+        "components:\n"
+        "  y5n-runtime-boot:\n    location: boot-v1/boot.tar.gz\n"
+        "  y5n-runtime-engine:\n    location: engine-v1/engine.tar.gz\n"
+    )
+    sdk = "components:\n  y5n-sdk-python:\n    location: sdk-v1/sdk.tar.gz\n"
+    apps = "components:\n  y5n-apps-runtime:\n    location: rt-v1/rt.tar.gz\n"
 
     def fake(url: str):
+        if "yakoon-runtime/pack-system/" in url:
+            return _FakeResp(pack_system.encode())
+        if "yakoon-runtime/pack-ident/" in url:
+            return _FakeResp(pack_ident.encode())
+        if "yakoon-runtime/pack-crm/" in url:
+            return _FakeResp(pack_crm.encode())
+        if "yakoon-runtime/pack-luma/" in url:
+            return _FakeResp(pack_luma.encode())
+        if "yakoon-runtime/pack-labs/" in url:
+            return _FakeResp(pack_labs.encode())
         if "yakoon-runtime/sdk/" in url:
-            return _FakeResp(catalogs["catalog.yml"].encode())
+            return _FakeResp(sdk.encode())
         if "yakoon-runtime/apps/" in url:
-            return _FakeResp(catalogs["apps/catalog.yml"].encode())
-        for path, body in catalogs.items():
-            if f"/HEAD/{path}" in url:
-                return _FakeResp(body.encode())
+            return _FakeResp(apps.encode())
+        if "/yakoon/HEAD/packs/catalog.yml" in url:
+            return _FakeResp(packs.encode())
+        if "/yakoon/HEAD/runtime/catalog.yml" in url:
+            return _FakeResp(runtime.encode())
         raise AssertionError(f"unexpected request: {url}")
 
     monkeypatch.setattr(catalog_module, "urlopen", fake)
     index = build_index(
         [
+            "github:yakoon-runtime/pack-system",
+            "github:yakoon-runtime/pack-ident",
+            "github:yakoon-runtime/pack-crm",
+            "github:yakoon-runtime/pack-luma",
+            "github:yakoon-runtime/pack-labs",
             "github:yakoon-runtime/yakoon:packs/catalog.yml",
             "github:yakoon-runtime/yakoon:runtime/catalog.yml",
             "github:yakoon-runtime/sdk",
-            "github:yakoon-runtime/apps:catalog.yml",
+            "github:yakoon-runtime/apps",
         ],
         Path("/tmp/x"),
     )
     assert index.resolve("y5n-packs-system") is not None
     assert index.resolve("y5n-packs-ident") is not None
+    assert index.resolve("y5n-packs-crm") is not None
+    assert index.resolve("y5n-packs-luma") is not None
+    assert index.resolve("y5n-packs-labs") is not None
     assert index.resolve("y5n-packs-root") is not None
+    assert index.resolve("y5n-runtime-boot") is not None
     assert index.resolve("y5n-sdk-python") is not None
     assert index.resolve("y5n-apps-runtime") is not None
