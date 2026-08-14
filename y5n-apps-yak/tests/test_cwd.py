@@ -69,3 +69,17 @@ def test_init_copies_packaged_default_context(monkeypatch):
         assert "y5n-packs-root" in ctx
         assert "yakoon:official" not in ctx
         assert 'name = "proj"' in ctx
+
+
+def test_install_ensures_context_when_missing():
+    from y5n.apps.yak.hosts.cli.commands.install import _ensure_context
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "demo"
+        _ensure_context(root)
+        ctx = root / ".yak" / "context.toml"
+        assert ctx.exists()
+        assert "github:yakoon-runtime/pack-system" in ctx.read_text()
+        # A second call is a no-op.
+        _ensure_context(root)
+        assert ctx.exists()
