@@ -20,7 +20,7 @@ def test_sharp_install():
         source = root / "repo"
         (source / "packs").mkdir(parents=True)
         (source / "packs" / "y5n-packs-crm").symlink_to(
-            repo_root / "packs" / "y5n-packs-crm", target_is_directory=True
+            repo_root / "pack-crm", target_is_directory=True
         )
         from conftest import make_source
 
