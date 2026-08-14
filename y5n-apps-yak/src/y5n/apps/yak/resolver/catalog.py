@@ -8,8 +8,12 @@ exact identity lookup — no searching, no name interpretation.
 
 from __future__ import annotations
 
+import shutil
+import tarfile
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.request import urlopen
 
 import yaml
 
@@ -82,8 +86,6 @@ def _load_local_catalog(spec: str, root: Path) -> Catalog:
 
 
 def _load_remote_catalog(spec: str) -> Catalog:
-    from urllib.request import urlopen
-
     repo = spec.removeprefix("github:")
     url = f"https://raw.githubusercontent.com/{repo}/HEAD/{CATALOG_FILENAME}"
     try:
@@ -94,6 +96,64 @@ def _load_remote_catalog(spec: str) -> Catalog:
     if not isinstance(data, dict):
         raise CatalogError(f"{url} must be a mapping")
     return _parse_catalog(spec, None, data)
+
+
+def fetch_github_artifact(
+    spec: str, location: str, fingerprint: str = ""
+) -> Path | None:
+    """Fetch a source-relative location from a GitHub source.
+
+    GitHub is transport only: the index already decided the location. A
+    github location is ``<tag>/<asset>`` and maps directly to the public
+    download endpoint — no release scan, no search.
+    """
+    if location.startswith("releases/") or location.startswith("/"):
+        raise CatalogError(
+            f"github source '{spec}': location must be '<tag>/<asset>', "
+            f"got '{location}'"
+        )
+    repo = spec.removeprefix("github:")
+    url = f"https://github.com/{repo}/releases/download/{location}"
+
+    cache_root = (
+        Path.home() / ".yak" / "cache" / "github" / repo / location.replace("/", "_")
+    )
+    artifact_dir = _find_artifact_dir(cache_root)
+    if artifact_dir is not None:
+        return artifact_dir
+
+    try:
+        with urlopen(url) as resp:
+            data = resp.read()
+    except Exception as exc:
+        raise CatalogError(f"cannot fetch {url}: {exc}") from exc
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tarpath = Path(tmp) / "resource.tar.gz"
+        tarpath.write_bytes(data)
+        try:
+            with tarfile.open(tarpath, "r:gz") as tar:
+                tar.extractall(path=tmp, filter="data")
+        except Exception as exc:
+            raise CatalogError(f"cannot extract {url}: {exc}") from exc
+        found = _find_artifact_dir(Path(tmp))
+        if found is None:
+            raise CatalogError(f"no artifact in {url}")
+        cache_root.mkdir(parents=True, exist_ok=True)
+        cached = cache_root / found.name
+        if not cached.exists():
+            shutil.copytree(found, cached)
+        return cached
+
+
+def _find_artifact_dir(parent: Path) -> Path | None:
+    """The subdirectory holding an ``artifact.yml`` (by identity)."""
+    if not parent.is_dir():
+        return None
+    for child in parent.iterdir():
+        if child.is_dir() and (child / "artifact.yml").exists():
+            return child
+    return None
 
 
 def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:

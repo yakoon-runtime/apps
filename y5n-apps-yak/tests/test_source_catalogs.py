@@ -6,14 +6,21 @@
 - D  Fallback: removing the local source returns to the released artifact.
 - E  Two sources offer the same identity — the first wins.
 - F  A → B → C → A is a clear cycle error.
+- G  GitHub is transport: catalog + location → artifact, no release scan.
+- H  --from is exclusive: ACME wins, nothing else is consulted.
+- I  --from miss is an error, never a fallback.
 """
 
 from __future__ import annotations
 
+import io
+import tarfile
 import tempfile
 from pathlib import Path
 
 import pytest
+from conftest import artifact as make_artifact
+from conftest import make_source, source_pack
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -222,3 +229,122 @@ def test_f_cycle_is_an_error():
 
         with pytest.raises(CatalogCycleError):
             build_index([str(root / "a")], root)
+
+
+class _FakeResp:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def read(self) -> bytes:
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args) -> bool:
+        return False
+
+
+def _tar_gz(artifact_dir: Path) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        tar.add(artifact_dir, arcname=artifact_dir.name)
+    return buffer.getvalue()
+
+
+def _fake_urlopen(responses: list[tuple[str, bytes]]):
+    def fake(url: str):
+        for match, payload in responses:
+            if match in url:
+                return _FakeResp(payload)
+        raise AssertionError(f"unexpected request: {url}")
+
+    return fake
+
+
+def test_g_github_is_transport_no_release_scan(monkeypatch):
+    from y5n.apps.yak.resolver import catalog as catalog_module
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        home = root / "home"
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+        artifact_dir = root / "ident-artifact"
+        make_artifact(artifact_dir, "y5n-packs-ident", "/usr/sbin/ident")
+        catalog_yml = (
+            "components:\n"
+            "  y5n-packs-ident:\n"
+            "    version: 0.8.0\n"
+            "    location: ident-v0.8.0/ident.artifact.tar.gz\n"
+        ).encode()
+        monkeypatch.setattr(
+            catalog_module,
+            "urlopen",
+            _fake_urlopen(
+                [
+                    (
+                        "raw.githubusercontent.com/acme/packs/HEAD/catalog.yml",
+                        catalog_yml,
+                    ),
+                    (
+                        "github.com/acme/packs/releases/download/ident-v0.8.0",
+                        _tar_gz(artifact_dir),
+                    ),
+                ]
+            ),
+        )
+
+        index = build_index(["github:acme/packs"], root)
+        hit = index.resolve("y5n-packs-ident")
+        assert hit is not None
+        catalog, ref = hit
+        assert catalog.base is None  # remote
+        assert ref.location == "ident-v0.8.0/ident.artifact.tar.gz"
+
+        mgr = _mgr(Context(path=root, sources=["github:acme/packs"]))
+        component = mgr._component_from_ref("y5n-packs-ident", catalog, ref)
+        assert component is not None
+        assert component.kind == "artifact"
+        assert component.artifact is not None
+        assert component.artifact.name == "y5n-packs-ident"
+        assert component.artifact.mount == "/usr/sbin/ident"
+
+
+def test_h_from_is_exclusive():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        official = root / "official"
+        make_artifact(official / "cool-art", "cool-shell", "/opt/official")
+        make_source(official, {"cool-shell": {"location": "cool-art"}})
+        acme = root / "acme"
+        make_artifact(acme / "cool-art", "cool-shell", "/opt/acme")
+        make_source(acme, {"cool-shell": {"location": "cool-art"}})
+
+        ctx = Context(path=root, sources=[str(official)])
+        mgr = _mgr(ctx)
+        inst = mgr.install(root / "inst")
+
+        # --from acme: only acme is consulted, its artifact wins.
+        mgr.add("cool-shell", inst.root, from_source=str(acme))
+        state = mgr.load(inst.root)
+        assert state is not None
+        record = next(c for c in state.components if c.name == "cool-shell")
+        assert record.mount == "/opt/acme"
+
+
+def test_i_from_miss_is_an_error():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        official = root / "official"
+        make_artifact(official / "foo-art", "foo", "/opt/foo")
+        make_source(official, {"foo": {"location": "foo-art"}})
+        acme = root / "acme"
+        make_source(acme, {"other": {"location": "other-art"}})
+
+        ctx = Context(path=root, sources=[str(official)])
+        mgr = _mgr(ctx)
+        inst = mgr.install(root / "inst")
+
+        with pytest.raises(ValueError, match="Unknown component"):
+            mgr.add("foo", inst.root, from_source=str(acme))

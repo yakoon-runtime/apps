@@ -26,8 +26,7 @@ def run(args, mgr) -> None:
             root,
             asker=TerminalStoreAsker(),
             ui=ui,
-            sources=_repositories(args),
-            sources_exclusive=bool(getattr(args, "from_repo", None)),
+            from_source=_from_source(args),
             force=bool(
                 getattr(args, "force", False) or getattr(args, "upgrade", False)
             ),
@@ -50,18 +49,10 @@ def _resolve_root(args) -> Path | None:
     return find_runtime_root()
 
 
-def _repositories(args) -> list[str] | None:
-    """Repositories: CLI --repository/--from overrides only.
+def _from_source(args) -> str | None:
+    """The exclusive source for this add (``--from``/``--repository``).
 
-    Without an override the resolver uses the Context repositories itself
-    (ADR-8), so ``add`` and ``update`` always share one source of truth.
+    ``--from <source>`` builds the index from that single source and its
+    subgraph only — a miss is an error, never a fallback to the Context.
     """
-    cli_repo = getattr(args, "repository", None)
-    cli_from = getattr(args, "from_repo", None)
-    if cli_repo:
-        return [cli_repo]
-    if cli_from:
-        from y5n.apps.yak.resolver.install import expand_repository_specs
-
-        return expand_repository_specs([cli_from])
-    return None
+    return getattr(args, "from_repo", None) or getattr(args, "repository", None)

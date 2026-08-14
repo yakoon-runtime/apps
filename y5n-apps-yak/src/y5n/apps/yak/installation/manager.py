@@ -222,19 +222,25 @@ class InstallationManager:
         *,
         asker: StoreAsker | None = None,
         ui=None,
-        sources: list[str] | None = None,
-        sources_exclusive: bool = False,
+        from_source: str | None = None,
         force: bool = False,
     ) -> Installation | None:
         """Add a component (a pack or an artifact) to an installation.
 
         Both share one reconciliation: resolve → make available →
         materialize → discover requirements → reconcile deployment →
-        persist. Only "make available" differs — a pack is linked from
-        its source, an artifact installs its payload and is copied.
-        Returns None when the component is already part of the
-        installation.
+        persist. ``--from <source>`` builds an exclusive index from that
+        single source (and its subgraph) — nothing else is consulted, and
+        a miss is an error, never a fallback. Returns None when the
+        component is already part of the installation.
         """
+        exclusive_index = None
+        if from_source is not None:
+            from y5n.apps.yak.resolver.catalog import build_index
+
+            context_root = self._context.path if self._context is not None else path
+            exclusive_index = build_index([from_source], context_root)
+
         with self._step(ui, "Resolving"):
             from y5n.apps.yak.environment.io import load as load_env
 
@@ -243,9 +249,7 @@ class InstallationManager:
                 raise RuntimeError(f"No installation found at {path}")
             existing = list(env.components)
 
-            component = self._resolve_component(
-                target, sources=sources, sources_exclusive=sources_exclusive
-            )
+            component = self._resolve_component(target, index=exclusive_index)
             if component is None:
                 raise ValueError(f"Unknown component: {target}")
 
@@ -253,7 +257,7 @@ class InstallationManager:
         try:
             with self._step(ui, "Making available"):
                 made = self._make_available(
-                    component, target, path, existing, force, sources
+                    component, target, path, existing, force, index=exclusive_index
                 )
                 if made is None:
                     return None
@@ -310,6 +314,7 @@ class InstallationManager:
         self,
         target: str,
         *,
+        index=None,
         sources: list[str] | None = None,
         sources_exclusive: bool = False,
         naming: bool = True,
@@ -319,9 +324,10 @@ class InstallationManager:
         ``index.resolve(name)`` returns the first exact hit in source
         order; the located resource becomes a source pack or an artifact.
         There is no search, no name interpretation, and no fallback: an
-        unknown identity resolves to nothing.
+        unknown identity resolves to nothing. ``index`` overrides the
+        Context index (used by an exclusive ``--from`` source).
         """
-        hit = self._index().resolve(target)
+        hit = (index if index is not None else self._index()).resolve(target)
         if hit is None:
             return None
         catalog, ref = hit
@@ -370,12 +376,13 @@ class InstallationManager:
         if catalog.base is not None:
             path = catalog.base / location
             return path if path.exists() else None
+        if catalog.spec.startswith("github:"):
+            from y5n.apps.yak.resolver.catalog import fetch_github_artifact
+
+            return fetch_github_artifact(catalog.spec, location)
         from y5n.apps.yak.resolver.catalog import CatalogError
 
-        raise CatalogError(
-            f"remote source '{catalog.spec}' materialization is not "
-            f"implemented yet (local sources only)"
-        )
+        raise CatalogError(f"source '{catalog.spec}' has no materialization adapter")
 
     @staticmethod
     def _parse_artifact(resource: Path):
@@ -431,7 +438,7 @@ class InstallationManager:
         path: Path,
         existing_packs: list,
         force: bool,
-        sources: list[str] | None,
+        index=None,
     ) -> tuple[list, list, list] | None:
         """Make the component available in the installation's environment.
 
@@ -442,10 +449,10 @@ class InstallationManager:
         """
         if component.kind == "pack":
             return self._make_pack_available(
-                component, target, path, existing_packs, force
+                component, target, path, existing_packs, force, index=index
             )
         return self._make_artifact_available(
-            component, target, path, existing_packs, force, sources
+            component, target, path, existing_packs, force
         )
 
     def _make_pack_available(
@@ -455,6 +462,7 @@ class InstallationManager:
         path: Path,
         existing_packs: list,
         force: bool,
+        index=None,
     ) -> tuple[list, list, list] | None:
         """Link a source pack into the installation (editable)."""
         pack = component.pack
@@ -475,7 +483,9 @@ class InstallationManager:
                 if str(name) == target:
                     comp = component
                 else:
-                    comp = self._resolve_component(str(name)) or _Component(
+                    comp = self._resolve_component(
+                        str(name), index=index
+                    ) or _Component(
                         kind="pack",
                         name=str(name),
                         pack=Pack(name=str(name), version="0.1"),
@@ -505,7 +515,6 @@ class InstallationManager:
         path: Path,
         existing_packs: list,
         force: bool,
-        sources: list[str] | None,
     ) -> tuple[list, list, list] | None:
         if PackName(target) in existing_packs and not force:
             return None
