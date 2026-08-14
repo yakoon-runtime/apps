@@ -198,9 +198,6 @@ class Index:
     def resolve(self, name: str) -> tuple[Catalog, ComponentRef] | None:
         return self.components.get(name)
 
-    def component_names(self) -> list[str]:
-        return list(self.components)
-
 
 def build_index(source_specs: list[str], context_root: Path) -> Index:
     """Merge the declared source catalogs into a flat index.

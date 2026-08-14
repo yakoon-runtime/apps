@@ -318,7 +318,8 @@ def test_k_redeploy_is_idempotent(monkeypatch):
         assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
         entries = _catalog_entries(fake)
         assert list(entries) == ["ident"]
-        assert entries["ident"]["version"] == "1.0.0"
+        # The catalog stays a dumb Name → Location map.
+        assert entries["ident"] == {"location": "ident"}
 
 
 def test_l_new_version_updates_the_single_entry(monkeypatch):
@@ -330,8 +331,8 @@ def test_l_new_version_updates_the_single_entry(monkeypatch):
         assert repo.deploy("ident", _published(home, "ident", "2.0.0")) is True
         entries = _catalog_entries(fake)
         assert list(entries) == ["ident"]
-        assert entries["ident"]["version"] == "2.0.0"
-        assert entries["ident"]["location"] == "ident-v2.0.0/ident.artifact.tar.gz"
+        # A new version never leaks into the catalog — it stays Name → Location.
+        assert entries["ident"] == {"location": "ident"}
 
 
 def test_m_failed_catalog_update_keeps_old_catalog_valid(monkeypatch):

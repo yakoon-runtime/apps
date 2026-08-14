@@ -12,19 +12,6 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import yaml
-from y5n.apps.yak.resolver.artifact import _parse_manifest
-
-
-def _artifact_fingerprint(artifact_dir: Path) -> str:
-    """The fingerprint declared by an artifact's own artifact.yml."""
-    manifest = artifact_dir / "artifact.yml"
-    if not manifest.exists():
-        return ""
-    try:
-        meta = _parse_manifest(manifest)
-    except Exception:
-        return ""
-    return str(meta.get("fingerprint", ""))
 
 
 class GithubReleaseRepository:
@@ -33,6 +20,10 @@ class GithubReleaseRepository:
     Resolution lives in the catalog/index (ADR-20); this adapter is
     transport: it fetches the declared catalog and serves resources, and
     on the write side it publishes an artifact plus its catalog entry.
+
+    The catalog stays minimal — ``ComponentName → relative Location``.
+    ``deploy`` only ensures the entry exists (``name → name``); it never
+    writes version, fingerprint or release paths into the catalog.
     """
 
     def __init__(self, repo: str) -> None:
@@ -42,8 +33,9 @@ class GithubReleaseRepository:
         """Publish a resource and its catalog entry (ADR-20).
 
         One repository operation: the artifact is fully published first,
-        then the catalog is updated as the last step. A successful deploy
-        means the resource is immediately resolvable through the catalog.
+        then the catalog entry is ensured as the last step. The entry is
+        minimal — ``name → name`` (relative location in the repo) — the
+        catalog never learns about versions, fingerprints or releases.
         Failing the artifact upload leaves the old catalog valid; failing
         the catalog update leaves the artifact unreferenced but the old
         catalog valid. Requires GITHUB_TOKEN or YAK_GITHUB_TOKEN.
@@ -63,7 +55,7 @@ class GithubReleaseRepository:
                 "Accept": "application/vnd.github.v3+json",
             }
 
-            # Extract "0.1.0" from "crm-0.1.0.python.artifact"
+            # Extract "0.1.0" from "crm-0.1.0.python.artifact" for the tag.
             version_part = artifact_dir.name.replace(f"{name}-", "").rsplit(".", 2)[0]
             tag = f"{name}-v{version_part}"
             release_data = {
@@ -136,26 +128,21 @@ class GithubReleaseRepository:
                 print(f"  Failed to upload asset: {exc}")
                 return False
 
-            # Catalog update is the last step: the resource becomes
-            # resolvable only once the catalog knows it. A failure here
-            # leaves the new artifact unreferenced but the old catalog
-            # valid.
-            entry = {
-                "version": version_part,
-                "location": f"{tag}/{name}.artifact.tar.gz",
-                "fingerprint": _artifact_fingerprint(artifact_dir),
-            }
-            if not self._upsert_catalog(name, entry, headers):
+            # Catalog entry is the last step: the resource becomes
+            # resolvable only once the catalog knows it. The entry is
+            # minimal — the component's relative location in the repo.
+            if not self._upsert_catalog(name, headers):
                 print(f"  Deploy failed: catalog not updated for {name}")
                 return False
             return True
 
-    def _upsert_catalog(self, name: str, entry: dict, headers: dict) -> bool:
-        """Upsert a component entry in the repository's catalog.yml.
+    def _upsert_catalog(self, name: str, headers: dict) -> bool:
+        """Ensure the component's minimal entry in the repository's catalog.yml.
 
         Reads the current catalog from the default branch, adds or
-        replaces the entry, and commits it back. Existing entries are
-        preserved.
+        replaces ``name → name`` (the component's relative location) and
+        commits it back. Existing entries are preserved. The catalog is a
+        dumb Name → Location map — no versions, no fingerprints.
         """
         url = f"https://api.github.com/repos/{self._repo}/contents/catalog.yml"
         existing = None
@@ -183,7 +170,7 @@ class GithubReleaseRepository:
             catalog = {}
 
         components = catalog.setdefault("components", {})
-        components[name] = entry
+        components[name] = {"location": name}
         new_content = yaml.safe_dump(catalog, default_flow_style=False, sort_keys=False)
         put_data = {
             "message": f"catalog: upsert {name}",
