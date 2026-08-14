@@ -149,10 +149,10 @@ class GithubReleaseRepository:
         Name → {Location, Release} map — no versions, no fingerprints.
         """
         url = f"https://api.github.com/repos/{self._repo}/contents/{self._catalog_path}"
-        existing = None
+        existing_file = None
         try:
             with urlopen(Request(url, headers=headers)) as resp:
-                existing = json.loads(resp.read().decode())
+                existing_file = json.loads(resp.read().decode())
         except HTTPError as exc:
             if exc.code != 404:
                 print(f"  GitHub API error: {exc}")
@@ -161,9 +161,9 @@ class GithubReleaseRepository:
             print(f"  GitHub API error: {exc}")
             return False
 
-        if existing is not None:
+        if existing_file is not None:
             try:
-                content = base64.b64decode(existing["content"]).decode()
+                content = base64.b64decode(existing_file["content"]).decode()
                 catalog = yaml.safe_load(content) or {}
             except Exception as exc:
                 print(f"  catalog.yml unreadable: {exc}")
@@ -174,10 +174,10 @@ class GithubReleaseRepository:
             catalog = {}
 
         components = catalog.setdefault("components", {})
-        existing = components.get(name)
         entry = {"location": name}
-        if isinstance(existing, dict) and "location" in existing:
-            entry["location"] = existing["location"]
+        existing_entry = components.get(name)
+        if isinstance(existing_entry, dict) and "location" in existing_entry:
+            entry["location"] = existing_entry["location"]
         entry["release"] = release
         components[name] = entry
         new_content = yaml.safe_dump(catalog, default_flow_style=False, sort_keys=False)
@@ -185,8 +185,8 @@ class GithubReleaseRepository:
             "message": f"catalog: upsert {name}",
             "content": base64.b64encode(new_content.encode()).decode(),
         }
-        if existing is not None and "sha" in existing:
-            put_data["sha"] = existing["sha"]
+        if existing_file is not None and "sha" in existing_file:
+            put_data["sha"] = existing_file["sha"]
         req = Request(
             url,
             data=json.dumps(put_data).encode(),
