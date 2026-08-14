@@ -26,9 +26,9 @@ def _init(root: Path) -> None:
     roots = [d for d in known_dirs if (root / d).is_dir()]
 
     ctx_lines = [
-        f'environment = "yakoon:platform"',
+        'environment = "yakoon:platform"',
         "",
-        f'sources = ["yakoon:official"]',
+        'sources = ["yakoon:official"]',
         "",
         f"[context]",
         f'name = "{root.name}"',

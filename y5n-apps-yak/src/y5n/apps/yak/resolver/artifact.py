@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import yaml
+from y5n.apps.yak.environment.models import Environment
+from y5n.apps.yak.pack.models import PackName
 
 
 class Artifact:
@@ -72,9 +74,6 @@ def load_remote_environment(path: Path) -> Environment | None:
     components it materializes. It holds no infrastructure and no
     resolution logic — the resolver decides how each component is met.
     """
-    from y5n.apps.yak.environment.models import Environment
-    from y5n.apps.yak.pack.models import PackName
-
     try:
         data = yaml.safe_load(path.read_text()) or {}
     except Exception:
