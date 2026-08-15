@@ -101,15 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
 
-    p = sub.add_parser("publish", help="Publish an artifact to the local store")
-    p.add_argument("name", help="Artifact name (e.g. y5n-packs-hello)")
+    p = sub.add_parser("publish", help="Publish a bundle's artifacts to the local store")
+    p.add_argument(
+        "name", help="Bundle or component name (e.g. runtime, y5n-packs-hello)"
+    )
     p.set_defaults(func=_publish.run)
 
     p = sub.add_parser(
         "deploy",
-        help="Deploy a published artifact to the source its catalog offers",
+        help="Deploy a published bundle to the sources its catalogs offer",
     )
-    p.add_argument("name", help="Component name (e.g. crm)")
+    p.add_argument("name", help="Bundle or component name (e.g. runtime, crm)")
     p.add_argument(
         "--to",
         help="Source spec (e.g. github:owner/repo) — only for a new component",
@@ -117,10 +119,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_deploy.run)
 
     p = sub.add_parser(
-        "build", help="Build artifacts from source into the current context"
+        "build", help="Build a bundle's artifacts from source into the current context"
     )
     p.add_argument(
-        "source", nargs="?", help="Source project path (default: current directory)"
+        "source",
+        nargs="?",
+        help="Bundle or source path (e.g. runtime, ./runtime/packages/y5n-runtime-engine)",
     )
     p.set_defaults(func=_build.run)
 

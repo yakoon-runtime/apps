@@ -266,6 +266,17 @@ class InstallationManager:
             return [identity]
         raise ValueError(f"Unknown identity: {identity}")
 
+    def _bundle_members(self, identity: str) -> list[str]:
+        """A bundle expands to its component names; anything else is itself.
+
+        The public lifecycle identity is a bundle; a plain name passes
+        through unchanged so the existing per-component commands keep
+        working. Unlike ``_identities`` this never raises — an unknown
+        name is left to the command's own resolution.
+        """
+        hit = self._index().resolve_bundle(identity)
+        return list(hit[1]) if hit is not None else [identity]
+
     def _install_artifact(self, artifact, path: Path, *, force: bool = False) -> bool:
         """Install a single resolved artifact's wheel (with dependencies).
 
