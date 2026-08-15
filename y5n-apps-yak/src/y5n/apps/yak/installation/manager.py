@@ -85,13 +85,25 @@ class InstallationManager:
     def _index(self):
         """The merged source index (ADR-20), built from the Context sources."""
         if self._index_cache is None:
-            if self._context is not None and self._context.sources:
-                self._index_cache = build_index(
-                    self._context.sources, self._context.path
-                )
+            ctx = self._current_context()
+            if ctx is not None and ctx.sources:
+                self._index_cache = build_index(ctx.sources, ctx.path)
             else:
                 self._index_cache = Index()
         return self._index_cache
+
+    def _current_context(self):
+        """The Context, loaded lazily.
+
+        ``yak install`` creates the context during the command; the
+        manager may have been built just before that. Loading on first
+        use lets a fresh install pick up its own init.
+        """
+        if self._context is None:
+            from y5n.apps.yak.hosts.cli.cwd import Context
+
+            self._context = Context.current()
+        return self._context
 
     def _paths_index(self, paths) -> Index | None:
         """The preferred local index built from the ``--path`` catalogs.
@@ -102,7 +114,8 @@ class InstallationManager:
         """
         if not paths:
             return None
-        context_root = self._context.path if self._context is not None else Path.cwd()
+        ctx = self._current_context()
+        context_root = ctx.path if ctx is not None else Path.cwd()
         return build_index([str(p) for p in paths], context_root)
 
     def _combined_index(self, paths=None) -> Index:
@@ -114,8 +127,9 @@ class InstallationManager:
         """
         if not paths:
             return self._index()
-        context_root = self._context.path if self._context is not None else Path.cwd()
-        sources = [str(p) for p in paths] + list(self._context.sources or [])
+        ctx = self._current_context()
+        context_root = ctx.path if ctx is not None else Path.cwd()
+        sources = [str(p) for p in paths] + list(ctx.sources or [])
         return build_index(sources, context_root)
 
     def _resolve_preferred(self, target: str, *, paths_index=None, mode: str = "artifact"):
