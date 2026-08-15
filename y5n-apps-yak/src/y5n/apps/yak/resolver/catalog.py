@@ -13,12 +13,14 @@ import os
 import shutil
 import tarfile
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.request import Request, urlopen
 
 import yaml
+from packaging.version import InvalidVersion, Version
 
 CATALOG_FILENAME = "catalog.yml"
 
@@ -37,14 +39,13 @@ class CatalogIdentityError(CatalogError):
 class ComponentRef:
     """One component offered by a source.
 
-    ``location`` is the source-relative path of the component's source;
-    ``release`` optionally names the published release the component
-    offers (an opaque release identifier, e.g. a tag — the transport
-    knows how to turn it into an artifact address).
+    ``location`` is the source-relative path of the component's source.
+    The catalog describes what a source offers and where the source is —
+    it never carries a version. Published releases are discovered from
+    the repository itself (see ``_repo_release_index``).
     """
 
     location: str
-    release: str | None = None
 
 
 @dataclass(frozen=True)
@@ -208,23 +209,30 @@ def _store_remote_catalog(
         pass
 
 
-def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
+def fetch_github_release(spec: str, name: str) -> Path | None:
     """Fetch a component's published release asset from a GitHub source.
 
-    The catalog says *which* release (the tag); this adapter knows the
-    asset convention (``{name}.artifact.tar.gz``). A release tag is the
-    *current build* of that version: the remote asset is validated by its
-    GitHub asset digest (the sha256 of the published tarball) before it
-    is (re)downloaded. When the digest is unchanged and the local content
-    is present, the download is skipped entirely. The digest is a
-    transport identity — distinct from the artifact's own fingerprint
-    (the build identity), which is read from the artifact afterwards.
+    The released version is discovered from the repository's own release
+    list — the catalog carries no version. ``deploy`` and this reader
+    share the convention: a release tag is ``{name}-v{version}`` and its
+    asset is ``{name}.artifact.tar.gz``; the reader picks the highest
+    published version. The remote asset is validated by its GitHub asset
+    digest (the sha256 of the published tarball) before it is
+    (re)downloaded. When the digest is unchanged and the local content is
+    present, the download is skipped entirely. The digest is a transport
+    identity — distinct from the artifact's own fingerprint (the build
+    identity), which is read from the artifact afterwards.
     """
     repo = github_repo(spec)
-    digest = _release_asset_digest(repo, name, release)
+    entry = _repo_release_index(repo).get(name)
+    if entry is None:
+        raise CatalogError(
+            f"component '{name}' has no release — use a --path catalog instead"
+        )
+    tag, digest = entry
 
     cache_root = (
-        Path.home() / ".yak" / "cache" / "github" / repo / f"{name}-{release}"
+        Path.home() / ".yak" / "cache" / "github" / repo / f"{name}-{tag}"
     )
     if digest is not None:
         stored = _cached_release(cache_root, digest)
@@ -233,7 +241,7 @@ def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
 
     url = (
         f"https://github.com/{repo}/releases/download/"
-        f"{release}/{name}.artifact.tar.gz"
+        f"{tag}/{name}.artifact.tar.gz"
     )
     with tempfile.TemporaryDirectory() as tmp:
         tarpath = Path(tmp) / f"{name}.artifact.tar.gz"
@@ -253,33 +261,98 @@ def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
         return _store_release(cache_root, artifact_dir, digest)
 
 
-def _release_asset_digest(repo: str, name: str, release: str) -> str | None:
-    """The digest GitHub reports for the release asset, or None.
+_ASSET_SUFFIX = ".artifact.tar.gz"
 
-    None when no token is available or the metadata cannot be read — the
-    caller then falls back to always downloading (correct, but not cheap).
+# Repo → (fetched at, {component: (tag, asset digest)}). The index is a
+# transport view of the repository, never a version truth.
+_RELEASE_INDEX_CACHE: dict[str, tuple[float, dict[str, tuple[str, str | None]]]] = {}
+_RELEASE_INDEX_LOCK = threading.Lock()
+_RELEASE_INDEX_TTL_SECONDS = 60.0
+
+
+def _repo_release_index(repo: str) -> dict[str, tuple[str, str | None]]:
+    """Component → (tag, digest) of its highest published release, per repo.
+
+    Loaded once per repository — never per component — and cached briefly.
+    Thread-safe: concurrent resolution of several components of the same
+    repository triggers a single scan.
     """
+    now = time.time()
+    cached = _RELEASE_INDEX_CACHE.get(repo)
+    if cached is not None and now - cached[0] < _RELEASE_INDEX_TTL_SECONDS:
+        return cached[1]
+    with _RELEASE_INDEX_LOCK:
+        cached = _RELEASE_INDEX_CACHE.get(repo)
+        if cached is not None and now - cached[0] < _RELEASE_INDEX_TTL_SECONDS:
+            return cached[1]
+        index = _index_repo_releases(_fetch_releases(repo))
+        _RELEASE_INDEX_CACHE[repo] = (time.time(), index)
+        return index
+
+
+def _fetch_releases(repo: str) -> list[dict]:
+    """All releases of a repository (paginated, best-effort)."""
     token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    if not token:
-        return None
-    url = f"https://api.github.com/repos/{repo}/releases/tags/{release}"
-    try:
-        req = Request(
-            url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github.v3+json",
-            },
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    releases: list[dict] = []
+    page = 1
+    while True:
+        url = (
+            "https://api.github.com/repos/"
+            f"{repo}/releases?per_page=100&page={page}"
         )
-        with urlopen(req) as resp:
-            data = json.loads(resp.read().decode())
-    except Exception:
-        return None
-    target = f"{name}.artifact.tar.gz"
-    for asset in data.get("assets", []):
-        if asset.get("name") == target:
-            return asset.get("digest")
-    return None
+        try:
+            with urlopen(Request(url, headers=headers)) as resp:
+                batch = json.loads(resp.read().decode())
+        except Exception:
+            break
+        if not isinstance(batch, list) or not batch:
+            break
+        releases.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
+    return releases
+
+
+def _index_repo_releases(releases: list[dict]) -> dict[str, tuple[str, str | None]]:
+    """Component → (tag, digest) of the highest release with a valid asset.
+
+    Pure selection, shared by the transport and the tests: a release
+    counts when its tag is ``{name}-v{version}`` and it carries the
+    ``{name}.artifact.tar.gz`` asset. The highest version wins — compared
+    as versions, never lexically (``0.10.0`` beats ``0.9.0``). Tags with a
+    different prefix or a different asset are irrelevant noise (legacy
+    releases in shared repositories included).
+    """
+    best: dict[str, tuple[str, str | None]] = {}
+    best_version: dict[str, Version] = {}
+    for release in releases:
+        tag = release.get("tag_name", "")
+        for asset in release.get("assets", []):
+            asset_name = asset.get("name", "")
+            if not asset_name.endswith(_ASSET_SUFFIX):
+                continue
+            name = asset_name[: -len(_ASSET_SUFFIX)]
+            prefix = f"{name}-v"
+            if not tag.startswith(prefix):
+                continue
+            version = tag[len(prefix) :]
+            key = _version_key(version)
+            if name not in best_version or key > best_version[name]:
+                best[name] = (tag, asset.get("digest"))
+                best_version[name] = key
+    return best
+
+
+def _version_key(version: str) -> Version:
+    """A comparable version key; an unparseable version sorts lowest."""
+    try:
+        return Version(version)
+    except InvalidVersion:
+        return Version("0")
 
 
 def _cached_release(cache_root: Path, digest: str) -> Path | None:
@@ -391,14 +464,7 @@ def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:
     for name, entry in raw_components.items():
         if not isinstance(entry, dict) or not isinstance(entry.get("location"), str):
             raise CatalogError(f"catalog '{spec}': component '{name}' needs a location")
-        release = entry.get("release")
-        if release is not None and not isinstance(release, str):
-            raise CatalogError(
-                f"catalog '{spec}': component '{name}' release must be a string"
-            )
-        components[str(name)] = ComponentRef(
-            location=entry["location"], release=release
-        )
+        components[str(name)] = ComponentRef(location=entry["location"])
     bundles = _parse_bundles(spec, data)
     return Catalog(spec=spec, base=base, components=components, bundles=bundles)
 

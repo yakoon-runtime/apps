@@ -29,6 +29,7 @@ from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import (
     Artifact,
+    DirectorySource,
     _parse_manifest,
 )
 from y5n.apps.yak.resolver.catalog import (
@@ -456,12 +457,7 @@ class InstallationManager:
         decides the mode.
         """
         if mode == "artifact":
-            if ref.release is None:
-                raise CatalogError(
-                    f"component '{name}' has no release — use a --path "
-                    f"catalog instead"
-                )
-            resource = self._materialize_release(catalog, name, ref.release)
+            resource = self._materialize_release(catalog, name)
             if resource is None:
                 return None
             artifact = self._parse_artifact(resource)
@@ -499,12 +495,25 @@ class InstallationManager:
             name=name, mode="source", source=resource, structure=structure_dir
         )
 
-    def _materialize_release(self, catalog, name: str, release: str) -> Path | None:
-        """Resolve a catalog's release declaration to a local artifact."""
+    def _materialize_release(self, catalog, name: str) -> Path | None:
+        """Resolve a component's released artifact.
+
+        A remote (GitHub) source discovers its published release from the
+        repository itself (highest published version, no catalog version).
+        A local source carries its released artifacts in ``artifacts/``
+        under the catalog root — the same DirectorySource shape as the
+        global store. The catalog names the source; it never names a
+        version.
+        """
         if catalog.base is None:
-            return fetch_github_release(catalog.spec, name, release)
-        path = catalog.base / release
-        return path if path.exists() else None
+            return fetch_github_release(catalog.spec, name)
+        artifact = DirectorySource(catalog.base / "artifacts").resolve(name)
+        if artifact is None or artifact.path is None:
+            raise CatalogError(
+                f"component '{name}' has no release — use a --path "
+                f"catalog instead"
+            )
+        return artifact.path
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
         """Resolve a source-relative catalog location to a local resource."""

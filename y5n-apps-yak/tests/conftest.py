@@ -59,11 +59,7 @@ def make_source(
     if components:
         for name, entry in components.items():
             lines.append(f"  {name}:")
-            lines.append(f"    version: {entry.get('version', '0.1')!r}")
             lines.append(f"    location: {entry['location']!r}")
-            release = entry.get("release")
-            if release is not None:
-                lines.append(f"    release: {release!r}")
     else:
         lines.append("  {}")
     if bundles:

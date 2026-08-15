@@ -31,9 +31,9 @@ def _world(root: Path):
     make_source(
         remote,
         {
-            "lib-a": {"location": "artifacts/lib-a", "release": "artifacts/lib-a"},
-            "lib-b": {"location": "artifacts/lib-b", "release": "artifacts/lib-b"},
-            "app": {"location": "artifacts/app", "release": "artifacts/app"},
+            "lib-a": {"location": "artifacts/lib-a"},
+            "lib-b": {"location": "artifacts/lib-b"},
+            "app": {"location": "artifacts/app"},
         },
         bundles={"platform": ["app", "lib-a", "lib-b"]},
     )
@@ -102,7 +102,7 @@ def test_pip_failure_leaves_no_state(monkeypatch):
         )
         make_source(
             bad,
-            {"broken": {"location": "artifacts/broken", "release": "artifacts/broken"}},
+            {"broken": {"location": "artifacts/broken"}},
             bundles={"bad": ["broken"]},
         )
         mgr = _mgr(root, [bad])

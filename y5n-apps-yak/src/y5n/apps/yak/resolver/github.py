@@ -144,20 +144,21 @@ class GithubReleaseRepository:
 
             # Catalog entry is the last step: the resource becomes
             # resolvable only once the catalog knows it. The entry is
-            # minimal — the component's relative location plus the release
-            # it just published.
-            if not self._upsert_catalog(name, tag, headers):
+            # minimal — the component's relative location. The published
+            # version is discovered from the repository itself, so the
+            # catalog never learns about versions or releases.
+            if not self._upsert_catalog(name, headers):
                 print(f"  Deploy failed: catalog not updated for {name}")
                 return False
             return True
 
-    def _upsert_catalog(self, name: str, release: str, headers: dict) -> bool:
+    def _upsert_catalog(self, name: str, headers: dict) -> bool:
         """Ensure the component's entry in the repository's catalog.yml.
 
         Reads the current catalog from the default branch, adds or
-        replaces ``name → {location, release}`` and commits it back.
-        Existing entries are preserved. The catalog is a dumb
-        Name → {Location, Release} map — no versions, no fingerprints.
+        replaces ``name → {location}`` and commits it back. Existing
+        entries are preserved. The catalog is a dumb Name → Location
+        map — no versions, no fingerprints, no releases.
         """
         url = f"https://api.github.com/repos/{self._repo}/contents/{self._catalog_path}"
         existing_file = None
@@ -189,7 +190,6 @@ class GithubReleaseRepository:
         existing_entry = components.get(name)
         if isinstance(existing_entry, dict) and "location" in existing_entry:
             entry["location"] = existing_entry["location"]
-        entry["release"] = release
         components[name] = entry
         new_content = yaml.safe_dump(catalog, default_flow_style=False, sort_keys=False)
         put_data = {

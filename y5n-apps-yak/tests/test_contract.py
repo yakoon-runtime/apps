@@ -3,7 +3,9 @@
 Reference tests for the core model:
 
 1. A component in a ``--path`` catalog resolves ``location`` → a source.
-2. Everything else resolves ``release`` → an artifact.
+2. Everything else resolves a released artifact — discovered from the
+   source (``artifacts/`` for a local source, GitHub releases remotely),
+   never declared in the catalog.
 3. Source and artifact produce the same structure result — and a
    component without ``structure/`` produces no structure at all.
 """
@@ -13,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_source, source_pack
+from conftest import artifact, make_source, source_pack
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -55,18 +57,10 @@ def test_path_catalog_resolves_source(tmp_path):
 
 
 def test_install_resolves_release_artifact(tmp_path):
-    """install uses ``release`` → a published artifact."""
+    """install discovers a released artifact from the source's artifacts/."""
     src = tmp_path / "src"
-    source_pack(src / "acme-widget", "acme-widget", "/opt/acme")
-    make_source(
-        src,
-        {
-            "acme-widget": {
-                "location": "acme-widget",
-                "release": "acme-widget",
-            }
-        },
-    )
+    artifact(src / "artifacts" / "acme-widget", "acme-widget", "/opt/acme")
+    make_source(src, {"acme-widget": {"location": "acme-widget"}})
 
     mgr = _mgr(tmp_path, [str(src)])
     inst = mgr.install(tmp_path / "inst", identity="acme-widget")
@@ -83,15 +77,13 @@ def test_source_and_artifact_same_structure_result(tmp_path):
     """source and artifact materialize the same structure; none without it."""
     src = tmp_path / "src"
     source_pack(src / "acme-widget", "acme-widget", "/opt/acme")
-    make_source(
-        src,
-        {
-            "acme-widget": {
-                "location": "acme-widget",
-                "release": "acme-widget",
-            }
-        },
+    artifact(
+        src / "artifacts" / "acme-widget",
+        "acme-widget",
+        "/opt/acme",
+        content="acme-widget-source",
     )
+    make_source(src, {"acme-widget": {"location": "acme-widget"}})
 
     # Source mode (via --path).
     mgr_src = _mgr(tmp_path, [str(src)])
@@ -104,7 +96,7 @@ def test_source_and_artifact_same_structure_result(tmp_path):
     assert src_struct.is_symlink()
     assert (src_struct / "payload.txt").read_text() == "acme-widget-source"
 
-    # Artifact mode (via release).
+    # Artifact mode (discovered release).
     mgr_art = _mgr(tmp_path, [str(src)])
     inst_art = mgr_art.install(tmp_path / "inst-art", identity="acme-widget")
     assert inst_art is not None

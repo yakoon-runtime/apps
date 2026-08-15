@@ -3,10 +3,8 @@ components:
     location: y5n-apps-console
   y5n-apps-runtime:
     location: y5n-apps-runtime
-    release: y5n-apps-runtime-v0.1.0
   y5n-apps-shell:
     location: y5n-apps-shell
-    release: y5n-apps-shell-v0.3.0
   y5n-apps-web:
     location: y5n-apps-web
   y5n-apps-yak:

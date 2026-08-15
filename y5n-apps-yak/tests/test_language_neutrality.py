@@ -55,13 +55,12 @@ def test_non_python_component_materializes_structure(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repo = root / "repo"
-        _dotnet_artifact(repo)
+        _dotnet_artifact(repo / "artifacts")
         make_source(
             repo,
             {
                 "acme-test": {
                     "location": "acme-test-1.0.0.dotnet.artifact",
-                    "release": "acme-test-1.0.0.dotnet.artifact",
                 }
             },
             bundles={"app": ["acme-test"]},
