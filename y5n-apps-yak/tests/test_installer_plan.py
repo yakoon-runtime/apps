@@ -189,5 +189,7 @@ def test_pip_failure_never_reports_success():
         with pytest.raises(RuntimeError, match="pip install failed"):
             mgr.install(root / "inst", identity="bad")
 
-        state = mgr.load(root / "inst")
-        assert state is None or state.status.value != "created"
+        # A failed pip run must leave no state: state.toml is the truth
+        # about an established environment and is only written after a
+        # successful install.
+        assert mgr.load(root / "inst") is None

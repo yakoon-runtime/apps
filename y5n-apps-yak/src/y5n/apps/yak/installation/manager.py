@@ -208,17 +208,6 @@ class InstallationManager:
         with self._step(ui, "Deployment"):
             self._assemble(structure_dir, root / ".yak", asker=asker)
 
-        inst = Installation(
-            name=name,
-            root=root,
-            packs=[PackName(c.name) for c in records],
-            components=records,
-            status=InstallationStatus.MATERIALIZED,
-            created=now,
-            updated=now,
-        )
-        self._write_state(inst)
-
         with self._step(ui, "Installing"):
             self._installer.install(root, self._python_candidates(resolved))
 
@@ -231,8 +220,18 @@ class InstallationManager:
                 workspace_path=workspace_path,
             )
 
-        inst.status = InstallationStatus.CREATED
-        inst.updated = datetime.now(UTC)
+        inst = Installation(
+            name=name,
+            root=root,
+            packs=[PackName(c.name) for c in records],
+            components=records,
+            status=InstallationStatus.CREATED,
+            created=now,
+            updated=datetime.now(UTC),
+        )
+        # State is the truth about an established environment: it is only
+        # written after the pip transaction succeeded. A failed install
+        # leaves no state that could claim an environment exists.
         self._write_state(inst)
         return inst
 
@@ -379,20 +378,20 @@ class InstallationManager:
                 components=self._merge_component_records(
                     (existing_inst.components if existing_inst else []), records
                 ),
-                status=InstallationStatus.MATERIALIZED,
+                status=InstallationStatus.CREATED,
                 created=now,
-                updated=now,
+                updated=datetime.now(UTC),
             )
-            self._write_state(inst)
-
             with self._step(ui, "Installing"):
                 self._installer.install(path, self._python_candidates(resolved))
 
             with self._step(ui, "Environment"):
                 touch(path, name=env.name, components=all_packs, mounts=merged)
 
-            inst.status = InstallationStatus.CREATED
-            inst.updated = datetime.now(UTC)
+            # State is only written after the pip transaction succeeded.
+            # On failure the existing state stays untouched and the staged
+            # components are rolled back — the environment is exactly what
+            # it was before.
             self._write_state(inst)
             return inst
         except Exception:

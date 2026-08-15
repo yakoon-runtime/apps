@@ -170,17 +170,17 @@ def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
     identifier, e.g. the tag); this adapter knows the asset convention
     (``{name}.artifact.tar.gz``) and the download address shape. There is
     no release scan and no search — the address is fully deterministic.
+
+    The asset is always fetched fresh: a release tag denotes the *current
+    build* of that version and ``deploy`` may replace the asset under the
+    same tag. A content cache keyed by tag alone would freeze stale
+    artifacts, so releases are never cached.
     """
     repo = github_repo(spec)
     url = (
         f"https://github.com/{repo}/releases/download/"
         f"{release}/{name}.artifact.tar.gz"
     )
-    cache_root = Path.home() / ".yak" / "cache" / "github" / repo / f"{name}-{release}"
-    artifact_dir = _find_artifact_dir(cache_root)
-    if artifact_dir is not None:
-        return artifact_dir
-
     with tempfile.TemporaryDirectory() as tmp:
         tarpath = Path(tmp) / f"{name}.artifact.tar.gz"
         try:
@@ -193,14 +193,16 @@ def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
                 tar.extractall(path=tmp, filter="data")
         except Exception as exc:
             raise CatalogError(f"cannot extract {url}: {exc}") from exc
-        cache_root.mkdir(parents=True, exist_ok=True)
-        cached = cache_root / name
-        if not cached.exists():
-            source = _find_artifact_dir(Path(tmp))
-            if source is None:
-                raise CatalogError(f"no artifact for {name} in {url}")
-            shutil.copytree(source, cached)
-        return cached
+        artifact_dir = _find_artifact_dir(Path(tmp))
+        if artifact_dir is None:
+            raise CatalogError(f"no artifact for {name} in {url}")
+        # The tag denotes the *current build* of that version; deploy may
+        # replace the asset under the same tag. Store the fetch under a
+        # content-keyed spot (the artifact's own fingerprint), so the
+        # caller's path survives this temp dir while a redeployed build
+        # never reuses stale content.
+        store = _release_store(repo, name, release, artifact_dir)
+        return store
 
 
 def fetch_github_artifact(spec: str, location: str) -> Path | None:
@@ -269,6 +271,31 @@ def _find_artifact_dir(parent: Path) -> Path | None:
         if child.is_dir() and (child / "artifact.yml").exists():
             return child
     return None
+
+
+def _release_store(repo: str, name: str, release: str, artifact_dir: Path) -> Path:
+    """Persist a fetched release artifact under its content identity.
+
+    The store key combines the release with the artifact's own
+    fingerprint, so the same tag re-deployed with a different build lands
+    in a different spot and stale content is never reused.
+    """
+    import y5n.apps.yak.resolver.artifact as artifact_mod
+
+    fingerprint = ""
+    manifest = artifact_dir / "artifact.yml"
+    if manifest.exists():
+        meta = artifact_mod._parse_manifest(manifest)
+        fp = meta.get("fingerprint", "")
+        if fp.startswith("sha256:"):
+            fp = fp[7:]
+        fingerprint = fp[:12]
+    key = f"{name}-{release}-{fingerprint}" if fingerprint else f"{name}-{release}"
+    store = Path.home() / ".yak" / "cache" / "github" / repo / key / name
+    if not store.exists():
+        store.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(artifact_dir, store)
+    return store
 
 
 def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:
