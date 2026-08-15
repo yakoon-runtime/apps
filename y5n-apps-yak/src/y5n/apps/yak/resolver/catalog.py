@@ -8,16 +8,20 @@ resolver knows component identities. Nothing else.
 
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import tarfile
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import yaml
 
 CATALOG_FILENAME = "catalog.yml"
+
+_BRANCH_CACHE: dict[str, str] = {}
 
 
 class CatalogError(Exception):
@@ -114,11 +118,43 @@ def _load_local_catalog(spec: str, root: Path, catalog_path: str) -> Catalog:
     return _parse_catalog(spec, root, data)
 
 
-def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
+def _default_branch(spec: str) -> str:
+    """The repository's default branch.
+
+    ``raw.githubusercontent``'s ``HEAD`` alias can serve a stale commit
+    shortly after a push; an explicit branch does not. The default branch
+    is resolved once per repository through the GitHub API and cached.
+    """
     repo = github_repo(spec)
-    url = f"https://raw.githubusercontent.com/{repo}/HEAD/{catalog_path}"
+    if repo in _BRANCH_CACHE:
+        return _BRANCH_CACHE[repo]
+    branch = "main"
     try:
-        with urlopen(url) as resp:
+        with urlopen(f"https://api.github.com/repos/{repo}") as resp:
+            data = json.loads(resp.read().decode())
+        branch = data.get("default_branch") or branch
+    except Exception:
+        pass
+    _BRANCH_CACHE[repo] = branch
+    return branch
+
+
+def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
+    """Read a remote catalog through the GitHub Contents API.
+
+    The contents API reads the git object directly and is fresh the
+    moment a deploy commits; ``raw.githubusercontent``'s CDN can lag
+    behind for minutes. The write side already uses the API, so the read
+    side follows the same truth.
+    """
+    repo = github_repo(spec)
+    url = f"https://api.github.com/repos/{repo}/contents/{catalog_path}"
+    headers = {"Accept": "application/vnd.github.raw+json"}
+    token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        with urlopen(Request(url, headers=headers)) as resp:
             data = yaml.safe_load(resp.read().decode()) or {}
     except Exception as exc:
         raise CatalogError(f"cannot fetch {url}: {exc}") from exc
@@ -181,7 +217,7 @@ def fetch_github_artifact(spec: str, location: str) -> Path | None:
             f"repository, got '{location}'"
         )
     repo = github_repo(spec)
-    url = f"https://codeload.github.com/{repo}/tar.gz/HEAD"
+    url = f"https://codeload.github.com/{repo}/tar.gz/{_default_branch(spec)}"
 
     cache_root = (
         Path.home() / ".yak" / "cache" / "github" / repo / location.replace("/", "_")
