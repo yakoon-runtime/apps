@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -242,14 +243,30 @@ class InstallationManager:
         resolved_all: list[_Component] = []
         try:
             with self._step(ui, "Reconciling"):
+                # Resolution is network-bound (release digests, downloads)
+                # and independent per component — resolve concurrently so
+                # the wall time is one round-trip, not one per component.
+                resolved: dict[str, _Component] = {}
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    futures = {
+                        pool.submit(
+                            self._resolve_preferred, name, paths_index=paths_index
+                        ): name
+                        for name in desired
+                    }
+                    for future in as_completed(futures):
+                        name = futures[future]
+                        component = future.result()
+                        if component is None:
+                            raise CatalogError(
+                                f"component '{name}' cannot be resolved "
+                                f"(declared by an installed identity)"
+                            )
+                        resolved[name] = component
+
                 for name in desired:
+                    component = resolved[name]
                     existing_record = merged.get(name)
-                    component = self._resolve_preferred(name, paths_index=paths_index)
-                    if component is None:
-                        raise CatalogError(
-                            f"component '{name}' cannot be resolved (declared by "
-                            f"an installed identity)"
-                        )
                     resolved_all.append(component)
                     drift = existing_record is not None and (
                         component.mode != existing_record.mode
