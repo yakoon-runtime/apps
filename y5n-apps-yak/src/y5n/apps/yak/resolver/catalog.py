@@ -49,11 +49,14 @@ class Catalog:
     ``spec`` is the source this catalog came from; ``base`` is the
     filesystem root for relative locations of a local source (None for a
     remote source). Locations are source-relative, never absolute.
+    ``bundles`` maps a bundle name to the component names it composes —
+    nothing else (a bundle never names other bundles).
     """
 
     spec: str
     base: Path | None
     components: dict[str, ComponentRef] = field(default_factory=dict)
+    bundles: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def load_catalog(spec: str, context_root: Path) -> Catalog:
@@ -248,7 +251,33 @@ def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:
         components[str(name)] = ComponentRef(
             location=entry["location"], release=release
         )
-    return Catalog(spec=spec, base=base, components=components)
+    bundles = _parse_bundles(spec, data)
+    return Catalog(spec=spec, base=base, components=components, bundles=bundles)
+
+
+def _parse_bundles(spec: str, data: dict) -> dict[str, tuple[str, ...]]:
+    """Parse a catalog's ``bundles:`` — name → list of component names.
+
+    A bundle names components only; it never names another bundle in this
+    version. Names are opaque identities — whether they resolve through
+    the shared index is an install-time concern, not a parse error here.
+    """
+    raw_bundles = data.get("bundles", {})
+    if not raw_bundles:
+        return {}
+    if not isinstance(raw_bundles, dict):
+        raise CatalogError(f"catalog '{spec}': 'bundles' must be a mapping")
+    bundles: dict[str, tuple[str, ...]] = {}
+    for name, members in raw_bundles.items():
+        if not isinstance(members, list) or not all(
+            isinstance(m, str) for m in members
+        ):
+            raise CatalogError(
+                f"catalog '{spec}': bundle '{name}' must be a list of "
+                "component names"
+            )
+        bundles[str(name)] = tuple(members)
+    return bundles
 
 
 @dataclass(frozen=True)
@@ -256,25 +285,33 @@ class Index:
     """The merged, local view of the declared source catalogs.
 
     ``components`` maps an exact component identity to its catalog and
-    reference. First hit wins (source order).
+    reference; ``bundles`` maps a bundle name to its catalog and member
+    list. First hit wins (source order) in both namespaces.
     """
 
     components: dict[str, tuple[Catalog, ComponentRef]] = field(default_factory=dict)
+    bundles: dict[str, tuple[Catalog, tuple[str, ...]]] = field(default_factory=dict)
 
     def resolve(self, name: str) -> tuple[Catalog, ComponentRef] | None:
         return self.components.get(name)
+
+    def resolve_bundle(self, name: str) -> tuple[Catalog, tuple[str, ...]] | None:
+        return self.bundles.get(name)
 
 
 def build_index(source_specs: list[str], context_root: Path) -> Index:
     """Merge the declared source catalogs into a flat index.
 
-    Declaration order: a component is taken from the first catalog that
-    offers it; later catalogs do not override it. The source list is
-    flat — the bootstrap knows catalog locations, nothing nests.
+    Declaration order: a component or bundle is taken from the first
+    catalog that offers it; later catalogs do not override it. The source
+    list is flat — the bootstrap knows catalog locations, nothing nests.
     """
     components: dict[str, tuple[Catalog, ComponentRef]] = {}
+    bundles: dict[str, tuple[Catalog, tuple[str, ...]]] = {}
     for spec in source_specs:
         catalog = load_catalog(spec, context_root)
         for name, ref in catalog.components.items():
             components.setdefault(name, (catalog, ref))
-    return Index(components=components)
+        for name, members in catalog.bundles.items():
+            bundles.setdefault(name, (catalog, members))
+    return Index(components=components, bundles=bundles)

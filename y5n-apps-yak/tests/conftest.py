@@ -8,6 +8,7 @@ from pathlib import Path
 def make_source(
     path: Path,
     components: dict | None = None,
+    bundles: dict | None = None,
 ) -> Path:
     """Create a source directory with a declared catalog.yml."""
     path.mkdir(parents=True, exist_ok=True)
@@ -23,6 +24,12 @@ def make_source(
                 lines.append(f"    release: {release!r}")
     else:
         lines.append("  {}")
+    if bundles:
+        lines.append("bundles:")
+        for name, members in bundles.items():
+            lines.append(f"  {name}:")
+            for member in members:
+                lines.append(f"    - {member!r}")
     (path / "catalog.yml").write_text("\n".join(lines) + "\n")
     return path
 
