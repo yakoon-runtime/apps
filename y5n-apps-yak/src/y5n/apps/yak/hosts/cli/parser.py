@@ -109,12 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "deploy",
-        help="Deploy a published bundle to the sources its catalogs offer",
+        help="Deploy a published bundle to the distribution repository",
     )
     p.add_argument("name", help="Bundle or component name (e.g. runtime, crm)")
     p.add_argument(
         "--to",
-        help="Source spec (e.g. github:owner/repo) — only for a new component",
+        help="Repository spec (e.g. github:owner/repo) — overrides the distribution",
     )
     p.set_defaults(func=_deploy.run)
 

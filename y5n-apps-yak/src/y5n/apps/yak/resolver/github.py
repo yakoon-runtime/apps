@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import base64
+import gzip
+import hashlib
+import io
 import json
 import os
 import tarfile
@@ -27,6 +30,33 @@ def release_tag_for(name: str, artifact_dir: Path) -> str:
     return f"{name}-v{version_part}"
 
 
+def _write_artifact_tarball(tarpath: Path, artifact_dir: Path, name: str) -> None:
+    """Write the deterministic artifact tarball (``{name}.artifact.tar.gz``).
+
+    Deterministic on purpose: the tarball's digest is the no-op signal for
+    ``deploy``, so the gzip header must not carry a timestamp. Same
+    artifact content always yields the same digest.
+    """
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        tar.add(artifact_dir, arcname=artifact_dir.name)
+    with open(tarpath, "wb") as fh:
+        fh.write(gzip.compress(buf.getvalue(), mtime=0))
+
+
+def _sha256_digest(data: bytes) -> str:
+    """The digest in GitHub's asset format: ``sha256:<hex>``."""
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _asset_digest(release: dict, asset_name: str) -> str | None:
+    """The GitHub digest of a release's named asset, or None."""
+    for asset in release.get("assets", []):
+        if asset.get("name") == asset_name:
+            return asset.get("digest")
+    return None
+
+
 class GithubReleaseRepository:
     """A GitHub source: serves a catalog and receives deployed resources.
 
@@ -47,14 +77,20 @@ class GithubReleaseRepository:
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
         """Publish a resource and its catalog entry (ADR-20).
 
-        One repository operation: the artifact is fully published first,
-        then the catalog entry is ensured as the last step. The entry is
-        minimal — ``name → name`` (relative location in the repo) — the
-        catalog never learns about versions, fingerprints or releases.
-        Failing the artifact upload leaves the old catalog valid; failing
-        the catalog update leaves the artifact unreferenced but the old
-        catalog valid. Requires YAK_GITHUB_TOKEN — the only credential yak
-        ever reads, and only on the write path.
+        One repository operation with three outcomes:
+
+        - CREATE: no release for ``{name}-v{version}`` yet — the release
+          is created and the asset uploaded.
+        - NO-OP: the release exists and its asset digest equals the local
+          tarball — the same build is already deployed; nothing changes.
+        - REPLACE: the release exists but the asset differs — only the
+          asset is replaced, the release itself is never deleted.
+
+        The catalog entry is ensured as the last step and is minimal —
+        ``name → name``. Failing the asset step leaves the old release
+        valid; failing the catalog update leaves the artifact unreferenced
+        but the old catalog valid. Requires YAK_GITHUB_TOKEN — the only
+        credential yak ever reads, and only on the write path.
         """
         token = os.environ.get("YAK_GITHUB_TOKEN")
         if not token:
@@ -63,95 +99,123 @@ class GithubReleaseRepository:
 
         with tempfile.TemporaryDirectory() as tmp:
             tarpath = Path(tmp) / f"{name}.artifact.tar.gz"
-            with tarfile.open(tarpath, "w:gz") as tar:
-                tar.add(artifact_dir, arcname=artifact_dir.name)
+            _write_artifact_tarball(tarpath, artifact_dir, name)
+            digest = _sha256_digest(tarpath.read_bytes())
 
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github.v3+json",
             }
-
             # Extract "0.1.0" from "crm-0.1.0.python.artifact" for the tag.
             tag = release_tag_for(name, artifact_dir)
-            release_data = {
-                "tag_name": tag,
-                "name": f"{name} {tag.removeprefix(name + '-v')}",
-                "draft": draft,
-            }
+            asset_name = f"{name}.artifact.tar.gz"
 
             release = self._release_by_tag(tag, headers)
             if release is not None:
-                # Same version already deployed → update the release.
-                req = Request(
-                    f"https://api.github.com/repos/{self._repo}/releases/{release['id']}",
-                    data=json.dumps(release_data).encode(),
-                    headers=headers,
-                    method="PATCH",
-                )
-                try:
-                    with urlopen(req) as resp:
-                        release = json.loads(resp.read().decode())
-                except HTTPError as exc:
-                    body = exc.read().decode(errors="replace")
-                    print(f"  GitHub API error: {exc}")
-                    if body:
-                        print(f"  {body}")
-                    return False
-                except Exception as exc:
-                    print(f"  GitHub API error: {exc}")
-                    return False
+                if _asset_digest(release, asset_name) == digest:
+                    print(f"  {name} unchanged on {self._repo} release {tag} (no-op)")
+                else:
+                    release = self._patch_release(release["id"], name, tag, draft, headers)
+                    if release is None:
+                        return False
+                    self._delete_asset(release["id"], asset_name, headers)
+                    if not self._upload_asset(release, name, tarpath, headers, tag):
+                        return False
             else:
-                req = Request(
-                    f"https://api.github.com/repos/{self._repo}/releases",
-                    data=json.dumps(release_data).encode(),
-                    headers=headers,
-                    method="POST",
-                )
-                try:
-                    with urlopen(req) as resp:
-                        release = json.loads(resp.read().decode())
-                except HTTPError as exc:
-                    body = exc.read().decode(errors="replace")
-                    print(f"  GitHub API error: {exc}")
-                    if body:
-                        print(f"  {body}")
+                release = self._create_release(name, tag, draft, headers)
+                if release is None:
                     return False
-                except Exception as exc:
-                    print(f"  GitHub API error: {exc}")
+                if not self._upload_asset(release, name, tarpath, headers, tag):
                     return False
-
-            self._delete_asset(release["id"], f"{name}.artifact.tar.gz", headers)
-
-            upload_url = release.get("upload_url", "").split("{")[0]
-            asset_data = tarpath.read_bytes()
-            asset_headers = {
-                **headers,
-                "Content-Type": "application/gzip",
-                "Content-Length": str(len(asset_data)),
-            }
-            asset_name = f"{name}.artifact.tar.gz"
-            upload_req = Request(
-                f"{upload_url}?name={asset_name}",
-                data=asset_data,
-                headers=asset_headers,
-                method="POST",
-            )
-            try:
-                with urlopen(upload_req) as resp:
-                    print(f"  Deployed {name} to {self._repo} release {tag}")
-            except Exception as exc:
-                print(f"  Failed to upload asset: {exc}")
-                return False
 
             # Catalog entry is the last step: the resource becomes
             # resolvable only once the catalog knows it. The entry is
             # minimal — the component's relative location. The published
-            # version is discovered from the repository itself, so the
-            # catalog never learns about versions or releases.
+            # version is discovered from the distribution repository, so
+            # the catalog never learns about versions or releases.
             if not self._upsert_catalog(name, headers):
                 print(f"  Deploy failed: catalog not updated for {name}")
                 return False
             return True
+
+    def _create_release(
+        self, name: str, tag: str, draft: bool, headers: dict
+    ) -> dict | None:
+        """Create the release for a tag; return it, or None on failure."""
+        release_data = {
+            "tag_name": tag,
+            "name": f"{name} {tag.removeprefix(name + '-v')}",
+            "draft": draft,
+        }
+        req = Request(
+            f"https://api.github.com/repos/{self._repo}/releases",
+            data=json.dumps(release_data).encode(),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urlopen(req) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as exc:
+            self._api_error(exc)
+            return None
+
+    def _patch_release(
+        self, release_id: int, name: str, tag: str, draft: bool, headers: dict
+    ) -> dict | None:
+        """Update an existing release's metadata; return it, or None."""
+        release_data = {
+            "tag_name": tag,
+            "name": f"{name} {tag.removeprefix(name + '-v')}",
+            "draft": draft,
+        }
+        req = Request(
+            f"https://api.github.com/repos/{self._repo}/releases/{release_id}",
+            data=json.dumps(release_data).encode(),
+            headers=headers,
+            method="PATCH",
+        )
+        try:
+            with urlopen(req) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as exc:
+            self._api_error(exc)
+            return None
+
+    def _upload_asset(
+        self, release: dict, name: str, tarpath: Path, headers: dict, tag: str
+    ) -> bool:
+        """Upload the artifact tarball to a release; return success."""
+        upload_url = release.get("upload_url", "").split("{")[0]
+        if not upload_url:
+            return False
+        asset_data = tarpath.read_bytes()
+        asset_headers = {
+            **headers,
+            "Content-Type": "application/gzip",
+            "Content-Length": str(len(asset_data)),
+        }
+        asset_name = f"{name}.artifact.tar.gz"
+        upload_req = Request(
+            f"{upload_url}?name={asset_name}",
+            data=asset_data,
+            headers=asset_headers,
+            method="POST",
+        )
+        try:
+            with urlopen(upload_req) as resp:
+                print(f"  Deployed {name} to {self._repo} release {tag}")
+                return True
+        except Exception as exc:
+            print(f"  Failed to upload asset: {exc}")
+            return False
+
+    @staticmethod
+    def _api_error(exc: Exception) -> None:
+        body = exc.read().decode(errors="replace") if isinstance(exc, HTTPError) else ""
+        print(f"  GitHub API error: {exc}")
+        if body:
+            print(f"  {body}")
 
     def _upsert_catalog(self, name: str, headers: dict) -> bool:
         """Ensure the component's entry in the repository's catalog.yml.

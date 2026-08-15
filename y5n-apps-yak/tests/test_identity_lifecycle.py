@@ -34,7 +34,9 @@ def _repo(root: Path) -> Path:
 
 
 def _mgr(root: Path, repo: Path) -> InstallationManager:
-    ctx = Context(path=root, sources=[str(repo)])
+    ctx = Context(
+        path=root, sources=[str(repo)], distribution="github:acme/dists"
+    )
     return InstallationManager(FileRepository(), DirectoryArtifactStore(), context=ctx)
 
 
@@ -114,7 +116,7 @@ def test_publish_expands_bundle(monkeypatch):
         assert calls == ["a", "b"]
 
 
-def test_deploy_expands_bundle_to_member_homes(monkeypatch):
+def test_deploy_expands_bundle_to_distribution(monkeypatch):
     from y5n.apps.yak.hosts.cli.commands import deploy as deploy_cmd
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -130,8 +132,8 @@ def test_deploy_expands_bundle_to_member_homes(monkeypatch):
         )
         deploy_cmd.run(_args(name="runtime", to=None), mgr)
 
-        # Both members deploy to their shared home catalog.
-        assert calls == [("a", str(base / "repo")), ("b", str(base / "repo"))]
+        # Both members deploy to the shared distribution repository.
+        assert calls == [("a", "github:acme/dists"), ("b", "github:acme/dists")]
 
 
 def test_deploy_rejects_to_for_a_bundle(monkeypatch):

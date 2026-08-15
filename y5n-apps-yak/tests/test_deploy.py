@@ -12,6 +12,7 @@ GitHub is mocked at the HTTP layer.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -62,6 +63,19 @@ class FakeGithub:
     def _upload_url(self, repo: str, rid: int) -> str:
         return f"https://uploads.gh/repos/{repo}/releases/{rid}/assets"
 
+    def _assets(self, repo: str, release: dict) -> list[dict]:
+        return [
+            {
+                "id": aid,
+                "name": name,
+                "digest": "sha256:" + hashlib.sha256(data).hexdigest(),
+                "browser_download_url": (
+                    f"https://gh/{repo}/dl/{release['tag']}/{name}"
+                ),
+            }
+            for name, (aid, data) in release["assets"].items()
+        ]
+
     def urlopen(self, url):
         full = url.full_url if hasattr(url, "full_url") else str(url)
         method = getattr(url, "method", "GET") or "GET"
@@ -72,16 +86,9 @@ class FakeGithub:
             release = self._release(repo)
             releases = []
             if release is not None:
-                assets = [
-                    {
-                        "name": name,
-                        "browser_download_url": (
-                            f"https://gh/{repo}/dl/{release['tag']}/{name}"
-                        ),
-                    }
-                    for name in release["assets"]
-                ]
-                releases.append({"tag_name": release["tag"], "assets": assets})
+                releases.append(
+                    {"tag_name": release["tag"], "assets": self._assets(repo, release)}
+                )
             return _FakeResp(json.dumps(releases).encode())
 
         if "/releases/latest" in full:
@@ -111,6 +118,7 @@ class FakeGithub:
                     {
                         "id": release["id"],
                         "tag_name": release["tag"],
+                        "assets": self._assets(repo, release),
                         "upload_url": self._upload_url(repo, release["id"])
                         + "{?name,label}",
                     }
@@ -152,11 +160,7 @@ class FakeGithub:
             repo = full.split("/repos/", 1)[1].split("/releases/", 1)[0]
             release = self._release(repo)
             assert release is not None
-            assets = [
-                {"id": aid, "name": name}
-                for name, (aid, _bytes) in release["assets"].items()
-            ]
-            return _FakeResp(json.dumps(assets).encode())
+            return _FakeResp(json.dumps(self._assets(repo, release)).encode())
 
         if "/assets" in full and method == "POST":
             repo = full.split("/repos/", 1)[1].split("/releases/", 1)[0]
@@ -241,7 +245,7 @@ def _mock_github(monkeypatch) -> FakeGithub:
     fake = FakeGithub()
     monkeypatch.setattr("y5n.apps.yak.resolver.github.urlopen", fake.urlopen)
     monkeypatch.setattr("y5n.apps.yak.resolver.github.Request", _FakeRequest)
-    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    monkeypatch.setenv("YAK_GITHUB_TOKEN", "test-token")
     return fake
 
 
@@ -254,7 +258,8 @@ def test_deploy_is_not_draft(monkeypatch):
         assert fake.releases["acme/packs"]["tag"] == "crm-v1.0.0"
 
 
-def test_redeploy_same_version_updates(monkeypatch):
+def test_redeploy_same_version_is_noop_until_content_changes(monkeypatch):
+    """Same build → NO-OP; a changed build of the same version → REPLACE."""
     fake = _mock_github(monkeypatch)
     with tempfile.TemporaryDirectory() as tmp:
         home = _mock_home(monkeypatch, tmp)
@@ -263,8 +268,16 @@ def test_redeploy_same_version_updates(monkeypatch):
         repo = GithubReleaseRepository("acme/packs")
         assert repo.deploy("crm", store) is True
         release_id = fake.releases["acme/packs"]["id"]
+        assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
 
-        # Deploying the same version again must update, not fail.
+        # Same build again: no-op — the release stays, no re-upload.
+        assert repo.deploy("crm", store) is True
+        assert fake.releases["acme/packs"]["id"] == release_id
+        assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
+
+        # A changed build of the same version: the asset is replaced, the
+        # release itself is never recreated.
+        (store / "structure" / "x.txt").write_text("changed")
         assert repo.deploy("crm", store) is True
         assert fake.releases["acme/packs"]["id"] == release_id
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 2
@@ -292,9 +305,8 @@ def test_deploy_spec_with_catalog_path_writes_that_catalog(monkeypatch):
         }
 
 
-def test_catalog_source_is_the_components_home(monkeypatch):
-    """Without --to, deploy targets the source whose catalog offers it."""
-    from y5n.apps.yak.hosts.cli.commands.deploy import _catalog_source
+def test_distribution_comes_from_the_context(monkeypatch):
+    """Without --to, deploy targets the context's distribution repository."""
     from y5n.apps.yak.hosts.cli.cwd import Context
     from y5n.apps.yak.installation.manager import InstallationManager
     from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -308,12 +320,16 @@ def test_catalog_source_is_the_components_home(monkeypatch):
             repo,
             {"cool-shell": {"location": "cool-shell"}},
         )
-        ctx = Context(path=root, sources=[str(repo)])
+        ctx = Context(
+            path=root,
+            sources=[str(repo)],
+            distribution="github:acme/dists",
+        )
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
-        assert _catalog_source(mgr, "cool-shell") == str(repo)
-        assert _catalog_source(mgr, "nope") is None
+        assert mgr._distribution_spec() == "github:acme/dists"
+        assert InstallationManager(FileRepository(), DirectoryArtifactStore())._distribution_spec() is None
 
 
 def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Path:

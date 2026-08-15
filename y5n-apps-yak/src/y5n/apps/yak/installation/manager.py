@@ -495,25 +495,36 @@ class InstallationManager:
             name=name, mode="source", source=resource, structure=structure_dir
         )
 
-    def _materialize_release(self, catalog, name: str) -> Path | None:
-        """Resolve a component's released artifact.
+    def _distribution_spec(self) -> str | None:
+        """The context's distribution repository (where artifacts live)."""
+        ctx = self._current_context()
+        return ctx.distribution if ctx is not None else None
 
-        A remote (GitHub) source discovers its published release from the
-        repository itself (highest published version, no catalog version).
-        A local source carries its released artifacts in ``artifacts/``
-        under the catalog root — the same DirectorySource shape as the
-        global store. The catalog names the source; it never names a
-        version.
+    def _materialize_release(self, catalog, name: str) -> Path | None:
+        """Resolve a component's released artifact from the distribution.
+
+        Released software lives in the context's single distribution
+        repository (``dists``) — discovered from its release list, never
+        from the source catalog. A local source carries its released
+        artifacts in ``artifacts/`` under the catalog root (the same
+        DirectorySource shape as the global store). The catalog names the
+        source; it never names a version.
         """
-        if catalog.base is None:
-            return fetch_github_release(catalog.spec, name)
-        artifact = DirectorySource(catalog.base / "artifacts").resolve(name)
-        if artifact is None or artifact.path is None:
+        if catalog.base is not None:
+            artifact = DirectorySource(catalog.base / "artifacts").resolve(name)
+            if artifact is None or artifact.path is None:
+                raise CatalogError(
+                    f"component '{name}' has no release — use a --path "
+                    f"catalog instead"
+                )
+            return artifact.path
+        spec = self._distribution_spec()
+        if spec is None:
             raise CatalogError(
-                f"component '{name}' has no release — use a --path "
-                f"catalog instead"
+                f"component '{name}' needs a distribution repository — "
+                "set 'distribution' in .yak/context.toml"
             )
-        return artifact.path
+        return fetch_github_release(spec, name)
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
         """Resolve a source-relative catalog location to a local resource."""
