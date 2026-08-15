@@ -2,13 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-PACK_TOML = """\
-name = "{name}"
-version = "0.1.0"
-description = "{title} pack"
-"""
-
-
 PYPROJECT_TOML = """\
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -48,7 +41,6 @@ def create_pack(name: str, target: Path | None = None, force: bool = False) -> P
         )
 
     root.mkdir(parents=True, exist_ok=True)
-    (root / "pack.toml").write_text(PACK_TOML.format(name=name, title=title))
     (root / "pyproject.toml").write_text(PYPROJECT_TOML.format(name=name))
     (root / "README.md").write_text(f"# {title}\n\n{title} pack.\n")
 

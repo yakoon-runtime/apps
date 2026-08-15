@@ -22,7 +22,7 @@ from y5n.apps.yak.installation.deployment import (
 from y5n.apps.yak.installation.deployment import load_installation, to_dict
 from y5n.apps.yak.installation.models import Component, Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer, PythonCandidate
-from y5n.apps.yak.pack.models import Mount, Pack, PackName
+from y5n.apps.yak.pack.models import Mount, Pack, PackName, read_mount
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import (
@@ -433,8 +433,9 @@ class InstallationManager:
 
         The caller decides source vs artifact — never the shape of a
         temporary resource. ``source`` uses ``location`` (a checkout),
-        ``artifact`` uses ``release`` (a published artifact). Pack
-        metadata is read only when present, to carry its mount — it never
+        ``artifact`` uses ``release`` (a published artifact). The
+        component's native identity (pyproject) is read only when present,
+        to assert it against the catalog and carry its mount — it never
         decides the mode.
         """
         if mode == "artifact":
@@ -473,7 +474,7 @@ class InstallationManager:
             return _Component(
                 name=pack.name,
                 mode="source",
-                pack=Pack(name=pack.name, version=pack.version, mount=pack.mount),
+                pack=Pack(name=pack.name, mount=pack.mount),
                 source=resource,
                 structure=structure_dir,
             )
@@ -524,17 +525,23 @@ class InstallationManager:
 
     @staticmethod
     def _read_pack(path: Path) -> Pack | None:
-        """Read a component's own identity from its pack.toml, if any."""
-        manifest = path / "pack.toml"
+        """Read a component's native identity and mount, if any.
+
+        Identity comes from the component's own build manifest
+        (``pyproject.toml``), mount from ``mount.toml``. No pack manifest
+        exists anymore — a component is its native project plus optional
+        mount semantics.
+        """
+        manifest = path / "pyproject.toml"
         if not manifest.exists():
             return None
 
         with open(manifest, "rb") as f:
             data = tomllib.load(f)
+        project = data.get("project", {})
         return Pack(
-            name=data.get("name", path.name),
-            version=data.get("version", "0.1"),
-            mount=data.get("mount"),
+            name=project.get("name", path.name),
+            mount=read_mount(path),
         )
 
     def _make_available(
@@ -557,7 +564,7 @@ class InstallationManager:
         """
         if component.mode == "source":
             return self._make_pack_available(
-                component, target, path, existing_packs, force, paths_index=paths_index
+                component, target, path, existing_packs, force
             )
         return self._make_artifact_available(
             component, target, path, existing_packs, force
@@ -578,18 +585,15 @@ class InstallationManager:
         path: Path,
         existing_packs: list,
         force: bool,
-        paths_index=None,
     ) -> tuple[list, list, list, list] | None:
-        """Link a source component into the installation (editable)."""
-        # A pack declares the packs it depends on via its mounts; a plain
-        # source (e.g. a Python library or app) has no pack.toml.
-        packs = (
-            [PackName(m.source) for m in component.pack.mounts]
-            if component.pack
-            else []
-        )
-        if not packs:
-            packs = [PackName(target)]
+        """Link a source component into the installation (editable).
+
+        Composition is explicit and lives in the catalog's bundles — a
+        component never pulls further components in by itself. ``mounts``
+        as a hidden dependency mechanism was removed with the pack
+        manifest.
+        """
+        packs = [PackName(target)]
         added = [p for p in packs if p not in existing_packs or force]
         if not added:
             return None
@@ -600,16 +604,7 @@ class InstallationManager:
         resolved: list[_Component] = []
         try:
             for name in added:
-                if str(name) == target:
-                    comp = component
-                else:
-                    comp = self._resolve_preferred(
-                        str(name), paths_index=paths_index, mode="source"
-                    ) or _Component(
-                        mode="source",
-                        name=str(name),
-                        pack=Pack(name=str(name), version="0.1"),
-                    )
+                comp = component
                 resolved.append(comp)
                 record = self._ensure_component(path, str(name), comp, force=force)
                 records.append(record)

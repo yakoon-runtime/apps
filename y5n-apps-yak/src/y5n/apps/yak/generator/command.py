@@ -50,16 +50,18 @@ Edit the resources/man.ydf file to document this command.
 
 
 def _find_pack_root(cwd: Path) -> tuple[Path, str] | None:
-    """Walk up from CWD looking for pack.toml. Returns (pack_root, pack_name)."""
+    """Walk up from CWD looking for a native project root (pyproject.toml)."""
     import tomllib
 
     for parent in [cwd, *cwd.parents]:
-        pack_toml = parent / "pack.toml"
-        if pack_toml.exists():
+        pyproject = parent / "pyproject.toml"
+        if pyproject.exists():
             try:
-                with open(pack_toml, "rb") as f:
+                with open(pyproject, "rb") as f:
                     data = tomllib.load(f)
-                return parent, data["name"]
+                project = data.get("project", {})
+                name = project.get("name") or parent.name
+                return parent, name
             except (tomllib.TOMLDecodeError, KeyError):
                 pass
     return None

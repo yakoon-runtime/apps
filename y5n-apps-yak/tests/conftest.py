@@ -38,12 +38,19 @@ def make_source(
 
 
 def source_pack(path: Path, name: str, mount: str) -> Path:
-    """A source-pack component: pack.toml + structure."""
+    """A source component: pyproject identity + mount.toml + structure."""
     (path / "structure").mkdir(parents=True, exist_ok=True)
     (path / "structure" / "payload.txt").write_text(f"{name}-source")
-    (path / "pack.toml").write_text(
-        f'name = "{name}"\nversion = "0.1"\nmount = "{mount}"\n'
+    (path / "pyproject.toml").write_text(
+        "[build-system]\n"
+        'requires = ["setuptools>=68", "wheel"]\n'
+        'build-backend = "setuptools.build_meta"\n'
+        "\n"
+        "[project]\n"
+        f'name = "{name}"\n'
+        'version = "0.1.0"\n'
     )
+    (path / "mount.toml").write_text(f'path = "{mount}"\n')
     return path
 
 
@@ -161,7 +168,5 @@ def source_proj(
     if mount:
         (path / "structure").mkdir(parents=True, exist_ok=True)
         (path / "structure" / "payload.txt").write_text(f"{name}-source")
-        (path / "pack.toml").write_text(
-            f'name = "{name}"\nversion = "{version}"\nmount = "{mount}"\n'
-        )
+        (path / "mount.toml").write_text(f'path = "{mount}"\n')
     return path

@@ -1,14 +1,25 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
 from typing import NewType
 
 PackName = NewType("PackName", str)
 
 
-@dataclass(frozen=True)
-class ToolReference:
-    name: str
+def read_mount(path: Path) -> str | None:
+    """Read a component's mount target from mount.toml, if any."""
+    manifest = path / "mount.toml"
+    if not manifest.exists():
+        return None
+    try:
+        with open(manifest, "rb") as f:
+            data = tomllib.load(f)
+    except Exception:
+        return None
+    value = data.get("path")
+    return str(value) if value else None
 
 
 @dataclass(frozen=True)
@@ -19,16 +30,14 @@ class Mount:
 
 @dataclass(frozen=True)
 class Pack:
-    """A resolved pack unit — what ``yak install`` composes from a pack.toml.
+    """Source component metadata: native identity plus optional mount.
 
-    ``mount`` is the tree path the pack's structure is mounted into
-    (e.g. ``/usr/bin`` for the system pack). ``mounts`` declare other
-    structures this pack's tree includes; ``tools`` name host apps the
-    pack needs.
+    ``name`` is the component's native identity (its pyproject project
+    name); ``mount`` is the tree path the component's structure is
+    mounted into (e.g. ``/usr/bin`` for the system pack), declared in
+    ``mount.toml``. Versioning belongs to the native build manifest —
+    this model never carries it.
     """
 
     name: str
-    version: str
     mount: str | None = None
-    mounts: list[Mount] = field(default_factory=list)
-    tools: list[ToolReference] = field(default_factory=list)

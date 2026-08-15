@@ -9,8 +9,9 @@ def _pack_name_from_root(pack_root: Path) -> str:
     import tomllib
 
     try:
-        with open(pack_root / "pack.toml", "rb") as f:
-            return tomllib.load(f).get("name", pack_root.name)
+        with open(pack_root / "pyproject.toml", "rb") as f:
+            project = tomllib.load(f).get("project", {})
+        return project.get("name", pack_root.name)
     except Exception:
         return pack_root.name
 

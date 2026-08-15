@@ -15,14 +15,11 @@ def _find_buildable_projects(root: Path) -> list[Path]:
     if not root.is_dir():
         return projects
 
-    # Pack erkannt an pack.toml (Primärerkennung)
-    if (root / "pack.toml").exists():
+    # A buildable project has a pyproject.toml with a build-system; the
+    # presence of mount.toml/structure is irrelevant to buildability.
+    pyproj = root / "pyproject.toml"
+    if pyproj.exists() and _is_buildable_pyproject(pyproj):
         projects.append(root)
-    else:
-        # Fallback: pyproject.toml with build-system (apps, runtime, sdk)
-        pyproj = root / "pyproject.toml"
-        if pyproj.exists() and _is_buildable_pyproject(pyproj):
-            projects.append(root)
 
     # Recurse into subdirectories
     for child in sorted(root.iterdir()):

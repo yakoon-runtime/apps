@@ -15,6 +15,18 @@ import yaml
 from y5n.apps.yak.resolver.catalog import _split_spec
 
 
+def release_tag_for(name: str, artifact_dir: Path) -> str:
+    """The release tag for a built artifact — its single version truth.
+
+    The tag version is derived from the artifact directory name
+    (``<name>-<version>.<builder>.artifact``), which the builder names
+    from the wheel's own version. Extract ``"0.1.0"`` from
+    ``crm-0.1.0.python.artifact``.
+    """
+    version_part = artifact_dir.name.replace(f"{name}-", "").rsplit(".", 2)[0]
+    return f"{name}-v{version_part}"
+
+
 class GithubReleaseRepository:
     """A GitHub source: serves a catalog and receives deployed resources.
 
@@ -59,11 +71,10 @@ class GithubReleaseRepository:
             }
 
             # Extract "0.1.0" from "crm-0.1.0.python.artifact" for the tag.
-            version_part = artifact_dir.name.replace(f"{name}-", "").rsplit(".", 2)[0]
-            tag = f"{name}-v{version_part}"
+            tag = release_tag_for(name, artifact_dir)
             release_data = {
                 "tag_name": tag,
-                "name": f"{name} {version_part}",
+                "name": f"{name} {tag.removeprefix(name + '-v')}",
                 "draft": draft,
             }
 

@@ -1,4 +1,4 @@
-"""Tests for builder module — project discovery via pack.toml."""
+"""Tests for builder module — project discovery via pyproject.toml."""
 
 from __future__ import annotations
 
@@ -9,10 +9,14 @@ from y5n.apps.yak.builder.workflow import _find_buildable_projects
 
 
 def _make_pack(root: Path, name: str) -> Path:
-    """Create a minimal pack with pack.toml."""
+    """Create a minimal Python component with pyproject.toml."""
     p = root / name
     p.mkdir()
-    (p / "pack.toml").write_text(f'name = "{name}"\nversion = "0.1"\n')
+    (p / "pyproject.toml").write_text(
+        '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n[project]\nname = "'
+        + name
+        + '"\nversion = "0.1"\n'
+    )
     return p
 
 
@@ -60,13 +64,20 @@ class TestFindBuildableProjects:
             result = _find_buildable_projects(Path(tmp))
             assert len(result) == 2
 
-    def test_pack_detected_via_pack_toml(self):
+    def test_pack_detected_via_pyproject(self):
         with tempfile.TemporaryDirectory() as tmp:
-            p = _make_pack(Path(tmp), "demo")
-            # pack.toml alone should detect it (even without pyproject.toml)
-            (p / "pyproject.toml").unlink(missing_ok=True)
+            _make_pack(Path(tmp), "demo")
             result = _find_buildable_projects(Path(tmp))
             assert len(result) == 1
+            assert result[0].name == "demo"
+
+    def test_mount_without_pyproject_not_buildable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "structure-only"
+            p.mkdir()
+            (p / "mount.toml").write_text('path = "/opt/x"\n')
+            result = _find_buildable_projects(Path(tmp))
+            assert result == []
 
     def test_app_detected_via_pyproject(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,7 +106,9 @@ class TestFindBuildableProjects:
         with tempfile.TemporaryDirectory() as tmp:
             hidden = Path(tmp) / ".hidden"
             hidden.mkdir()
-            (hidden / "pack.toml").write_text('name = "hidden"\n')
+            (hidden / "pyproject.toml").write_text(
+                '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n'
+            )
             _make_pack(Path(tmp), "visible")
             result = _find_buildable_projects(Path(tmp))
             assert len(result) == 1

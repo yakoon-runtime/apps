@@ -22,8 +22,8 @@ class TestCreatePack:
     def test_create_pack_structure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = create_pack("hello", target=Path(tmp))
-            assert (root / "pack.toml").exists()
             assert (root / "pyproject.toml").exists()
+            assert not (root / "pack.toml").exists()
             assert (root / "README.md").exists()
             assert (root / "src" / "y5n" / "packs" / "hello" / "__init__.py").exists()
             assert (root / "structure" / ".yak" / "yak.yml").exists()
@@ -32,7 +32,7 @@ class TestCreatePack:
             assert "resolvable: false" in yml
             assert "navigable: true" in yml
 
-            toml = (root / "pack.toml").read_text()
+            toml = (root / "pyproject.toml").read_text()
             assert 'name = "hello"' in toml
 
     def test_create_pack_respects_target(self):
@@ -54,7 +54,7 @@ class TestCreatePack:
             (root / "extra.txt").write_text("user file")
             root2 = create_pack("demo", target=Path(tmp), force=True)
             assert root2 == root
-            assert (root / "pack.toml").exists()
+            assert (root / "pyproject.toml").exists()
             assert (root / "extra.txt").exists()
 
 

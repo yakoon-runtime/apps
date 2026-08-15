@@ -6,11 +6,11 @@ import hashlib
 import shutil
 import subprocess
 import sys
-import tomllib
 import zipfile
 from pathlib import Path
 
 from y5n.apps.yak.builder.protocol import ArtifactInfo
+from y5n.apps.yak.pack.models import read_mount
 
 
 class PythonBuildProvider:
@@ -46,15 +46,10 @@ class PythonBuildProvider:
         if info is None:
             return None
 
-        # A component's artifact name comes from its own pack.toml
-        # (folder == name), not from its Python distribution name.
-        pack_manifest = project_dir / "pack.toml"
-        if pack_manifest.exists():
-            with open(pack_manifest, "rb") as f:
-                pack = tomllib.load(f)
-            info.name = pack.get("name", info.name)
-            info.version = pack.get("version", info.version)
-            info.mount = pack.get("mount")
+        # The artifact's identity is the builder's result — the wheel's
+        # own name and version from pyproject.toml. No other manifest may
+        # relabel it afterwards.
+        info.mount = read_mount(project_dir)
 
         artifact_dir = output_dir / info.filename
         artifact_dir.mkdir(parents=True, exist_ok=True)
