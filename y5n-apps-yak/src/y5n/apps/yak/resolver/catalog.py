@@ -166,17 +166,26 @@ def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
 def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
     """Fetch a component's published release asset from a GitHub source.
 
-    The catalog says *which* release (``release`` is an opaque release
-    identifier, e.g. the tag); this adapter knows the asset convention
-    (``{name}.artifact.tar.gz``) and the download address shape. There is
-    no release scan and no search — the address is fully deterministic.
-
-    The asset is always fetched fresh: a release tag denotes the *current
-    build* of that version and ``deploy`` may replace the asset under the
-    same tag. A content cache keyed by tag alone would freeze stale
-    artifacts, so releases are never cached.
+    The catalog says *which* release (the tag); this adapter knows the
+    asset convention (``{name}.artifact.tar.gz``). A release tag is the
+    *current build* of that version: the remote asset is validated by its
+    GitHub asset digest (the sha256 of the published tarball) before it
+    is (re)downloaded. When the digest is unchanged and the local content
+    is present, the download is skipped entirely. The digest is a
+    transport identity — distinct from the artifact's own fingerprint
+    (the build identity), which is read from the artifact afterwards.
     """
     repo = github_repo(spec)
+    digest = _release_asset_digest(repo, name, release)
+
+    cache_root = (
+        Path.home() / ".yak" / "cache" / "github" / repo / f"{name}-{release}"
+    )
+    if digest is not None:
+        stored = _cached_release(cache_root, digest)
+        if stored is not None:
+            return stored
+
     url = (
         f"https://github.com/{repo}/releases/download/"
         f"{release}/{name}.artifact.tar.gz"
@@ -196,13 +205,69 @@ def fetch_github_release(spec: str, name: str, release: str) -> Path | None:
         artifact_dir = _find_artifact_dir(Path(tmp))
         if artifact_dir is None:
             raise CatalogError(f"no artifact for {name} in {url}")
-        # The tag denotes the *current build* of that version; deploy may
-        # replace the asset under the same tag. Store the fetch under a
-        # content-keyed spot (the artifact's own fingerprint), so the
-        # caller's path survives this temp dir while a redeployed build
-        # never reuses stale content.
-        store = _release_store(repo, name, release, artifact_dir)
-        return store
+        return _store_release(cache_root, artifact_dir, digest)
+
+
+def _release_asset_digest(repo: str, name: str, release: str) -> str | None:
+    """The digest GitHub reports for the release asset, or None.
+
+    None when no token is available or the metadata cannot be read — the
+    caller then falls back to always downloading (correct, but not cheap).
+    """
+    token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return None
+    url = f"https://api.github.com/repos/{repo}/releases/tags/{release}"
+    try:
+        req = Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+        )
+        with urlopen(req) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception:
+        return None
+    target = f"{name}.artifact.tar.gz"
+    for asset in data.get("assets", []):
+        if asset.get("name") == target:
+            return asset.get("digest")
+    return None
+
+
+def _cached_release(cache_root: Path, digest: str) -> Path | None:
+    """The locally stored artifact whose recorded digest matches the remote.
+
+    The digest guards the mutable release: the cache is only reused when
+    the published asset is unchanged, so a tag alone is never a cache key.
+    """
+    manifest = cache_root / "manifest.json"
+    if not manifest.exists():
+        return None
+    try:
+        meta = json.loads(manifest.read_text())
+    except Exception:
+        return None
+    if meta.get("digest") != digest:
+        return None
+    artifact_dir = _find_artifact_dir(cache_root / "artifact")
+    if artifact_dir is None:
+        return None
+    return artifact_dir
+
+
+def _store_release(cache_root: Path, artifact_dir: Path, digest: str | None) -> Path:
+    """Persist a fetched release under its manifest-guarded cache spot."""
+    store = cache_root / "artifact"
+    if store.exists():
+        shutil.rmtree(store, ignore_errors=True)
+    store.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(artifact_dir, store / artifact_dir.name)
+    meta = {"digest": digest} if digest else {}
+    (cache_root / "manifest.json").write_text(json.dumps(meta))
+    return store / artifact_dir.name
 
 
 def fetch_github_artifact(spec: str, location: str) -> Path | None:
@@ -271,31 +336,6 @@ def _find_artifact_dir(parent: Path) -> Path | None:
         if child.is_dir() and (child / "artifact.yml").exists():
             return child
     return None
-
-
-def _release_store(repo: str, name: str, release: str, artifact_dir: Path) -> Path:
-    """Persist a fetched release artifact under its content identity.
-
-    The store key combines the release with the artifact's own
-    fingerprint, so the same tag re-deployed with a different build lands
-    in a different spot and stale content is never reused.
-    """
-    import y5n.apps.yak.resolver.artifact as artifact_mod
-
-    fingerprint = ""
-    manifest = artifact_dir / "artifact.yml"
-    if manifest.exists():
-        meta = artifact_mod._parse_manifest(manifest)
-        fp = meta.get("fingerprint", "")
-        if fp.startswith("sha256:"):
-            fp = fp[7:]
-        fingerprint = fp[:12]
-    key = f"{name}-{release}-{fingerprint}" if fingerprint else f"{name}-{release}"
-    store = Path.home() / ".yak" / "cache" / "github" / repo / key / name
-    if not store.exists():
-        store.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(artifact_dir, store)
-    return store
 
 
 def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:

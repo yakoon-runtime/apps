@@ -25,6 +25,14 @@ def _mgr(root: Path, sources: list[str]) -> InstallationManager:
     return InstallationManager(FileRepository(), DirectoryArtifactStore(), context=ctx)
 
 
+@pytest.fixture(autouse=True)
+def _no_pip(monkeypatch):
+    """These tests prove resolution and materialization, not installation."""
+    from y5n.apps.yak.installer.installer import Installer
+
+    monkeypatch.setattr(Installer, "install", lambda self, root, candidates: None)
+
+
 def _structure(inst: Path, name: str) -> Path:
     return inst / ".yak" / "components" / name / "structure"
 
