@@ -1,4 +1,4 @@
-"""Read and write .yak/environment.yml."""
+"""Read and write .yak/environment.yml — the environment's declaration."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
-from y5n.apps.yak.pack.models import Mount, PackName
+from y5n.apps.yak.pack.models import Mount
 
 from .models import Environment
 
@@ -21,21 +21,24 @@ def touch(
     root: Path,
     *,
     name: str | None = None,
-    components: list[PackName] | None = None,
+    install: dict[str, list[str]] | None = None,
     mounts: list[Mount] | None = None,
     workspace_path: str | None = None,
 ) -> Environment:
     """Load-or-create the environment, apply fields, stamp timestamps, save.
 
-    This is the single write path for environment.yml during installs:
-    created stays from the first write, updated always advances.
+    This is the single write path for environment.yml: created stays from
+    the first write, updated always advances. ``install`` replaces the
+    declaration when given.
     """
     env = load(root) or Environment(name=name or root.name)
     now = datetime.now(UTC)
     env.created = env.created or now
     env.updated = now
-    if components is not None:
-        env.components = components
+    if name is not None:
+        env.name = name
+    if install is not None:
+        env.install = install
     if mounts is not None:
         env.mounts = mounts
     if workspace_path is not None:
@@ -50,31 +53,33 @@ def load(context_root: Path) -> Environment | None:
         return None
     try:
         data = yaml.safe_load(path.read_text()) or {}
-        mounts = [
-            Mount(source=m.get("source") or m.get("pack", ""), target=m["target"])
-            for m in data.get("mounts", [])
-        ]
-        # "components" is the desired set; "dependencies" is read for
-        # backwards compatibility with older environment files.
-        components = data.get("components")
-        if components is None:
-            components = data.get("dependencies", [])
-        deps = [PackName(d) for d in components]
-        ws = data.get("workspace", {})
-        inst = data.get("installation", {})
-        return Environment(
-            name=data.get("name", ""),
-            schema=data.get("schema", "1"),
-            components=deps,
-            mounts=mounts,
-            workspace_path=(
-                ws.get("path", "structure") if isinstance(ws, dict) else "structure"
-            ),
-            created=_parse_dt(inst.get("created")) if isinstance(inst, dict) else None,
-            updated=_parse_dt(inst.get("updated")) if isinstance(inst, dict) else None,
-        )
     except Exception:
         return None
+    install = data.get("install")
+    # The old schema stored a resolved component list; it cannot express
+    # the user's intent, so it is treated as absent (the install command
+    # reports the clean break explicitly).
+    if install is None:
+        return None
+    mounts = [
+        Mount(source=m.get("source") or m.get("pack", ""), target=m["target"])
+        for m in data.get("mounts", [])
+    ]
+    ws = data.get("workspace", {})
+    inst = data.get("installation", {})
+    return Environment(
+        name=data.get("name", ""),
+        schema=data.get("schema", "2"),
+        install={
+            str(k): [str(p) for p in (v or [])] for k, v in install.items()
+        },
+        mounts=mounts,
+        workspace_path=(
+            ws.get("path", "structure") if isinstance(ws, dict) else "structure"
+        ),
+        created=_parse_dt(inst.get("created")) if isinstance(inst, dict) else None,
+        updated=_parse_dt(inst.get("updated")) if isinstance(inst, dict) else None,
+    )
 
 
 def _parse_dt(raw: str | None) -> datetime | None:
@@ -93,7 +98,7 @@ def save(env: Environment, context_root: Path) -> None:
     data = {
         "schema": env.schema,
         "name": env.name,
-        "components": list(env.components),
+        "install": {k: list(v) for k, v in env.install.items()},
         "workspace": {"path": env.workspace_path},
         "mounts": mounts_yaml,
     }

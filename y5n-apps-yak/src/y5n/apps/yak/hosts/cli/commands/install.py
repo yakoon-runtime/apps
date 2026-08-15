@@ -1,10 +1,9 @@
-"""yak install <component|bundle> [--path <catalog>]... [--target <dir>].
+"""yak install <bundle> [--path <catalog>]... [--target <dir>].
 
-The first argument is always an identity: a component name or a bundle
-name. On a fresh environment the identity is materialized; on an
-existing environment its components are added. ``--path`` catalogs are
-preferred local sources: a component found there resolves through its
-``location``, everything else through its ``release`` — per component.
+The first argument is a bundle identity — the public install language.
+``--path`` catalogs are preferred local sources stored per identity: a
+component found there resolves through its ``location``, everything else
+through its ``release`` — per component.
 """
 
 from __future__ import annotations
@@ -20,6 +19,13 @@ def run(args, mgr) -> None:
     identity = args.identity
     paths = getattr(args, "path", None)
 
+    if not _is_bundle(mgr, identity, paths):
+        ui.fail(
+            f"'{identity}' is not a bundle — install identities are bundles "
+            f"(e.g. 'runtime', 'system')."
+        )
+        return
+
     _ensure_context(root)
 
     ui.title(f'Installing "{identity}"')
@@ -28,6 +34,12 @@ def run(args, mgr) -> None:
         ui.ok(f"Installed {identity}")
     except Exception as e:
         ui.fail(f"Installation failed: {e}")
+
+
+def _is_bundle(mgr, identity: str, paths) -> bool:
+    """Whether the identity names a bundle (the public install language)."""
+    index = mgr._combined_index(paths)
+    return index.resolve_bundle(identity) is not None
 
 
 def _ensure_context(root: Path) -> None:

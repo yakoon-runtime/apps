@@ -159,108 +159,177 @@ class InstallationManager:
         ui=None,
         workspace_path: str = "structure",
     ) -> Installation | None:
-        """Make an identity part of an environment (ADR-21).
+        """Make an identity part of the environment (ADR-21).
 
-        The first argument of ``yak install`` is always an identity: a
-        component or a bundle name. ``identity`` is that name. A bundle
-        resolves to its members through the shared index; every member
-        resolves like any other component.
-
-        ``paths`` are repeatable ``--path`` catalogs: a component found in
-        any of them resolves through its ``location`` (source); everything
-        else resolves through its ``release`` (artifact) — per component,
-        no global mode.
-
-        On a fresh environment the identity is materialized from scratch;
-        on an existing environment its components are added. Returns None
-        when the identity is already part of the environment.
+        ``install`` changes the declaration (``environment.yml``) so that
+        ``identity`` is desired, then converges the environment to it.
+        ``paths`` are repeatable ``--path`` catalogs that belong to this
+        install decision and are stored per identity. On an existing
+        environment the identity's entry is replaced — ``install system``
+        after ``install system --path ./pack-system`` drops the override
+        and converges back to artifacts.
         """
         root = path.resolve()
-        if load_env(root) is not None:
-            index = self._combined_index(paths)
-            added_any = False
-            for name in self._identities(identity, index=index):
-                if (
-                    self._add_component(
-                        str(name), root, asker=asker, ui=ui, paths=paths
-                    )
-                    is not None
-                ):
-                    added_any = True
-            if not added_any:
-                return None
-            return self.load(root)
-
-        now = datetime.now(UTC)
-        name = root.name or "yakoon"
-        structure_dir = root / workspace_path
-        with self._step(ui, "Workspace"):
-            root.mkdir(parents=True, exist_ok=True)
-            staged = self._materialize_install(root, identity=identity, paths=paths)
-            records = [r for r, _ in staged]
-            resolved = [c for _, c in staged]
-            mounts = self._component_mounts(root, records)
-            self._materializer.materialize(
-                structure_dir,
-                mounts=mounts,
-                components_dir=self._components_dir(root),
+        env_file = root / ".yak" / "environment.yml"
+        env = load_env(root)
+        if env is None and env_file.exists():
+            raise RuntimeError(
+                "environment.yml uses the old schema (a resolved component "
+                "list). Reinitialize: rm -rf .yak .venv && yak init && "
+                "yak install ..."
             )
-        with self._step(ui, "Deployment"):
-            self._assemble(structure_dir, root / ".yak", asker=asker)
+        paths_list = [str(p) for p in (paths or [])]
+        if env is not None and env.install.get(identity) == paths_list:
+            # Already declared exactly as requested — nothing to change.
+            return None
+        declaration = dict(env.install) if env else {}
+        declaration[identity] = paths_list
+        return self._reconcile(
+            root,
+            install=declaration,
+            ui=ui,
+            asker=asker,
+            workspace_path=workspace_path,
+        )
 
-        with self._step(ui, "Installing"):
-            self._installer.install(root, self._python_candidates(resolved))
+    def _reconcile(
+        self,
+        path: Path,
+        *,
+        install: dict[str, list[str]],
+        ui=None,
+        asker: StoreAsker | None = None,
+        workspace_path: str = "structure",
+    ) -> Installation:
+        """Converge the environment to a declaration (SOLL → IST).
+
+        ``install`` maps identities to their ``--path`` overrides; each
+        identity's bundle is resolved against the current catalogs and
+        every component resolves per component: a ``--path`` hit is a
+        source, everything else a release (artifact). Components no
+        longer desired are removed, drifted artifacts re-staged, and the
+        whole set is installed in one pip transaction. ``state.toml`` is
+        the truth about an established environment: it is written only
+        after the transaction succeeded, so a failed run leaves the
+        previous state intact.
+        """
+        root = path.resolve()
+        env = load_env(root)
+        inst = self.load(root)
+        if inst is not None and inst.status == InstallationStatus.RUNNING:
+            raise RuntimeError(f"Cannot update running installation: {inst.name}")
+
+        env_name = env.name if env else (root.name or "yakoon")
+        structure_dir = root / (env.workspace_path if env else workspace_path)
+
+        # The environment-wide preferred source index: the union of all
+        # active --path overrides. Ownership is per identity (an override
+        # dies with its identity); resolution uses the union — one
+        # environment, not isolated install islands.
+        all_paths = sorted({p for paths in install.values() for p in paths})
+        combined = self._combined_index(all_paths)
+        paths_index = self._paths_index(all_paths)
+
+        desired: list[str] = []
+        with self._step(ui, "Resolving"):
+            for identity in install:
+                for member in self._identities(identity, index=combined):
+                    if member not in desired:
+                        desired.append(member)
+
+        merged = {c.name: c for c in (inst.components if inst else [])}
+        original_names = set(merged)
+        resolved_all: list[_Component] = []
+        try:
+            with self._step(ui, "Reconciling"):
+                for name in desired:
+                    existing_record = merged.get(name)
+                    component = self._resolve_preferred(name, paths_index=paths_index)
+                    if component is None:
+                        raise CatalogError(
+                            f"component '{name}' cannot be resolved (declared by "
+                            f"an installed identity)"
+                        )
+                    resolved_all.append(component)
+                    drift = existing_record is not None and (
+                        component.mode != existing_record.mode
+                        or (
+                            component.mode == "artifact"
+                            and component.artifact is not None
+                            and component.artifact.fingerprint
+                            and component.artifact.fingerprint
+                            != existing_record.fingerprint
+                        )
+                    )
+                    if existing_record is None or drift:
+                        merged[name] = self._ensure_component(
+                            root, name, component, force=True
+                        )
+                    else:
+                        merged[name] = self._ensure_component(root, name, component)
+
+            obsolete = [n for n in merged if n not in desired]
+            self._remove_orphans(root, set(desired))
+
+            new_records = [merged.get(n, Component(name=n)) for n in desired]
+            component_mounts = self._component_mounts(root, new_records)
+            manual = [m for m in (env.mounts if env else []) if m not in component_mounts]
+            all_mounts = component_mounts + manual
+
+            with self._step(ui, "Workspace"):
+                self._materializer.materialize(
+                    structure_dir,
+                    mounts=all_mounts,
+                    components_dir=self._components_dir(root),
+                )
+
+            with self._step(ui, "Deployment"):
+                existing_dep = load_installation(root / ".yak" / "deployment.yml")
+                self._assemble(
+                    structure_dir, root / ".yak", existing=existing_dep, asker=asker
+                )
+
+            with self._step(ui, "Installing"):
+                self._installer.install(root, self._python_candidates(resolved_all))
+        except Exception:
+            # The run failed before the state was committed: roll back
+            # components that were staged by this run so no residue claims
+            # them, then re-raise. Previously installed components stay —
+            # state still describes them truthfully.
+            for name in desired:
+                if name not in original_names:
+                    self._cleanup_component(root, merged.get(name, Component(name=name)))
+            raise
+
+        # Removals only after the install transaction succeeded: a failed
+        # run must never uninstall ahead of a broken state.
+        for name in obsolete:
+            self._remove_component(root, name)
 
         with self._step(ui, "Environment"):
-            touch(
+            env = touch(
                 root,
-                name=name,
-                components=[PackName(c.name) for c in records],
-                mounts=mounts,
-                workspace_path=workspace_path,
+                name=env_name,
+                install=install,
+                mounts=all_mounts,
+                workspace_path=env.workspace_path if env else workspace_path,
             )
 
+        now = datetime.now(UTC)
         inst = Installation(
-            name=name,
+            name=env_name,
             root=root,
-            packs=[PackName(c.name) for c in records],
-            components=records,
+            packs=[PackName(c.name) for c in new_records],
+            components=new_records,
             status=InstallationStatus.CREATED,
             created=now,
             updated=datetime.now(UTC),
         )
-        # State is the truth about an established environment: it is only
-        # written after the pip transaction succeeded. A failed install
-        # leaves no state that could claim an environment exists.
+        # State is the truth about an established environment: written
+        # only after the pip transaction succeeded. A failed install or
+        # update leaves the previous state (or none) intact.
         self._write_state(inst)
         return inst
-
-    def _materialize_install(
-        self,
-        path: Path,
-        *,
-        identity: str,
-        paths: list[str] | None = None,
-    ) -> list[tuple[Component, _Component]]:
-        """Resolve and stage the identity's components.
-
-        The identity names the components to compose (a bundle's members,
-        or the single component). Each is resolved per component: source
-        from any ``--path`` catalog, release otherwise, then staged into
-        the component store. Returns (record, resolved) pairs — the staged
-        IST record and the resolved component that builds the Python
-        install plan.
-        """
-        index = self._combined_index(paths)
-        paths_index = self._paths_index(paths)
-        staged: list[tuple[Component, _Component]] = []
-        for name in self._identities(identity, index=index):
-            comp = self._resolve_preferred(str(name), paths_index=paths_index)
-            if comp is None:
-                continue
-            record = self._ensure_component(path, str(name), comp)
-            staged.append((record, comp))
-        return staged
 
     @staticmethod
     def _python_candidates(resolved: list[_Component]) -> list[PythonCandidate]:
@@ -302,104 +371,6 @@ class InstallationManager:
         """
         hit = self._index().resolve_bundle(identity)
         return list(hit[1]) if hit is not None else [identity]
-
-    # ── Add (ADR-21: folded into install) ──
-
-    def _add_component(
-        self,
-        target: str,
-        path: Path,
-        *,
-        asker: StoreAsker | None = None,
-        ui=None,
-        force: bool = False,
-        paths: list[str] | None = None,
-    ) -> Installation | None:
-        """Make one component part of an existing environment (ADR-21).
-
-        The reconciliation is: resolve → make available → materialize →
-        discover requirements → reconcile deployment → persist. ``paths``
-        are repeatable ``--path`` catalogs: a component found in any of
-        them resolves through its ``location`` (source); everything else
-        through its ``release`` (artifact) — per component, no global
-        mode. Returns None when the component is already part of the
-        installation.
-        """
-        paths_index = self._paths_index(paths)
-
-        with self._step(ui, "Resolving"):
-            env = load_env(path)
-            if env is None:
-                raise RuntimeError(f"No installation found at {path}")
-            existing = list(env.components)
-
-            component = self._resolve_preferred(target, paths_index=paths_index)
-            if component is None:
-                raise ValueError(f"Unknown component: {target}")
-
-            # A component already installed in a different mode is re-staged
-            # in the new mode — the decision is per component (ADR-21).
-            force = force or self._mode_changed(path, target, component.mode)
-
-        records: list[Component] = []
-        try:
-            with self._step(ui, "Making available"):
-                made = self._make_available(
-                    component, target, path, existing, force, paths_index=paths_index
-                )
-                if made is None:
-                    return None
-                all_packs, mounts, records, resolved = made
-
-            structure_dir = path / env.workspace_path
-            merged = list(env.mounts) + [m for m in mounts if m not in env.mounts]
-
-            with self._step(ui, "Materializing"):
-                self._materializer.materialize(
-                    structure_dir,
-                    mounts=merged,
-                    components_dir=self._components_dir(path),
-                )
-
-            self._report_mounts(ui, mounts)
-
-            with self._step(ui, "Deployment"):
-                existing_dep = load_installation(path / ".yak" / "deployment.yml")
-                self._assemble(
-                    structure_dir, path / ".yak", existing=existing_dep, asker=asker
-                )
-
-            existing_inst = self.load(path)
-            now = datetime.now(UTC)
-            inst = Installation(
-                name=existing_inst.name if existing_inst else target,
-                root=path.resolve(),
-                packs=all_packs,
-                components=self._merge_component_records(
-                    (existing_inst.components if existing_inst else []), records
-                ),
-                status=InstallationStatus.CREATED,
-                created=now,
-                updated=datetime.now(UTC),
-            )
-            with self._step(ui, "Installing"):
-                self._installer.install(path, self._python_candidates(resolved))
-
-            with self._step(ui, "Environment"):
-                touch(path, name=env.name, components=all_packs, mounts=merged)
-
-            # State is only written after the pip transaction succeeded.
-            # On failure the existing state stays untouched and the staged
-            # components are rolled back — the environment is exactly what
-            # it was before.
-            self._write_state(inst)
-            return inst
-        except Exception:
-            # The operation failed after components were staged: roll back
-            # the partial staging/payload so no residue remains.
-            for record in records:
-                self._cleanup_component(path, record)
-            raise
 
     def _resolve_component(
         self,
@@ -543,98 +514,6 @@ class InstallationManager:
             mount=read_mount(path),
         )
 
-    def _make_available(
-        self,
-        component: _Component,
-        target: str,
-        path: Path,
-        existing_packs: list,
-        force: bool,
-        paths_index=None,
-    ) -> tuple[list, list, list, list] | None:
-        """Stage the component into the installation's component store.
-
-        Returns (all_packs, mounts, records, resolved) or None when
-        nothing is new. Staging goes through ``_ensure_component`` so
-        ``install`` and ``update`` share the same mechanism; on failure
-        any partially staged components are cleaned up before re-raising.
-        The Python install happens later, once, over the whole resolved
-        set.
-        """
-        if component.mode == "source":
-            return self._make_pack_available(
-                component, target, path, existing_packs, force
-            )
-        return self._make_artifact_available(
-            component, target, path, existing_packs, force
-        )
-
-    def _mode_changed(self, path: Path, name: str, mode: str) -> bool:
-        """Whether the component is installed in a different mode."""
-        inst = self.load(path)
-        if inst is None:
-            return False
-        record = next((c for c in inst.components if c.name == name), None)
-        return record is not None and record.mode != mode
-
-    def _make_pack_available(
-        self,
-        component: _Component,
-        target: str,
-        path: Path,
-        existing_packs: list,
-        force: bool,
-    ) -> tuple[list, list, list, list] | None:
-        """Link a source component into the installation (editable).
-
-        Composition is explicit and lives in the catalog's bundles — a
-        component never pulls further components in by itself. ``mounts``
-        as a hidden dependency mechanism was removed with the pack
-        manifest.
-        """
-        packs = [PackName(target)]
-        added = [p for p in packs if p not in existing_packs or force]
-        if not added:
-            return None
-        all_packs = existing_packs + added
-
-        records: list[Component] = []
-        mounts: list[Mount] = []
-        resolved: list[_Component] = []
-        try:
-            for name in added:
-                comp = component
-                resolved.append(comp)
-                record = self._ensure_component(path, str(name), comp, force=force)
-                records.append(record)
-                staged = self._component_structure(path, str(name))
-                if record.mount and staged.exists():
-                    mounts.append(Mount(source=str(staged), target=record.mount))
-        except Exception:
-            for record in records:
-                self._cleanup_component(path, record)
-            raise
-        return all_packs, mounts, records, resolved
-
-    def _make_artifact_available(
-        self,
-        component: _Component,
-        target: str,
-        path: Path,
-        existing_packs: list,
-        force: bool,
-    ) -> tuple[list, list, list, list] | None:
-        if PackName(target) in existing_packs and not force:
-            return None
-
-        all_packs = existing_packs + [PackName(target)]
-        record = self._ensure_component(path, target, component, force=force)
-        mounts: list[Mount] = []
-        staged = self._component_structure(path, target)
-        if record.mount and staged.exists():
-            mounts.append(Mount(source=str(staged), target=record.mount))
-        return all_packs, mounts, [record], [component]
-
     def _ensure_component(
         self,
         path: Path,
@@ -697,10 +576,6 @@ class InstallationManager:
             return not (staged.is_symlink() and staged.exists())
         return not (staged.is_dir() and not staged.is_symlink())
 
-    @staticmethod
-    def _record_mode(component: _Component) -> str:
-        return component.mode
-
     def _cleanup_component(self, path: Path, record: Component) -> None:
         """Remove a component's staged namespace and installed payload."""
         comp_dir = self._components_dir(path) / record.name
@@ -714,16 +589,6 @@ class InstallationManager:
                     capture_output=True,
                     check=False,
                 )
-
-    @staticmethod
-    def _merge_component_records(
-        existing: list[Component], added: list[Component]
-    ) -> list[Component]:
-        """Merge IST records — exactly one per component name."""
-        by_name = {c.name: c for c in existing}
-        for record in added:
-            by_name[record.name] = record
-        return list(by_name.values())
 
     @staticmethod
     def _wheel_dist(package_file: Path | None) -> str:
@@ -742,104 +607,19 @@ class InstallationManager:
         asker: StoreAsker | None = None,
         ui=None,
     ) -> Installation:
-        """Reconcile the installation (IST) against its desired state.
+        """Converge the installation to its declaration (environment.yml).
 
-        The desired set is the installation's own declared state (the
-        ``.yak/environment.yml`` record); it converges with the source
-        index. Components no longer desired are removed; artifact
-        components whose fingerprint changed are re-staged. The
-        workspace is then re-materialized from the staged component
-        store only.
+        Unlike ``install`` the declaration is not changed: the stored
+        identities and their ``--path`` overrides are re-resolved against
+        the current catalogs, so bundle growth, shrinkage and new builds
+        of the same version become visible. State (IST) is written only
+        after the install transaction succeeded.
         """
-        with self._step(ui, "Resolving"):
-            inst = self.load(path)
-            if inst is None:
-                raise ValueError(f"Installation not found: {path}")
-            if inst.status == InstallationStatus.RUNNING:
-                raise RuntimeError(f"Cannot update running installation: {inst.name}")
-            env = load_env(path)
-            if env is None:
-                raise RuntimeError(f"No environment found at {path}")
-
-        now = datetime.now(UTC)
-        structure_dir = path / env.workspace_path
-        desired = [str(c) for c in env.components]
-        merged = {c.name: c for c in inst.components}
-        resolved_all: list[_Component] = []
-
-        with self._step(ui, "Reconciling"):
-            for name in desired:
-                existing_record = merged.get(name)
-                mode = (
-                    existing_record.mode if existing_record is not None else "artifact"
-                )
-                component = self._resolve_component(name, mode=mode)
-                if component is None:
-                    continue
-                resolved_all.append(component)
-                record = merged.get(name)
-                fingerprint_drift = (
-                    record is not None
-                    and component.mode == "artifact"
-                    and component.artifact is not None
-                    and component.artifact.fingerprint
-                    and component.artifact.fingerprint != record.fingerprint
-                )
-                mode_drift = (
-                    record is not None and self._record_mode(component) != record.mode
-                )
-                if record is None or fingerprint_drift or mode_drift:
-                    merged[name] = self._ensure_component(
-                        path, name, component, force=True
-                    )
-                else:
-                    # Heals a missing/broken staged structure; a no-op when
-                    # the staged component already matches the desired state.
-                    merged[name] = self._ensure_component(path, name, component)
-
-            obsolete = [name for name in merged if name not in desired]
-            for name in obsolete:
-                self._remove_component(path, name)
-                merged.pop(name, None)
-
-            self._remove_orphans(path, set(desired))
-
-        new_records = [merged.get(d, Component(name=d)) for d in desired]
-
-        with self._step(ui, "Workspace"):
-            self._materializer.materialize(
-                structure_dir,
-                mounts=list(env.mounts),
-                components_dir=self._components_dir(path),
-            )
-
-        with self._step(ui, "Deployment"):
-            # Preserve the operator's bindings; only newly declared stores
-            # are (re)assembled.
-            existing = load_installation(path / ".yak" / "deployment.yml")
-            self._assemble(structure_dir, path / ".yak", existing=existing, asker=asker)
-
-        inst.packs = [PackName(c.name) for c in new_records]
-        inst.components = new_records
-        inst.status = InstallationStatus.MATERIALIZED
-        inst.updated = now
-        self._write_state(inst)
-
-        with self._step(ui, "Installing"):
-            self._installer.install(path, self._python_candidates(resolved_all))
-
-        with self._step(ui, "Environment"):
-            touch(
-                path,
-                name=env.name,
-                components=list(env.components),
-                mounts=list(env.mounts),
-            )
-
-        inst.status = InstallationStatus.CREATED
-        inst.updated = datetime.now(UTC)
-        self._write_state(inst)
-        return inst
+        root = path.resolve()
+        env = load_env(root)
+        if env is None:
+            raise ValueError(f"Installation not found at {path}")
+        return self._reconcile(root, install=env.install, ui=ui, asker=asker)
 
     def _remove_component(self, path: Path, name: str) -> None:
         """Remove a component: drop its staged namespace and uninstall it."""
@@ -887,7 +667,7 @@ class InstallationManager:
             issues.append("✘ Environment   .yak/environment.yml missing")
         else:
             issues.append(
-                f"✓ Environment   {len(env.mounts)} mount(s), {len(env.components)} component(s)"
+                f"✓ Environment   {len(env.mounts)} mount(s), {len(env.install)} identity(s)"
             )
 
         # Components from state
@@ -912,17 +692,16 @@ class InstallationManager:
                 else:
                     issues.append(f"✓ Component     {component.name}")
 
-        # Orphans: staged components that are not desired (SOLL).
-        if env:
-            desired = {str(c) for c in env.components}
-            comps_dir = self._components_dir(root)
-            if comps_dir.is_dir():
-                for entry in sorted(comps_dir.iterdir()):
-                    if entry.name not in desired and entry.is_dir():
-                        issues.append(
-                            f"✘ Orphan        .yak/components/{entry.name} — "
-                            "not in environment (run 'yak update')"
-                        )
+        # Orphans: staged components that are not part of the installation.
+        desired = {c.name for c in inst.components}
+        comps_dir = self._components_dir(root)
+        if comps_dir.is_dir():
+            for entry in sorted(comps_dir.iterdir()):
+                if entry.name not in desired and entry.is_dir():
+                    issues.append(
+                        f"✘ Orphan        .yak/components/{entry.name} — "
+                        "not in environment (run 'yak update')"
+                    )
 
         # Mount resolution
         if env:
@@ -1037,47 +816,6 @@ class InstallationManager:
             if c.mount and self._component_structure(path, c.name).exists()
         ]
 
-    def resolve_mount_sources(self, mounts: list) -> list:
-        """Convert pack-name or repo-relative mounts to source-path mounts.
-
-        A mount source is either a pack name (resolved through the
-        artifact store) or a repo-relative path like
-        ``packs/y5n-packs-ident/structure`` (resolved against the
-        repository roots).
-        """
-        resolved = []
-        for m in mounts:
-            if isinstance(m, dict):
-                source = m.get("source") or m.get("pack") or ""
-                target = m.get("target", "")
-            else:
-                source = m.source if hasattr(m, "source") else getattr(m, "pack", "")
-                target = getattr(m, "target", "")
-            if not source:
-                continue
-            artifact_root = self._resolve_source(source)
-            if artifact_root is None:
-                continue
-            structure = artifact_root / "structure"
-            if not structure.is_dir():
-                structure = artifact_root
-            resolved.append(Mount(source=str(structure.resolve()), target=target))
-        return resolved
-
-    def _resolve_source(self, source: str) -> Path | None:
-        """Resolve a mount source — a pack name or a repo-relative path."""
-        artifact = self._artifacts.get_artifact(PackName(source))
-        if artifact is not None:
-            return artifact
-        s = Path(source)
-        if s.is_absolute() and s.is_dir():
-            return s
-        for root in self._repo.roots():
-            candidate = root / s
-            if candidate.is_dir():
-                return candidate
-        return None
-
     # ── Assembly (ADR-19) ──
 
     def _assemble(
@@ -1122,11 +860,6 @@ class InstallationManager:
     def _detail(ui, text: str) -> None:
         if ui is not None:
             ui.detail(text)
-
-    def _report_mounts(self, ui, mounts: list) -> None:
-        with self._step(ui, "Mounts"):
-            for m in mounts:
-                self._detail(ui, f"{m.target} ← {m.source}")
 
     def _write_state(self, inst: Installation) -> None:
         state_dir = inst.root / ".yak"

@@ -253,27 +253,34 @@ def test_non_python_component_lifecycle(monkeypatch):
         (ctx / ".yak" / "context.toml").write_text("[context]\nname = 'ctx'\n")
         monkeypatch.chdir(ctx)
 
-        # A source catalog: minimal platform namespaces (so the workspace
-        # tree has a root) plus the language-neutral artifact.
+        # The --path source: minimal platform namespaces (so the workspace
+        # tree has a root). The language-neutral artifact lives in a
+        # separate context source, not a preferred --path catalog.
         from conftest import make_source, source_pack
 
-        source = root / "repo"
+        source = root / "src"
         source_pack(source / "packs" / "acme-root", "acme-root", "/")
         source_pack(source / "runtime" / "acme-boot", "acme-boot", "/boot")
-        _dotnet_artifact(source)
         make_source(
             source,
             {
                 "acme-root": {"location": "packs/acme-root"},
                 "acme-boot": {"location": "runtime/acme-boot"},
+            },
+            bundles={"platform": ["acme-root", "acme-boot"]},
+        )
+        repo = root / "repo"
+        _dotnet_artifact(repo)
+        make_source(
+            repo,
+            {
                 "acme-test": {
                     "location": "acme-test-1.0.0.dotnet.artifact",
                     "release": "acme-test-1.0.0.dotnet.artifact",
                 },
             },
-            bundles={"platform": ["acme-root", "acme-boot"]},
         )
-        ctx_obj = Context(path=ctx, sources=[str(source)])
+        ctx_obj = Context(path=ctx, sources=[str(repo), str(source)])
 
         mgr = InstallationManager(
             FileRepository(),

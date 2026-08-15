@@ -65,20 +65,24 @@ def test_install_materializes_bundle_members():
 
         env = load_env(inst.root)
         assert env is not None
-        assert sorted(str(c) for c in env.components) == ["bar", "baz", "foo"]
+        assert env.install == {"all": []}
 
 
 @pytest.mark.slow
-def test_update_converges_to_changed_desired_set():
+def test_update_converges_to_bundle_growth_and_shrink():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repo = _build_repo(root, ["foo", "bar", "baz"])
         mgr = _mgr(root, repo)
         inst = mgr.install(root / "inst", identity="all")
         assert inst is not None
+        env = load_env(inst.root)
+        assert env is not None
+        assert env.install == {"all": []}
 
-        # The desired set changes to foo + quux: the source grows quux,
-        # and the materialized SOLL is edited accordingly.
+        # The catalog bundle grows quux and shrinks bar+baz. ``update``
+        # re-resolves the identity against the current bundle, so the
+        # environment converges: quux is added, bar/baz disappear.
         make_artifact(repo / "artifacts" / "quux-art", "quux", "/opt/quux")
         make_source(
             repo,
@@ -92,8 +96,8 @@ def test_update_converges_to_changed_desired_set():
                     "release": "artifacts/quux-art",
                 },
             },
+            bundles={"all": ["foo", "quux"]},
         )
-        touch(inst.root, name="fake", components=["foo", "quux"])
 
         mgr2 = _mgr(root, repo)
         mgr2.update(inst.root)

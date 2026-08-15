@@ -95,7 +95,7 @@ def test_install_component_on_existing_environment_adds():
 
         env = load_env(inst.root)
         assert env is not None
-        assert sorted(str(c) for c in env.components) == ["bar", "foo"]
+        assert sorted(env.install) == ["bar", "foo"]
         state = mgr.load(inst.root)
         assert state is not None
         assert sorted(c.name for c in state.components) == ["bar", "foo"]
@@ -118,7 +118,10 @@ def test_install_bundle_on_existing_environment_adds_members():
 
         env = load_env(inst.root)
         assert env is not None
-        assert sorted(str(c) for c in env.components) == ["bar", "baz", "foo"]
+        assert sorted(env.install) == ["foo", "runtime"]
+        state = mgr.load(inst.root)
+        assert state is not None
+        assert sorted(c.name for c in state.components) == ["bar", "baz", "foo"]
 
 
 @pytest.mark.slow

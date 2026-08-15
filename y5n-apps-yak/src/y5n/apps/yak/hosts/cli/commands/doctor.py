@@ -26,7 +26,7 @@ def run(args, mgr) -> None:
     else:
         issues.append("— Environment:  none")
         issues.append(
-            "  Run 'yak install <component|bundle>' (e.g. 'yak install runtime')"
+            "  Run 'yak install <bundle>' (e.g. 'yak install runtime')"
         )
 
     from y5n.apps.yak.environment.io import load as load_env

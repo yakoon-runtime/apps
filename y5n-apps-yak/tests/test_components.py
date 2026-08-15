@@ -83,10 +83,7 @@ def test_install_stages_platform_components(monkeypatch):
 
         env = load_env(inst)
         assert env is not None
-        assert env.components == [
-            PackName("acme-root"),
-            PackName("acme-boot"),
-        ]
+        assert env.install == {"platform": [str(inst.parent / "repo")]}
         assert all(
             m.source.startswith(str(inst / ".yak" / "components")) for m in env.mounts
         )
@@ -155,38 +152,43 @@ def test_workspace_points_at_component_store_only(monkeypatch):
 def test_artifact_component_survives_store_deletion(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        repo = root / "repo"
-        root_pack = repo / "packs" / "acme-root"
+        # The --path source: platform members (source-only).
+        src = root / "src"
+        root_pack = src / "packs" / "acme-root"
         source_pack(root_pack, "acme-root", "/")
-        boot_pack = repo / "runtime" / "acme-boot"
+        boot_pack = src / "runtime" / "acme-boot"
         source_pack(boot_pack, "acme-boot", "/boot")
-        make_artifact(repo / "artifacts" / "erp-art", "erp", "/opt/erp", "content")
         make_source(
-            repo,
+            src,
             {
                 "acme-root": {"location": "packs/acme-root"},
                 "acme-boot": {"location": "runtime/acme-boot"},
-                "erp": {
-                    "location": "artifacts/erp-art",
-                    "release": "artifacts/erp-art",
-                },
             },
             bundles={"platform": ["acme-root", "acme-boot"]},
         )
-        ctx = Context(path=root, sources=[str(repo)])
+        # The context source: erp as a published artifact (not a --path).
+        repo = root / "repo"
+        make_artifact(repo / "erp-art", "erp", "/opt/erp", "content")
+        make_source(
+            repo,
+            {"erp": {"location": "erp-art", "release": "erp-art"}},
+        )
+        ctx = Context(path=root, sources=[str(repo), str(src)])
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
         inst = root / "inst"
-        mgr.install(inst, identity="platform", paths=[str(repo)])
+        mgr.install(inst, identity="platform", paths=[str(src)])
         mgr.install(inst, identity="erp")
 
+        # erp is not covered by the preferred source (src) and resolves
+        # through its release: a self-contained artifact copy.
         staged = inst / ".yak" / "components" / "erp" / "structure"
         assert staged.is_dir() and not staged.is_symlink()
         assert (staged / "payload.txt").read_text() == "content"
 
         # GOLD: removing the source resource must not break the component.
-        shutil.rmtree(repo / "artifacts" / "erp-art")
+        shutil.rmtree(repo / "erp-art")
 
         assert (staged / "payload.txt").read_text() == "content"
         ws = inst / "structure" / "opt" / "erp"
@@ -283,12 +285,9 @@ def test_install_and_update_share_installation_structure(monkeypatch):
         env_upd = load_env(updated)
         assert env_inst is not None and env_upd is not None
         assert (
-            env_inst.components
-            == env_upd.components
-            == [
-                PackName("acme-root"),
-                PackName("acme-boot"),
-            ]
+            env_inst.install
+            == env_upd.install
+            == {"platform": [str(installed.parent / "repo")]}
         )
         assert env_inst.workspace_path == "structure"
         assert env_upd.workspace_path == "structure"
