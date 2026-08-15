@@ -13,7 +13,7 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 @pytest.mark.slow
 def test_sharp_install():
-    """Install the minimal platform, then add a component."""
+    """Install a component from a local source catalog."""
     root = Path(tempfile.mkdtemp(prefix="yak-sharp-"))
     try:
         from conftest import make_source, source_pack
@@ -28,16 +28,17 @@ def test_sharp_install():
             context=ctx,
         )
 
-        inst = mgr.install(root / "installations" / "cool", mode="source")
-        assert inst.packs == []
-
-        added = mgr.add("cool-shell", inst.root, mode="source")
-        assert added is not None
-        assert "cool-shell" in added.packs
+        inst = mgr.install(
+            root / "installations" / "cool",
+            identity="cool-shell",
+            paths=[str(source)],
+        )
+        assert inst is not None
+        assert "cool-shell" in inst.packs
 
         print(f"Name:         {inst.name}")
         print(f"Status:       {inst.status.value}")
-        print(f"Packs:        {', '.join(added.packs)}")
+        print(f"Packs:        {', '.join(inst.packs)}")
         print(f"Root:         {inst.root}")
         print()
 

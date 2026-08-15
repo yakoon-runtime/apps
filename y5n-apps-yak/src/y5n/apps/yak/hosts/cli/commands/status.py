@@ -17,7 +17,7 @@ def run(args, mgr) -> None:
     env = load_env(ctx)
     if env is None:
         print("  Environment: none")
-        print("  Run 'yak install' (fresh) or 'yak bootstrap' (development)")
+        print("  Run 'yak install <component|bundle>' (e.g. 'yak install runtime')")
         return
 
     print(f"  Environment: {env.name}")

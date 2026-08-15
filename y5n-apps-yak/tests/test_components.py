@@ -50,17 +50,23 @@ def _platform_mgr(
     components["acme-root"] = {"location": "packs/acme-root"}
     components["acme-boot"] = {"location": "runtime/acme-boot"}
     components.update(extra_components or {})
-    make_source(repo, components)
-    ctx = Context(
-        path=root,
-        sources=[str(repo)],
-        install=["acme-root", "acme-boot"],
+    make_source(
+        repo,
+        components,
+        bundles={"platform": ["acme-root", "acme-boot"]},
     )
+    ctx = Context(path=root, sources=[str(repo)])
     return InstallationManager(
         FileRepository(),
         DirectoryArtifactStore(),
         context=ctx,
     )
+
+
+def _platform(mgr: InstallationManager, inst: Path) -> None:
+    """Install the platform bundle from the source catalog."""
+    repo = inst.parent / "repo"
+    mgr.install(inst, identity="platform", paths=[str(repo)])
 
 
 @pytest.mark.slow
@@ -69,7 +75,7 @@ def test_install_stages_platform_components(monkeypatch):
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
-        mgr.install(inst, mode="source")
+        _platform(mgr, inst)
 
         for name in ("acme-root", "acme-boot"):
             staged = inst / ".yak" / "components" / name / "structure"
@@ -94,13 +100,13 @@ def test_install_stages_platform_components(monkeypatch):
 
 
 @pytest.mark.slow
-def test_add_source_pack_is_source_linked(monkeypatch):
+def test_install_source_pack_is_source_linked(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("acme-system", inst, mode="source")
+        _platform(mgr, inst)
+        mgr.install(inst, identity="acme-system", paths=[str(root / "repo")])
 
         staged = inst / ".yak" / "components" / "acme-system" / "structure"
         assert staged.is_symlink()
@@ -119,7 +125,7 @@ def test_add_source_pack_is_source_linked(monkeypatch):
         assert ws.is_symlink()
         assert ws.readlink() == staged
 
-        # Platform mounts survive the add (no pruning of staged mounts).
+        # Platform mounts survive the install (no pruning of staged mounts).
         assert (inst / "structure" / "boot").is_symlink()
         assert (inst / "structure" / ".yak").is_symlink()
 
@@ -136,8 +142,8 @@ def test_workspace_points_at_component_store_only(monkeypatch):
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("acme-system", inst, mode="source")
+        _platform(mgr, inst)
+        mgr.install(inst, identity="acme-system", paths=[str(root / "repo")])
 
         prefix = str(inst / ".yak" / "components")
         for entry in (inst / "structure").rglob("*"):
@@ -150,23 +156,30 @@ def test_artifact_component_survives_store_deletion(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repo = root / "repo"
+        root_pack = repo / "packs" / "acme-root"
+        source_pack(root_pack, "acme-root", "/")
+        boot_pack = repo / "runtime" / "acme-boot"
+        source_pack(boot_pack, "acme-boot", "/boot")
         make_artifact(repo / "artifacts" / "erp-art", "erp", "/opt/erp", "content")
         make_source(
             repo,
             {
+                "acme-root": {"location": "packs/acme-root"},
+                "acme-boot": {"location": "runtime/acme-boot"},
                 "erp": {
                     "location": "artifacts/erp-art",
                     "release": "artifacts/erp-art",
-                }
+                },
             },
+            bundles={"platform": ["acme-root", "acme-boot"]},
         )
         ctx = Context(path=root, sources=[str(repo)])
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("erp", inst, mode="artifact")
+        mgr.install(inst, identity="platform", paths=[str(repo)])
+        mgr.install(inst, identity="erp")
 
         staged = inst / ".yak" / "components" / "erp" / "structure"
         assert staged.is_dir() and not staged.is_symlink()
@@ -190,8 +203,8 @@ def test_doctor_detects_dangling_source_component(monkeypatch):
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("acme-system", inst, mode="source")
+        _platform(mgr, inst)
+        mgr.install(inst, identity="acme-system", paths=[str(root / "repo")])
 
         shutil.rmtree(root / "repo" / "packs" / "acme-system" / "structure")
 
@@ -219,8 +232,7 @@ def test_update_artifact_refreshes_component(monkeypatch):
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("erp", inst, mode="artifact")
+        mgr.install(inst, identity="erp")
 
         staged = inst / ".yak" / "components" / "erp" / "structure"
         assert (staged / "payload.txt").read_text() == "v1"
@@ -243,19 +255,19 @@ def test_update_artifact_refreshes_component(monkeypatch):
 
 
 @pytest.mark.slow
-def test_install_and_bootstrap_share_installation_structure(monkeypatch):
+def test_install_and_update_share_installation_structure(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         installed = root / "installed"
-        bootstrapped = root / "bootstrapped"
-        mgr.install(installed, mode="source")
-        mgr.install(bootstrapped, mode="source")
+        updated = root / "updated"
+        _platform(mgr, installed)
+        _platform(mgr, updated)
 
         # The same installation model: same .yak structure.
         for sub in ("state.toml", "environment.yml", "deployment.yml"):
             assert (installed / ".yak" / sub).exists()
-            assert (bootstrapped / ".yak" / sub).exists()
+            assert (updated / ".yak" / sub).exists()
         assert sorted(
             p.name for p in (installed / ".yak" / "components").iterdir()
         ) == [
@@ -263,36 +275,36 @@ def test_install_and_bootstrap_share_installation_structure(monkeypatch):
             "acme-root",
         ]
         assert sorted(
-            p.name for p in (bootstrapped / ".yak" / "components").iterdir()
+            p.name for p in (updated / ".yak" / "components").iterdir()
         ) == ["acme-boot", "acme-root"]
 
         # Same SOLL/IST.
         env_inst = load_env(installed)
-        env_boot = load_env(bootstrapped)
-        assert env_inst is not None and env_boot is not None
+        env_upd = load_env(updated)
+        assert env_inst is not None and env_upd is not None
         assert (
             env_inst.components
-            == env_boot.components
+            == env_upd.components
             == [
                 PackName("acme-root"),
                 PackName("acme-boot"),
             ]
         )
         assert env_inst.workspace_path == "structure"
-        assert env_boot.workspace_path == "structure"
+        assert env_upd.workspace_path == "structure"
 
         st_inst = mgr.load(installed)
-        st_boot = mgr.load(bootstrapped)
-        assert st_inst is not None and st_boot is not None
+        st_upd = mgr.load(updated)
+        assert st_inst is not None and st_upd is not None
         assert [c.name for c in st_inst.components] == [
             "acme-root",
             "acme-boot",
         ]
-        assert [c.name for c in st_boot.components] == [
+        assert [c.name for c in st_upd.components] == [
             "acme-root",
             "acme-boot",
         ]
-        assert all(c.mode == "source" for c in st_boot.components)
+        assert all(c.mode == "source" for c in st_upd.components)
 
 
 def test_materializer_refuses_store_source():

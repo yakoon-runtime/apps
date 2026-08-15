@@ -28,17 +28,22 @@ def _platform_mgr(
     source_pack(repo / "packs" / "acme-root", "acme-root", "/")
     source_pack(repo / "runtime" / "acme-boot", "acme-boot", "/boot")
     components.update(extra_components or {})
-    make_source(repo, components)
-    ctx = Context(
-        path=root,
-        sources=[str(repo)],
-        install=["acme-root", "acme-boot"],
+    make_source(
+        repo,
+        components,
+        bundles={"platform": ["acme-root", "acme-boot"]},
     )
+    ctx = Context(path=root, sources=[str(repo)])
     return InstallationManager(
         FileRepository(),
         DirectoryArtifactStore(),
         context=ctx,
     )
+
+
+def _platform(mgr: InstallationManager, inst: Path) -> None:
+    repo = inst.parent / "repo"
+    mgr.install(inst, identity="platform", paths=[str(repo)])
 
 
 def _erp_source(root: Path, content: str = "data") -> Path:
@@ -61,13 +66,12 @@ def test_update_heals_deleted_artifact_structure(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repo = _erp_source(root)
-        ctx = Context(path=root, sources=[str(repo)], install=["erp"])
+        ctx = Context(path=root, sources=[str(repo)])
         mgr = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("erp", inst, mode="artifact")
+        mgr.install(inst, identity="erp")
 
         staged = inst / ".yak" / "components" / "erp" / "structure"
         assert (staged / "payload.txt").read_text() == "data"
@@ -85,7 +89,7 @@ def test_update_heals_deleted_platform_component(monkeypatch):
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
-        mgr.install(inst, mode="source")
+        _platform(mgr, inst)
 
         boot = inst / ".yak" / "components" / "acme-boot"
         assert boot.exists()
@@ -110,8 +114,7 @@ def test_mode_switch_replaces_component(monkeypatch):
             FileRepository(), DirectoryArtifactStore(), context=ctx_art
         )
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("erp", inst, mode="artifact")
+        mgr.install(inst, identity="erp")
 
         staged = inst / ".yak" / "components" / "erp" / "structure"
         assert staged.is_dir() and not staged.is_symlink()
@@ -120,15 +123,15 @@ def test_mode_switch_replaces_component(monkeypatch):
         assert [c.name for c in state.components].count("erp") == 1
         assert next(c for c in state.components if c.name == "erp").mode == "artifact"
 
-        # Re-adding in source mode replaces the artifact with a source link.
+        # Re-installing in source mode (via --path) replaces the artifact.
         dev = root / "dev"
         source_pack(dev / "erp", "erp", "/opt/erp")
         make_source(dev, {"erp": {"location": "erp"}})
-        ctx_src = Context(path=root, sources=[str(dev), str(official)])
+        ctx_src = Context(path=root, sources=[str(official)])
         mgr2 = InstallationManager(
             FileRepository(), DirectoryArtifactStore(), context=ctx_src
         )
-        mgr2.add("erp", inst, mode="source", force=True)
+        mgr2.install(inst, identity="erp", paths=[str(dev)])
 
         assert staged.is_symlink()
         state = mgr2.load(inst)
@@ -143,7 +146,7 @@ def test_update_removes_orphan_components(monkeypatch):
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
-        mgr.install(inst, mode="source")
+        _platform(mgr, inst)
 
         orphan = inst / ".yak" / "components" / "stale"
         (orphan / "structure").mkdir(parents=True)
@@ -158,12 +161,12 @@ def test_update_removes_orphan_components(monkeypatch):
 
 
 @pytest.mark.slow
-def test_add_rolls_back_partial_staging(monkeypatch):
+def test_install_rolls_back_partial_staging(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         mgr = _platform_mgr(root, monkeypatch)
         inst = root / "inst"
-        mgr.install(inst, mode="source")
+        _platform(mgr, inst)
 
         def boom(*a, **k):
             raise RuntimeError("boom")
@@ -171,7 +174,7 @@ def test_add_rolls_back_partial_staging(monkeypatch):
         monkeypatch.setattr(type(mgr._installer), "install", boom)
 
         with pytest.raises(RuntimeError, match="boom"):
-            mgr.add("acme-system", inst, mode="source")
+            mgr.install(inst, identity="acme-system", paths=[str(root / "repo")])
         assert not (inst / ".yak" / "components" / "acme-system").exists()
 
 

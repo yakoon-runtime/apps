@@ -139,7 +139,7 @@ class InstallationManager:
         self,
         path: Path,
         *,
-        identity: str | None = None,
+        identity: str,
         paths: list[str] | None = None,
         asker: StoreAsker | None = None,
         ui=None,
@@ -159,19 +159,23 @@ class InstallationManager:
         no global mode.
 
         On a fresh environment the identity is materialized from scratch;
-        on an existing environment its components are added — the same
-        reconciliation as ``add``. ``workspace_path`` is the workspace
-        layout for a fresh environment.
-
-        Without ``identity`` the operation falls back to the Context's
-        ``install`` baseline — the transition to ADR-21, removed with the
-        baseline in a later step.
+        on an existing environment its components are added. Returns None
+        when the identity is already part of the environment.
         """
         root = path.resolve()
-        if identity is not None and load_env(root) is not None:
+        if load_env(root) is not None:
             index = self._combined_index(paths)
+            added_any = False
             for name in self._identities(identity, index=index):
-                self.add(str(name), root, asker=asker, ui=ui, mode=mode, paths=paths)
+                if (
+                    self._add_component(
+                        str(name), root, asker=asker, ui=ui, mode=mode, paths=paths
+                    )
+                    is not None
+                ):
+                    added_any = True
+            if not added_any:
+                return None
             return self.load(root)
 
         now = datetime.now(UTC)
@@ -223,11 +227,11 @@ class InstallationManager:
         self,
         path: Path,
         *,
-        identity: str | None = None,
+        identity: str,
         paths: list[str] | None = None,
         mode: str = "artifact",
     ) -> list[Component]:
-        """Resolve the identities to install into staged components.
+        """Resolve the identity's components into staged components.
 
         The identity names the components to compose (a bundle's members,
         or the single component). Each is resolved per component: source
@@ -239,7 +243,7 @@ class InstallationManager:
         paths_index = self._paths_index(paths)
         components: list[Component] = []
         wheels: list[Path] = []
-        for name in self._install_names(identity, index=index):
+        for name in self._identities(identity, index=index):
             comp = self._resolve_preferred(str(name), paths_index=paths_index, mode=mode)
             if comp is None:
                 continue
@@ -250,22 +254,6 @@ class InstallationManager:
             components.append(self._ensure_component(path, str(name), comp))
         self._install_wheels(wheels, path)
         return components
-
-    def _install_names(
-        self, identity: str | None = None, *, index: Index | None = None
-    ) -> list[str]:
-        """The component names to install: the identity's, or the baseline.
-
-        With an identity, a bundle resolves to its members (the names
-        resolve through the shared index, first hit wins) and a component
-        resolves to itself. Without one, the Context's ``install`` list is
-        the baseline — the transition to ADR-21.
-        """
-        if identity is not None:
-            return self._identities(identity, index=index)
-        if self._context is None:
-            return []
-        return list(self._context.install)
 
     def _identities(
         self, identity: str, *, index: Index | None = None
@@ -314,38 +302,29 @@ class InstallationManager:
         cmd.extend(str(w) for w in wheels)
         return subprocess.run(cmd, capture_output=True).returncode == 0
 
-    # ── Add ──
+    # ── Add (ADR-21: folded into install) ──
 
-    def add(
+    def _add_component(
         self,
         target: str,
         path: Path,
         *,
         asker: StoreAsker | None = None,
         ui=None,
-        from_source: str | None = None,
         force: bool = False,
         mode: str = "artifact",
         paths: list[str] | None = None,
     ) -> Installation | None:
-        """Add a component (a pack or an artifact) to an installation.
+        """Make one component part of an existing environment (ADR-21).
 
-        Both share one reconciliation: resolve → make available →
-        materialize → discover requirements → reconcile deployment →
-        persist. ``--from <source>`` builds an exclusive index from that
-        single source (and its subgraph) — nothing else is consulted, and
-        a miss is an error, never a fallback. ``paths`` are repeatable
-        ``--path`` catalogs: a component found in any of them resolves
-        through its ``location`` (source); everything else through its
-        ``release`` (artifact) — per component, no global mode. ``mode``
-        is the fallback for components absent from all ``--path``
-        catalogs. Returns None when the component is already part of the
+        The reconciliation is: resolve → make available → materialize →
+        discover requirements → reconcile deployment → persist. ``paths``
+        are repeatable ``--path`` catalogs: a component found in any of
+        them resolves through its ``location`` (source); everything else
+        through its ``release`` (artifact) — per component, no global
+        mode. Returns None when the component is already part of the
         installation.
         """
-        exclusive_index = None
-        if from_source is not None:
-            context_root = self._context.path if self._context is not None else path
-            exclusive_index = build_index([from_source], context_root)
         paths_index = self._paths_index(paths)
 
         with self._step(ui, "Resolving"):
@@ -354,22 +333,21 @@ class InstallationManager:
                 raise RuntimeError(f"No installation found at {path}")
             existing = list(env.components)
 
-            if exclusive_index is not None:
-                component = self._resolve_component(
-                    target, index=exclusive_index, mode=mode
-                )
-            else:
-                component = self._resolve_preferred(
-                    target, paths_index=paths_index, mode=mode
-                )
+            component = self._resolve_preferred(
+                target, paths_index=paths_index, mode=mode
+            )
             if component is None:
                 raise ValueError(f"Unknown component: {target}")
+
+            # A component already installed in a different mode is re-staged
+            # in the new mode — the decision is per component (ADR-21).
+            force = force or self._mode_changed(path, target, component.mode)
 
         records: list[Component] = []
         try:
             with self._step(ui, "Making available"):
                 made = self._make_available(
-                    component, target, path, existing, force, index=exclusive_index
+                    component, target, path, existing, force, paths_index=paths_index
                 )
                 if made is None:
                     return None
@@ -427,9 +405,6 @@ class InstallationManager:
         target: str,
         *,
         index=None,
-        sources: list[str] | None = None,
-        sources_exclusive: bool = False,
-        naming: bool = True,
         mode: str = "source",
     ) -> _Component | None:
         """Resolve a component through the source index (ADR-20).
@@ -441,7 +416,7 @@ class InstallationManager:
         artifact) and fails when no release is declared. There is no
         search, no name interpretation, and no fallback: an unknown
         identity resolves to nothing. ``index`` overrides the Context
-        index (used by an exclusive ``--from`` source).
+        index.
         """
         hit = (index if index is not None else self._index()).resolve(target)
         if hit is None:
@@ -463,8 +438,8 @@ class InstallationManager:
         if mode == "artifact":
             if ref.release is None:
                 raise CatalogError(
-                    f"component '{name}' has no release — use a local source "
-                    f"or 'yak bootstrap' instead"
+                    f"component '{name}' has no release — use a --path "
+                    f"catalog instead"
                 )
             resource = self._materialize_release(catalog, name, ref.release)
             if resource is None:
@@ -567,22 +542,30 @@ class InstallationManager:
         path: Path,
         existing_packs: list,
         force: bool,
-        index=None,
+        paths_index=None,
     ) -> tuple[list, list, list] | None:
         """Make the component available in the installation's environment.
 
         Returns (all_packs, mounts, records) or None when nothing is new.
-        Staging goes through ``_ensure_component`` so ``add`` and
+        Staging goes through ``_ensure_component`` so ``install`` and
         ``update`` share the same mechanism; on failure any partially
         staged components are cleaned up before re-raising.
         """
         if component.mode == "source":
             return self._make_pack_available(
-                component, target, path, existing_packs, force, index=index
+                component, target, path, existing_packs, force, paths_index=paths_index
             )
         return self._make_artifact_available(
             component, target, path, existing_packs, force
         )
+
+    def _mode_changed(self, path: Path, name: str, mode: str) -> bool:
+        """Whether the component is installed in a different mode."""
+        inst = self.load(path)
+        if inst is None:
+            return False
+        record = next((c for c in inst.components if c.name == name), None)
+        return record is not None and record.mode != mode
 
     def _make_pack_available(
         self,
@@ -591,7 +574,7 @@ class InstallationManager:
         path: Path,
         existing_packs: list,
         force: bool,
-        index=None,
+        paths_index=None,
     ) -> tuple[list, list, list] | None:
         """Link a source component into the installation (editable)."""
         # A pack declares the packs it depends on via its mounts; a plain
@@ -615,8 +598,8 @@ class InstallationManager:
                 if str(name) == target:
                     comp = component
                 else:
-                    comp = self._resolve_component(
-                        str(name), index=index
+                    comp = self._resolve_preferred(
+                        str(name), paths_index=paths_index, mode="source"
                     ) or _Component(
                         mode="source",
                         name=str(name),

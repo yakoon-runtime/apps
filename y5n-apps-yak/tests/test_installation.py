@@ -9,10 +9,18 @@ from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
 
 
-def _make_env(root, pack_name="test-pack"):
+def _make_env(root):
     repo = root / "repo"
-    source_pack(repo / pack_name, pack_name, f"/{pack_name}")
-    make_source(repo, {pack_name: {"location": pack_name}})
+    source_pack(repo / "acme-root", "acme-root", "/")
+    source_pack(repo / "test-pack", "test-pack", "/test-pack")
+    make_source(
+        repo,
+        {
+            "acme-root": {"location": "acme-root"},
+            "test-pack": {"location": "test-pack"},
+        },
+        bundles={"platform": ["acme-root"]},
+    )
     return repo
 
 
@@ -29,10 +37,11 @@ def test_install_creates_platform_installation():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        inst = mgr.install(inst_path, mode="source")
+        inst = mgr.install(inst_path, identity="platform", paths=[str(repos)])
 
+        assert inst is not None
         assert inst.name == "inst"
-        assert inst.packs == []
+        assert "acme-root" in inst.packs
         assert inst.root == inst_path
         assert (inst.root / "workspace.toml").exists()
         assert (inst.root / ".yak" / "state.toml").exists()
@@ -46,36 +55,36 @@ def test_install_creates_platform_installation():
 
 
 @pytest.mark.slow
-def test_add_extends_the_platform():
+def test_install_extends_the_platform():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repos = _make_env(root)
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path, mode="source")
-        added = mgr.add("test-pack", inst_path, mode="source")
+        mgr.install(inst_path, identity="platform", paths=[str(repos)])
+        added = mgr.install(inst_path, identity="test-pack", paths=[str(repos)])
 
         assert added is not None
         assert "test-pack" in added.packs
-        # Idempotent: adding again reports nothing new.
-        assert mgr.add("test-pack", inst_path, mode="source") is None
+        # Idempotent: installing again reports nothing new.
+        assert (
+            mgr.install(inst_path, identity="test-pack", paths=[str(repos)]) is None
+        )
 
 
 @pytest.mark.slow
-def test_add_unknown_component_raises():
+def test_install_unknown_identity_raises():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repos = _make_env(root)
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path, mode="source")
+        mgr.install(inst_path, identity="platform", paths=[str(repos)])
 
-        import pytest
-
-        with pytest.raises(ValueError, match="Unknown component"):
-            mgr.add("nonexistent", inst_path, mode="source")
+        with pytest.raises(ValueError, match="Unknown identity"):
+            mgr.install(inst_path, identity="nonexistent")
 
 
 @pytest.mark.slow
@@ -86,7 +95,7 @@ def test_load_from_path():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path, mode="source")
+        mgr.install(inst_path, identity="platform", paths=[str(repos)])
 
         loaded = mgr.load(inst_path)
         assert loaded is not None
@@ -111,8 +120,8 @@ def test_update_reconciles():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path, mode="source")
-        mgr.add("test-pack", inst_path, mode="source")
+        mgr.install(inst_path, identity="platform", paths=[str(repos)])
+        mgr.install(inst_path, identity="test-pack", paths=[str(repos)])
         mgr.update(inst_path)
 
         loaded = mgr.load(inst_path)
@@ -129,8 +138,8 @@ def test_doctor_reports_missing_pack():
         mgr = _mgr(root, repos)
 
         inst_path = root / "inst"
-        mgr.install(inst_path, mode="source")
-        mgr.add("test-pack", inst_path, mode="source")
+        mgr.install(inst_path, identity="platform", paths=[str(repos)])
+        mgr.install(inst_path, identity="test-pack", paths=[str(repos)])
 
         import shutil
 

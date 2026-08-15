@@ -1,9 +1,9 @@
-"""ADR-20 gold test: Yak materializes the components the bootstrap declares.
+"""ADR-20 gold test: Yak materializes the components the bundle declares.
 
 Yak knows no component names. A source catalog provides component
-locations; the Context's ``install`` list names what to install. Both
-``install`` and a reconciled ``update`` converge to the declared set —
-with no installer change, because the desired set is fully declarative.
+locations and releases; a bundle names what to install. ``install``
+materializes the bundle's members — with no installer change, because the
+desired set is fully declarative.
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ def _build_repo(root: Path, names: list[str]) -> Path:
     }
     for name in names:
         make_artifact(repo / "artifacts" / f"{name}-art", name, f"/opt/{name}")
-    make_source(repo, components)
+    make_source(repo, components, bundles={"all": names})
     return repo
 
 
-def _mgr(root: Path, repo: Path, install: list[str]) -> InstallationManager:
-    ctx = Context(path=root, sources=[str(repo)], install=install)
+def _mgr(root: Path, repo: Path) -> InstallationManager:
+    ctx = Context(path=root, sources=[str(repo)])
     return InstallationManager(
         FileRepository(),
         DirectoryArtifactStore(),
@@ -47,13 +47,14 @@ def _mgr(root: Path, repo: Path, install: list[str]) -> InstallationManager:
 
 
 @pytest.mark.slow
-def test_install_materializes_declared_components():
+def test_install_materializes_bundle_members():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repo = _build_repo(root, ["foo", "bar", "baz"])
-        mgr = _mgr(root, repo, ["foo", "bar", "baz"])
-        inst = mgr.install(root / "inst")
+        mgr = _mgr(root, repo)
+        inst = mgr.install(root / "inst", identity="all")
 
+        assert inst is not None
         state = mgr.load(inst.root)
         assert state is not None
         assert sorted(c.name for c in state.components) == ["bar", "baz", "foo"]
@@ -72,8 +73,9 @@ def test_update_converges_to_changed_desired_set():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         repo = _build_repo(root, ["foo", "bar", "baz"])
-        mgr = _mgr(root, repo, ["foo", "bar", "baz"])
-        inst = mgr.install(root / "inst")
+        mgr = _mgr(root, repo)
+        inst = mgr.install(root / "inst", identity="all")
+        assert inst is not None
 
         # The desired set changes to foo + quux: the source grows quux,
         # and the materialized SOLL is edited accordingly.
@@ -93,7 +95,7 @@ def test_update_converges_to_changed_desired_set():
         )
         touch(inst.root, name="fake", components=["foo", "quux"])
 
-        mgr2 = _mgr(root, repo, ["foo", "quux"])
+        mgr2 = _mgr(root, repo)
         mgr2.update(inst.root)
 
         state = mgr2.load(inst.root)

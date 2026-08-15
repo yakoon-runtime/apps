@@ -11,8 +11,6 @@ def _add_action(sub, name: str, actions: list[str], func):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from y5n.apps.yak.hosts.cli.commands import add as _add
-    from y5n.apps.yak.hosts.cli.commands import bootstrap as _bootstrap
     from y5n.apps.yak.hosts.cli.commands import build as _build
     from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
     from y5n.apps.yak.hosts.cli.commands import create_pack as _create_pack
@@ -65,32 +63,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_install.run)
-
-    p = sub.add_parser(
-        "add",
-        help="Add a pack or artifact to the installation",
-    )
-    p.add_argument("name", help="Component name (e.g. crm, y5n-packs-hello)")
-    p.add_argument(
-        "--target", "-t", default=".", help="Installation directory (default: current)"
-    )
-    p.add_argument("--verbose", "-v", action="store_true")
-    p.add_argument(
-        "--upgrade", "-u", action="store_true", help="Upgrade to latest version"
-    )
-    p.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="Force reinstall even if version is unchanged",
-    )
-    p.add_argument("--repository", help="Package repository (e.g. github:owner/repo)")
-    p.add_argument(
-        "--from",
-        dest="from_repo",
-        help="Named repository in the context (e.g. acme)",
-    )
-    p.set_defaults(func=_add.run)
 
     p = sub.add_parser("update", help="Update the installation")
     p.add_argument(
@@ -151,13 +123,6 @@ def build_parser() -> argparse.ArgumentParser:
         "source", nargs="?", help="Source project path (default: current directory)"
     )
     p.set_defaults(func=_build.run)
-
-    p = sub.add_parser("bootstrap", help="Prepare this repository for development")
-    p.add_argument(
-        "--force", "-f", action="store_true", help="Recreate everything from scratch"
-    )
-    p.add_argument("--check", action="store_true", help="Only verify, don't modify")
-    p.set_defaults(func=_bootstrap.run)
 
     p = sub.add_parser("create", help="Scaffold new Yakoon projects")
     create_sub = p.add_subparsers(dest="create_action", required=True)

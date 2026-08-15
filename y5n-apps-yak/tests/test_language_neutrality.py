@@ -271,12 +271,9 @@ def test_non_python_component_lifecycle(monkeypatch):
                     "release": "acme-test-1.0.0.dotnet.artifact",
                 },
             },
+            bundles={"platform": ["acme-root", "acme-boot"]},
         )
-        ctx_obj = Context(
-            path=ctx,
-            sources=[str(source)],
-            install=["acme-root", "acme-boot"],
-        )
+        ctx_obj = Context(path=ctx, sources=[str(source)])
 
         mgr = InstallationManager(
             FileRepository(),
@@ -284,8 +281,8 @@ def test_non_python_component_lifecycle(monkeypatch):
             context=ctx_obj,
         )
         inst = root / "inst"
-        mgr.install(inst, mode="source")
-        mgr.add("acme-test", inst, mode="artifact")
+        mgr.install(inst, identity="platform", paths=[str(source)])
+        mgr.install(inst, identity="acme-test")
 
         # Namespace is staged and materialized — no wheel involved.
         staged = inst / ".yak" / "components" / "acme-test" / "structure"

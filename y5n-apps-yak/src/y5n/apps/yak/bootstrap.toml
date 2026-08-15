@@ -9,17 +9,5 @@ sources = [
     "github:yakoon-runtime/apps",
 ]
 
-install = [
-    "y5n-packs-root",
-    "y5n-runtime-boot",
-    "y5n-runtime-api",
-    "y5n-runtime-engine",
-    "y5n-runtime-store",
-    "y5n-runtime-transport",
-    "y5n-runtime-llm",
-    "y5n-sdk-python",
-    "y5n-apps-runtime",
-]
-
 [logs]
 path = ".yak/logs"

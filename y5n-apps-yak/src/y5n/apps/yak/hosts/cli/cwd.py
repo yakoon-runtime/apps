@@ -9,16 +9,14 @@ class Context:
     """A YakContext — describes a development environment.
 
     Loaded from .yak/context.toml. ``sources`` is the flat ADR-20 source
-    set (catalog locations); ``install`` is the bootstrap's desired
-    component set. ``source_dirs`` is a transition: the local monorepo
-    folders the installer resolves build roots against until the repo
-    split.
+    set (catalog locations). ``source_dirs`` is a transition: the local
+    monorepo folders the installer resolves build roots against until the
+    repo split.
     """
 
     path: Path
     name: str = ""
     schema: str = "1"
-    install: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     source_dirs: list[Path] = field(default_factory=list)
 
@@ -61,7 +59,6 @@ def _load_context(root: Path) -> Context:
         path=root,
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
-        install=_string_list(data.get("install")),
         sources=_string_list(data.get("sources")),
         source_dirs=source_dirs,
     )
