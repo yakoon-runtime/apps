@@ -8,6 +8,3 @@ sources = [
     "github:yakoon-runtime/sdk",
     "github:yakoon-runtime/apps",
 ]
-
-[logs]
-path = ".yak/logs"
