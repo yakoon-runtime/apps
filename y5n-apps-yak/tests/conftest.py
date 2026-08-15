@@ -1,4 +1,10 @@
-"""Shared helpers for the source-catalog model (ADR-20)."""
+"""Shared helpers for the source-catalog model (ADR-20).
+
+The test suite is hermetic: an autouse guard blocks real GitHub network
+calls and redirects ``Path.home`` into a per-test tempdir, so no test
+run can touch the real registry, pollute ``~/.yak`` or upload to a real
+repository. Transport tests fake ``urlopen``/``Request`` explicitly.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +12,39 @@ import base64
 import hashlib
 import zipfile
 from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_real_github(monkeypatch):
+    """Block real GitHub transport in the resolver modules.
+
+    A test must fake ``urlopen``/``Request`` explicitly (FakeGithub); a
+    test that would reach the real network fails loudly instead of
+    operating on the real repositories or uploading fake artifacts.
+    """
+    def _block(*args, **kwargs):
+        raise AssertionError(
+            "real GitHub network call attempted in tests — fake the "
+            "transport (FakeGithub) or use a local catalog"
+        )
+
+    import y5n.apps.yak.resolver.catalog as catalog_mod
+    import y5n.apps.yak.resolver.github as github_mod
+
+    monkeypatch.setattr(github_mod, "urlopen", _block)
+    monkeypatch.setattr(github_mod, "Request", _block)
+    monkeypatch.setattr(catalog_mod, "urlopen", _block)
+    monkeypatch.setattr(catalog_mod, "Request", _block)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_home(monkeypatch, tmp_path):
+    """Keep every test off the real ``~/.yak`` global store and cache."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
 
 
 def make_source(

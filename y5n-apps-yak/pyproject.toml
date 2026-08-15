@@ -25,6 +25,7 @@ where = ["src"]
 namespaces = true
 
 [tool.pytest.ini_options]
+addopts = "-m 'not slow'"
 markers = [
-    "slow: full install/materialize cycle (venv + pip); skip with -m 'not slow'",
+    "slow: full install/materialize cycle (venv + pip); skip by default; run with -m slow",
 ]
