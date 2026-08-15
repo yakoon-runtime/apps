@@ -124,7 +124,8 @@ class InstallationManager:
         A component in any ``--path`` catalog uses its ``location`` (a
         local source); everything else resolves through the Context index
         using its ``release``. There is no global mode — the decision is
-        per component.
+        per component. ``mode`` is only the release fallback for resolving
+        a source pack's declared dependencies.
         """
         if paths_index is not None:
             hit = paths_index.resolve(target)
@@ -144,7 +145,6 @@ class InstallationManager:
         asker: StoreAsker | None = None,
         ui=None,
         workspace_path: str = "structure",
-        mode: str = "artifact",
     ) -> Installation | None:
         """Make an identity part of an environment (ADR-21).
 
@@ -169,7 +169,7 @@ class InstallationManager:
             for name in self._identities(identity, index=index):
                 if (
                     self._add_component(
-                        str(name), root, asker=asker, ui=ui, mode=mode, paths=paths
+                        str(name), root, asker=asker, ui=ui, paths=paths
                     )
                     is not None
                 ):
@@ -184,7 +184,7 @@ class InstallationManager:
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
             platform = self._materialize_install(
-                root, identity=identity, paths=paths, mode=mode
+                root, identity=identity, paths=paths
             )
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
@@ -229,7 +229,6 @@ class InstallationManager:
         *,
         identity: str,
         paths: list[str] | None = None,
-        mode: str = "artifact",
     ) -> list[Component]:
         """Resolve the identity's components into staged components.
 
@@ -244,7 +243,7 @@ class InstallationManager:
         components: list[Component] = []
         wheels: list[Path] = []
         for name in self._identities(identity, index=index):
-            comp = self._resolve_preferred(str(name), paths_index=paths_index, mode=mode)
+            comp = self._resolve_preferred(str(name), paths_index=paths_index)
             if comp is None:
                 continue
             if comp.artifact is not None and comp.mode == "artifact":
@@ -312,7 +311,6 @@ class InstallationManager:
         asker: StoreAsker | None = None,
         ui=None,
         force: bool = False,
-        mode: str = "artifact",
         paths: list[str] | None = None,
     ) -> Installation | None:
         """Make one component part of an existing environment (ADR-21).
@@ -333,9 +331,7 @@ class InstallationManager:
                 raise RuntimeError(f"No installation found at {path}")
             existing = list(env.components)
 
-            component = self._resolve_preferred(
-                target, paths_index=paths_index, mode=mode
-            )
+            component = self._resolve_preferred(target, paths_index=paths_index)
             if component is None:
                 raise ValueError(f"Unknown component: {target}")
 

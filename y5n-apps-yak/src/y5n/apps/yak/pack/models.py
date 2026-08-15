@@ -19,7 +19,7 @@ class Mount:
 
 @dataclass(frozen=True)
 class Pack:
-    """A resolved pack unit — what ``yak add`` installs from a pack.toml.
+    """A resolved pack unit — what ``yak install`` composes from a pack.toml.
 
     ``mount`` is the tree path the pack's structure is mounted into
     (e.g. ``/usr/bin`` for the system pack). ``mounts`` declare other

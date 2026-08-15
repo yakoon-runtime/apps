@@ -3,73 +3,61 @@
 `yak` is the command-line interface for Yakoon — a composable,
 language-neutral runtime platform.
 
-Yakoon starts empty.
+Yakoon starts empty. One composition primitive makes a component or a
+bundle part of an environment:
 
-The runtime itself contains no packs, no commands and no product
-assumptions. Capabilities are added explicitly with `yak add`.
+    yak install <component|bundle> [--path <catalog>]...
 
-## Install or bootstrap?
+The first argument is always an identity: a component name or a bundle
+name. A bundle is a name → list of component names; it resolves to its
+members through the shared index.
 
-Both commands create the same minimal Yakoon platform.
+## Sources and artifacts
 
-Use `install` for a regular installation:
+A catalog (`catalog.yml`) is what a source offers. Each component keeps
+both faces — where the source is and which release to use:
 
-    mkdir my-yakoon
-    cd my-yakoon
-    yak install
+```yaml
+# catalog.yml
+components:
+  y5n-runtime-api:
+    location: packages/y5n-runtime-api   # source
+    release: y5n-runtime-api-v0.8.0      # artifact
 
-The platform is installed from released artifacts.
+bundles:
+  runtime:
+    - y5n-packs-root
+    - y5n-runtime-api
+    - y5n-sdk-python
+```
 
-Use `bootstrap` when developing Yakoon itself from a source checkout:
+`location` answers *where the source is*; `release` answers *which
+published release to use*. Bundles are global — they name components and
+resolve through the shared index, first hit wins.
 
-    git clone <yakoon-repository>
-    cd <yakoon-repository>
-    yak bootstrap
+## Compose an environment
 
-The platform is installed from the local sources (editable).
+    yak install runtime          # the runtime bundle, from releases
+    yak install crm              # one component, from its release
+    yak install crm --path ./my-catalog
 
-In both cases the result is a minimal platform:
+`--path` is a repeatable **source override**: it points at a source with
+a `catalog.yml` (never directly at a component). A component found in
+any `--path` catalog resolves through its `location` (source); everything
+else resolves through its `release` (artifact) — per component, no global
+mode. An installation can hold `runtime-api = source` and
+`sdk-python = artifact` at the same time.
 
-    Runtime + SDK + Hosts
-    0 packs
-    0 nodes
-    runtime store
+Granularity:
 
-The difference is only how the Yakoon platform itself is installed:
+    yak install runtime
+    yak install runtime --path ./runtime --path ./sdk --path ./apps
 
-    yak install     → released artifacts
-    yak bootstrap   → local sources (editable)
+The last form resolves every member of the `runtime` bundle as a source.
 
+## Where a component lives in an installation
 
-## Add components
-
-Components are added with the same command in every environment:
-
-    yak add system
-    yak add ident
-    yak add crm
-
-`yak add` resolves a component from the sources available to the
-current context:
-
-    1. Source directories       [sources] in context.toml
-    2. Global artifact store    ~/.yak/artifacts/
-    3. Repositories             [repositories] in context.toml
-
-The artifact store is always system-global:
-
-    ~/.yak/artifacts/
-
-`build` stages the artifact in the context-local `.yak/artifacts/`;
-`publish` lifts it into the system-global `~/.yak/artifacts/`, where
-every installation can resolve it.
-
-This allows released and development components to be mixed in the
-same installation.
-
-### Where a component lives in an installation
-
-`add` stages each component's namespace into the installation-local
+`install` stages each component's namespace into the installation-local
 component store, at a version-stable path:
 
     .yak/components/<name>/structure
@@ -77,84 +65,15 @@ component store, at a version-stable path:
 A source component is a symlink into its source tree (editable); an
 artifact component is copied (self-contained). The materializer never
 reads from artifact stores or language packages — component namespaces
-are staged through `.yak/components/<name>/structure` first. Explicit
-operator or host mounts pass through directly:
-
-    .yak/artifacts/                  build staging
-    ~/.yak/artifacts/                system-wide distribution
-    <installation>/.yak/components/  installed state
+are staged through `.yak/components/<name>/structure` first.
 
 `environment.yml` lists the desired components (SOLL); `state.toml`
 records what is installed and why (IST: mode, version, fingerprint,
-source). `yak update` reconciles the two.
+source). `yak update` reconciles the two. Installing an identity on an
+existing environment adds its components; `install` returns nothing when
+the identity is already part of the environment.
 
-
-### Regular installation
-
-    yak install
-    yak add system
-    yak add ident
-
-Result:
-
-    Runtime     artifact
-    system      artifact
-    ident       artifact
-
-
-### Yakoon development
-
-    yak bootstrap
-    yak add system
-    yak add ident
-
-Result:
-
-    Runtime     local source (editable)
-    system      local source
-    ident       local source
-
-
-### Develop company components against released Yakoon
-
-Start with a regular Yakoon installation:
-
-    yak install
-    yak add system
-    yak add ident
-
-Then add the company's development directory to the context:
-
-    # .yak/context.toml
-
-    [sources]
-    dirs = ["/home/acme/dev/packs"]
-
-Now local company components can be added directly:
-
-    yak add acme-erp
-    yak add acme-machines
-
-Result:
-
-    Runtime          artifact
-    system           artifact
-    ident            artifact
-    acme-erp         local source
-    acme-machines    local source
-
-The company can therefore develop and debug its own components
-against a released Yakoon installation without publishing them first.
-
-When a component is ready for release:
-
-    yak build acme-erp
-    yak publish acme-erp
-    yak deploy acme-erp --to acme
-
-Other installations can then resolve it as an artifact.
-
-## Distribute a component
+## Build and distribute a component
 
 Yak in one picture:
 
@@ -166,83 +85,40 @@ Yak in one picture:
       ▼
     ~/.yak/artifacts/
       │
-      ├── add ──────→ Installation
+      ├── install ──→ Installation
       │
       │ deploy
       ▼
     Repository
       │
-      └── add ──────→ Other installation
+      └── install ──→ Other installation
 
-`publish` copies a built artifact into the system-global store:
+`build` produces artifacts from a project; `publish` lifts a built
+artifact into the system-global store; `deploy` ships a *published*
+artifact into a remote repository, where other installations can resolve
+it immediately.
 
+    yak build acme-erp
     yak publish acme-erp
-
-`deploy` ships a *published* artifact into a remote repository, where
-other installations can resolve it immediately:
-
-    yak deploy acme-erp --to acme
-
-`deploy` reads only from the published store — an artifact must be
-published first. A successful deploy makes the artifact immediately
-resolvable from the target repository.
-
-Repositories are configured in the context. A named repository is both a
-read source (`add --from`) and a deploy target (`deploy --to`):
-
-    # .yak/context.toml
-
-    [repositories]
-    sources = ["github:yakoon-runtime/packs"]
-
-    [repositories.acme]
-    type = "github"
-    repo = "acme/packs"
-
-    yak add acme-erp --from acme
-    yak deploy acme-erp --to acme
-
-An inline spec works without configuration:
-
     yak deploy acme-erp --to github:acme/packs
+
+Any installation can then resolve the component from that repository:
+
+    yak install acme-erp
 
 Credentials come from the environment, never from configuration files:
 
     export GITHUB_TOKEN=<token>
-    # or: export YAK_GITHUB_TOKEN=<token>
 
-Create the token at:
-
-    https://github.com/settings/personal-access-tokens
-
-`deploy` needs permission to create releases in the target repository:
-a fine-grained token requires **Contents: Read and write** for that
+`deploy` needs permission to create releases in the target repository: a
+fine-grained token requires **Contents: Read and write** for that
 repository; a classic token requires the `repo` scope. Tokens are never
 stored in `.yak/` configuration.
 
-A real deploy to a repository:
-
-    yak build y5n-apps-yak
-    yak publish y5n-apps-yak
-    yak deploy y5n-apps-yak --to github:acme/packs
-
-Any installation can then resolve the component from that repository:
-
-    yak add y5n-apps-yak --from github:acme/packs
-
-For the Yakoon project itself, source and distribution are separate
-repositories:
-
-    yakoon-runtime/yakoon    the source repository (monorepo)
-    yakoon-runtime/apps      the default artifact repository for released
-                             Yakoon applications — the launcher and
-                             `add --from` resolve `y5n-apps-yak` from here
-
 ## The model
 
-    install/bootstrap    creates the platform
-    context              defines where components are found
-    build                builds a component
-    publish              makes a component available on this system
-    add                  adds a component to an installation
-    deploy               makes a component available outside this system
+    install    makes a component or bundle part of an environment
+    context    defines where components are found
+    build      builds a component
+    publish    makes a component available on this system
+    deploy     makes a component available outside this system
