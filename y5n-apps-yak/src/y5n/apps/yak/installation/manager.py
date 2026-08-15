@@ -21,8 +21,7 @@ from y5n.apps.yak.installation.deployment import (
 )
 from y5n.apps.yak.installation.deployment import load_installation, to_dict
 from y5n.apps.yak.installation.models import Component, Installation, InstallationStatus
-from y5n.apps.yak.installer.installer import Installer
-from y5n.apps.yak.installer.venv import ensure_venv
+from y5n.apps.yak.installer.installer import Installer, PythonCandidate
 from y5n.apps.yak.pack.models import Mount, Pack, PackName
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
@@ -197,10 +196,10 @@ class InstallationManager:
         structure_dir = root / workspace_path
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            platform = self._materialize_install(
-                root, identity=identity, paths=paths
-            )
-            mounts = self._component_mounts(root, platform)
+            staged = self._materialize_install(root, identity=identity, paths=paths)
+            records = [r for r, _ in staged]
+            resolved = [c for _, c in staged]
+            mounts = self._component_mounts(root, records)
             self._materializer.materialize(
                 structure_dir,
                 mounts=mounts,
@@ -212,8 +211,8 @@ class InstallationManager:
         inst = Installation(
             name=name,
             root=root,
-            packs=[PackName(c.name) for c in platform],
-            components=platform,
+            packs=[PackName(c.name) for c in records],
+            components=records,
             status=InstallationStatus.MATERIALIZED,
             created=now,
             updated=now,
@@ -221,13 +220,13 @@ class InstallationManager:
         self._write_state(inst)
 
         with self._step(ui, "Installing"):
-            self._installer.install(inst)
+            self._installer.install(root, self._python_candidates(resolved))
 
         with self._step(ui, "Environment"):
             touch(
                 root,
                 name=name,
-                components=[PackName(c.name) for c in platform],
+                components=[PackName(c.name) for c in records],
                 mounts=mounts,
                 workspace_path=workspace_path,
             )
@@ -243,30 +242,44 @@ class InstallationManager:
         *,
         identity: str,
         paths: list[str] | None = None,
-    ) -> list[Component]:
-        """Resolve the identity's components into staged components.
+    ) -> list[tuple[Component, _Component]]:
+        """Resolve and stage the identity's components.
 
         The identity names the components to compose (a bundle's members,
         or the single component). Each is resolved per component: source
-        from any ``--path`` catalog, release otherwise. Its wheel (if any)
-        is installed, and its namespace staged — exactly like any
-        component added later.
+        from any ``--path`` catalog, release otherwise, then staged into
+        the component store. Returns (record, resolved) pairs — the staged
+        IST record and the resolved component that builds the Python
+        install plan.
         """
         index = self._combined_index(paths)
         paths_index = self._paths_index(paths)
-        components: list[Component] = []
-        wheels: list[Path] = []
+        staged: list[tuple[Component, _Component]] = []
         for name in self._identities(identity, index=index):
             comp = self._resolve_preferred(str(name), paths_index=paths_index)
             if comp is None:
                 continue
-            if comp.artifact is not None and comp.mode == "artifact":
+            record = self._ensure_component(path, str(name), comp)
+            staged.append((record, comp))
+        return staged
+
+    @staticmethod
+    def _python_candidates(resolved: list[_Component]) -> list[PythonCandidate]:
+        """The Python install plan: wheels for artifacts, editable for sources.
+
+        Source and artifact are different origins of the same component;
+        pip receives both forms in one transaction and resolves the whole
+        graph at once. Yak knows no Python dependencies.
+        """
+        candidates: list[PythonCandidate] = []
+        for comp in resolved:
+            if comp.mode == "artifact" and comp.artifact is not None:
                 wheel = comp.artifact.package_file
                 if wheel is not None and wheel.exists():
-                    wheels.append(wheel)
-            components.append(self._ensure_component(path, str(name), comp))
-        self._install_wheels(wheels, path)
-        return components
+                    candidates.append(PythonCandidate(wheel=wheel))
+            elif comp.mode == "source" and comp.source is not None:
+                candidates.append(PythonCandidate(project=comp.source))
+        return candidates
 
     def _identities(
         self, identity: str, *, index: Index | None = None
@@ -290,41 +303,6 @@ class InstallationManager:
         """
         hit = self._index().resolve_bundle(identity)
         return list(hit[1]) if hit is not None else [identity]
-
-    def _install_artifact(self, artifact, path: Path, *, force: bool = False) -> bool:
-        """Install a single resolved artifact's wheel (with dependencies).
-
-        The platform is already installed as a set, so pip resolves the
-        y5n-* dependencies from the installed wheels and fetches external
-        dependencies (e.g. ``textual``) from PyPI.
-        """
-        wheel = artifact.package_file
-        if wheel is None or not wheel.exists():
-            return True
-        python = ensure_venv(path / ".venv")
-        cmd = [str(python), "-m", "pip", "install"]
-        if force:
-            cmd.append("--force-reinstall")
-        cmd.append(str(wheel))
-
-        return subprocess.run(cmd, capture_output=True).returncode == 0
-
-    def _install_wheels(self, wheels: list, path: Path, *, force: bool = False) -> bool:
-        """Install a set of wheels in one command.
-
-        pip resolves the y5n-* dependencies among the local wheels and
-        fetches only external dependencies (e.g. ``websockets``) from PyPI
-        — the same contract as the old editable install of all platform
-        projects together.
-        """
-        if not wheels:
-            return True
-        python = ensure_venv(path / ".venv")
-        cmd = [str(python), "-m", "pip", "install"]
-        if force:
-            cmd.append("--force-reinstall")
-        cmd.extend(str(w) for w in wheels)
-        return subprocess.run(cmd, capture_output=True).returncode == 0
 
     # ── Add (ADR-21: folded into install) ──
 
@@ -372,7 +350,7 @@ class InstallationManager:
                 )
                 if made is None:
                     return None
-                all_packs, mounts, records = made
+                all_packs, mounts, records, resolved = made
 
             structure_dir = path / env.workspace_path
             merged = list(env.mounts) + [m for m in mounts if m not in env.mounts]
@@ -406,6 +384,9 @@ class InstallationManager:
                 updated=now,
             )
             self._write_state(inst)
+
+            with self._step(ui, "Installing"):
+                self._installer.install(path, self._python_candidates(resolved))
 
             with self._step(ui, "Environment"):
                 touch(path, name=env.name, components=all_packs, mounts=merged)
@@ -564,13 +545,15 @@ class InstallationManager:
         existing_packs: list,
         force: bool,
         paths_index=None,
-    ) -> tuple[list, list, list] | None:
-        """Make the component available in the installation's environment.
+    ) -> tuple[list, list, list, list] | None:
+        """Stage the component into the installation's component store.
 
-        Returns (all_packs, mounts, records) or None when nothing is new.
-        Staging goes through ``_ensure_component`` so ``install`` and
-        ``update`` share the same mechanism; on failure any partially
-        staged components are cleaned up before re-raising.
+        Returns (all_packs, mounts, records, resolved) or None when
+        nothing is new. Staging goes through ``_ensure_component`` so
+        ``install`` and ``update`` share the same mechanism; on failure
+        any partially staged components are cleaned up before re-raising.
+        The Python install happens later, once, over the whole resolved
+        set.
         """
         if component.mode == "source":
             return self._make_pack_available(
@@ -596,7 +579,7 @@ class InstallationManager:
         existing_packs: list,
         force: bool,
         paths_index=None,
-    ) -> tuple[list, list, list] | None:
+    ) -> tuple[list, list, list, list] | None:
         """Link a source component into the installation (editable)."""
         # A pack declares the packs it depends on via its mounts; a plain
         # source (e.g. a Python library or app) has no pack.toml.
@@ -614,6 +597,7 @@ class InstallationManager:
 
         records: list[Component] = []
         mounts: list[Mount] = []
+        resolved: list[_Component] = []
         try:
             for name in added:
                 if str(name) == target:
@@ -626,23 +610,17 @@ class InstallationManager:
                         name=str(name),
                         pack=Pack(name=str(name), version="0.1"),
                     )
+                resolved.append(comp)
                 record = self._ensure_component(path, str(name), comp, force=force)
                 records.append(record)
                 staged = self._component_structure(path, str(name))
                 if record.mount and staged.exists():
                     mounts.append(Mount(source=str(staged), target=record.mount))
-
-            inst = Installation(
-                name=target,
-                root=path.resolve(),
-                packs=all_packs,
-            )
-            self._installer.install(inst)
         except Exception:
             for record in records:
                 self._cleanup_component(path, record)
             raise
-        return all_packs, mounts, records
+        return all_packs, mounts, records, resolved
 
     def _make_artifact_available(
         self,
@@ -651,14 +629,9 @@ class InstallationManager:
         path: Path,
         existing_packs: list,
         force: bool,
-    ) -> tuple[list, list, list] | None:
+    ) -> tuple[list, list, list, list] | None:
         if PackName(target) in existing_packs and not force:
             return None
-
-        if component.artifact is not None:
-            ok = self._install_artifact(component.artifact, path, force=force)
-            if not ok:
-                raise RuntimeError(f"Failed to install artifact: {target}")
 
         all_packs = existing_packs + [PackName(target)]
         record = self._ensure_component(path, target, component, force=force)
@@ -666,7 +639,7 @@ class InstallationManager:
         staged = self._component_structure(path, target)
         if record.mount and staged.exists():
             mounts.append(Mount(source=str(staged), target=record.mount))
-        return all_packs, mounts, [record]
+        return all_packs, mounts, [record], [component]
 
     def _ensure_component(
         self,
@@ -798,6 +771,7 @@ class InstallationManager:
         structure_dir = path / env.workspace_path
         desired = [str(c) for c in env.components]
         merged = {c.name: c for c in inst.components}
+        resolved_all: list[_Component] = []
 
         with self._step(ui, "Reconciling"):
             for name in desired:
@@ -808,6 +782,7 @@ class InstallationManager:
                 component = self._resolve_component(name, mode=mode)
                 if component is None:
                     continue
+                resolved_all.append(component)
                 record = merged.get(name)
                 fingerprint_drift = (
                     record is not None
@@ -820,8 +795,6 @@ class InstallationManager:
                     record is not None and self._record_mode(component) != record.mode
                 )
                 if record is None or fingerprint_drift or mode_drift:
-                    if fingerprint_drift and component.artifact is not None:
-                        self._install_artifact(component.artifact, path, force=True)
                     merged[name] = self._ensure_component(
                         path, name, component, force=True
                     )
@@ -859,7 +832,7 @@ class InstallationManager:
         self._write_state(inst)
 
         with self._step(ui, "Installing"):
-            self._installer.install(inst)
+            self._installer.install(path, self._python_candidates(resolved_all))
 
         with self._step(ui, "Environment"):
             touch(

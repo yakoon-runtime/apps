@@ -110,7 +110,9 @@ def test_source_without_structure_produces_none(tmp_path):
     """A pure Python source without ``structure/`` stages nothing."""
     src = tmp_path / "src"
     (src / "acme-lib").mkdir(parents=True)
-    (src / "acme-lib" / "pyproject.toml").write_text("[project]\nname = 'acme-lib'\n")
+    (src / "acme-lib" / "pyproject.toml").write_text(
+        "[project]\nname = 'acme-lib'\nversion = '0.1.0'\n"
+    )
     make_source(src, {"acme-lib": {"location": "acme-lib"}})
 
     mgr = _mgr(tmp_path, [])

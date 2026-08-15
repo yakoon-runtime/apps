@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import zipfile
 from pathlib import Path
 
 
@@ -63,4 +66,102 @@ def artifact(
         "mount: " + mount + "\n"
         "fingerprint: sha256:" + (fingerprint or name) + "\n"
     )
+    return path
+
+
+def wheel_artifact(
+    path: Path,
+    name: str,
+    version: str,
+    deps: tuple = (),
+    mount: str | None = None,
+) -> Path:
+    """An artifact component with a real wheel: artifact.yml + wheel."""
+    (path / "structure").mkdir(parents=True, exist_ok=True)
+    (path / "structure" / "payload.txt").write_text("data")
+    _write_wheel(path, name, version, deps)
+    mount_line = f"mount: {mount}\n" if mount else ""
+    (path / "artifact.yml").write_text(
+        f"name: {name}\n"
+        f"version: {version}\n"
+        "kind: package\n"
+        "builder: python\n"
+        "host: python\n"
+        f"{mount_line}"
+        f"fingerprint: sha256:{name}\n"
+    )
+    return path
+
+
+def _write_wheel(artifact_dir: Path, name: str, version: str, deps: tuple) -> None:
+    """Write a minimal installable pure-python wheel into an artifact dir."""
+    dist = name.replace("-", "_")
+    meta = (
+        "Metadata-Version: 2.1\n"
+        f"Name: {name}\n"
+        f"Version: {version}\n"
+        + "".join(f"Requires-Dist: {d}\n" for d in deps)
+        + "\n"
+    )
+    wheel_text = (
+        "Wheel-Version: 1.0\n"
+        "Generator: yak-test\n"
+        "Root-Is-Purelib: true\n"
+        "Tag: py3-none-any\n"
+    )
+    files = {
+        f"{dist}/__init__.py": "",
+        f"{dist}-{version}.dist-info/METADATA": meta,
+        f"{dist}-{version}.dist-info/WHEEL": wheel_text,
+    }
+    record_lines = []
+    for filename, content in files.items():
+        digest = base64.urlsafe_b64encode(
+            hashlib.sha256(content.encode()).digest()
+        ).rstrip(b"=").decode()
+        record_lines.append(f"{filename},sha256={digest},{len(content)}\n")
+    record = "".join(record_lines) + f"{dist}-{version}.dist-info/RECORD,,\n"
+    files[f"{dist}-{version}.dist-info/RECORD"] = record
+
+    wheel = artifact_dir / f"{dist}-{version}-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as zf:
+        for filename, content in files.items():
+            zf.writestr(filename, content)
+
+
+def source_proj(
+    path: Path,
+    name: str,
+    version: str,
+    deps: tuple = (),
+    mount: str | None = None,
+) -> Path:
+    """A source component that pip can install editable (pyproject + module)."""
+    pkg = name.replace("-", "_")
+    (path / "src" / pkg).mkdir(parents=True)
+    (path / "src" / pkg / "__init__.py").write_text("")
+    deps_list = "".join(f'    "{d}",\n' for d in deps)
+    (path / "pyproject.toml").write_text(
+        "[build-system]\n"
+        'requires = ["setuptools>=68", "wheel"]\n'
+        'build-backend = "setuptools.build_meta"\n'
+        "\n"
+        "[project]\n"
+        f'name = "{name}"\n'
+        f'version = "{version}"\n'
+        "requires-python = '>=3.13'\n"
+        + (f"dependencies = [\n{deps_list}]\n" if deps else "")
+        + "\n"
+        "[tool.setuptools]\n"
+        'package-dir = {"" = "src"}\n'
+        "\n"
+        "[tool.setuptools.packages.find]\n"
+        'where = ["src"]\n'
+    )
+    if mount:
+        (path / "structure").mkdir(parents=True, exist_ok=True)
+        (path / "structure" / "payload.txt").write_text(f"{name}-source")
+        (path / "pack.toml").write_text(
+            f'name = "{name}"\nversion = "{version}"\nmount = "{mount}"\n'
+        )
     return path
