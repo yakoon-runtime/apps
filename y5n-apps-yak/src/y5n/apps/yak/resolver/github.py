@@ -53,11 +53,12 @@ class GithubReleaseRepository:
         catalog never learns about versions, fingerprints or releases.
         Failing the artifact upload leaves the old catalog valid; failing
         the catalog update leaves the artifact unreferenced but the old
-        catalog valid. Requires GITHUB_TOKEN or YAK_GITHUB_TOKEN.
+        catalog valid. Requires YAK_GITHUB_TOKEN — the only credential yak
+        ever reads, and only on the write path.
         """
-        token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        token = os.environ.get("YAK_GITHUB_TOKEN")
         if not token:
-            print("  GITHUB_TOKEN not set")
+            print("  YAK_GITHUB_TOKEN not set")
             return False
 
         with tempfile.TemporaryDirectory() as tmp:

@@ -9,7 +9,6 @@ resolver knows component identities. Nothing else.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import tarfile
 import tempfile
@@ -156,9 +155,6 @@ def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
         return cached
     url = f"https://api.github.com/repos/{repo}/contents/{catalog_path}"
     headers = {"Accept": "application/vnd.github.raw+json"}
-    token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     try:
         with urlopen(Request(url, headers=headers)) as resp:
             data = yaml.safe_load(resp.read().decode()) or {}
@@ -291,11 +287,12 @@ def _repo_release_index(repo: str) -> dict[str, tuple[str, str | None]]:
 
 
 def _fetch_releases(repo: str) -> list[dict]:
-    """All releases of a repository (paginated, best-effort)."""
-    token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    """All releases of a repository (paginated, best-effort).
+
+    Reads are anonymous: a public ``github:`` source needs no credential,
+    and an accidentally set token must not change read semantics.
+    """
     headers = {"Accept": "application/vnd.github.v3+json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     releases: list[dict] = []
     page = 1
     while True:
