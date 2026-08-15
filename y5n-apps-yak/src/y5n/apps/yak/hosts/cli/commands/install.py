@@ -1,7 +1,9 @@
-"""yak install [--target <dir>] — create the minimal Yakoon platform.
+"""yak install <component|bundle> [--target <dir>] — compose an environment.
 
-The platform is the runtime, the SDK and the host apps — no packs.
-Capabilities are composed afterwards with `yak add`.
+The first argument is always an identity: a component name or a bundle
+name. On a fresh environment the identity is materialized; on an
+existing environment its components are added. Every component resolves
+through its release.
 """
 
 from __future__ import annotations
@@ -14,18 +16,14 @@ from y5n.apps.yak.hosts.cli.ui import TerminalUI
 def run(args, mgr) -> None:
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
     root = Path(getattr(args, "target", ".")).resolve()
-
-    if _is_installed(root):
-        ui.fail("Yakoon is already installed here — use 'yak add' or 'yak update'")
-        return
+    identity = args.identity
 
     _ensure_context(root)
 
-    ui.title("Installing Yakoon")
+    ui.title(f'Installing "{identity}"')
     try:
-        mgr.install(root, ui=ui)
-        ui.ok(f"Yakoon ready at {root}")
-        ui.detail("Capabilities are added with 'yak add' (e.g. 'yak add system').")
+        mgr.install(root, ui=ui, identity=identity)
+        ui.ok(f"Installed {identity}")
     except Exception as e:
         ui.fail(f"Installation failed: {e}")
 
@@ -43,9 +41,3 @@ def _ensure_context(root: Path) -> None:
     from y5n.apps.yak.hosts.cli.commands import init_cmd
 
     init_cmd._init(root)
-
-
-def _is_installed(root: Path) -> bool:
-    """An installation marker (.yak/state.toml or environment.yml) exists."""
-    yak = root / ".yak"
-    return (yak / "state.toml").exists() or (yak / "environment.yml").exists()

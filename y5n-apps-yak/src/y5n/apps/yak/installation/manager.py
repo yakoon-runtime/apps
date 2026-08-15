@@ -99,29 +99,41 @@ class InstallationManager:
         self,
         path: Path,
         *,
+        identity: str | None = None,
         asker: StoreAsker | None = None,
         ui=None,
         workspace_path: str = "structure",
         mode: str = "artifact",
-    ) -> Installation:
-        """Materialize the bootstrap installation the Context declares (ADR-8).
+    ) -> Installation | None:
+        """Make an identity part of an environment (ADR-21).
 
-        ``install`` reads the Context's ``install`` list — the component
-        identities the bootstrap wants — and resolves each through the
-        source index. Root and boot have no special status. ``workspace_path``
-        is the workspace layout: ``structure/`` for a regular installation,
-        ``workspace/structure/`` when bootstrapping inside a source checkout.
-        ``mode`` decides how each component is obtained: ``artifact``
-        (released, via ``release``) for ``yak install``, ``source`` (local
-        checkout, via ``location``) for ``yak bootstrap``.
+        The first argument of ``yak install`` is always an identity: a
+        component or a bundle name. ``identity`` is that name. A bundle
+        resolves to its members through the shared index; every member
+        resolves like any other component.
+
+        On a fresh environment the identity is materialized from scratch;
+        on an existing environment its components are added — the same
+        reconciliation as ``add``. ``mode`` decides how each component is
+        obtained (release for ``install``). ``workspace_path`` is the
+        workspace layout for a fresh environment.
+
+        Without ``identity`` the operation falls back to the Context's
+        ``install`` baseline — the transition to ADR-21, removed with the
+        baseline in a later step.
         """
-        now = datetime.now(UTC)
         root = path.resolve()
+        if identity is not None and load_env(root) is not None:
+            for name in self._identities(identity):
+                self.add(str(name), root, asker=asker, ui=ui, mode=mode)
+            return self.load(root)
+
+        now = datetime.now(UTC)
         name = root.name or "yakoon"
         structure_dir = root / workspace_path
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            platform = self._materialize_install(root, mode=mode)
+            platform = self._materialize_install(root, identity=identity, mode=mode)
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
                 structure_dir,
@@ -160,18 +172,18 @@ class InstallationManager:
         return inst
 
     def _materialize_install(
-        self, path: Path, *, mode: str = "artifact"
+        self, path: Path, *, identity: str | None = None, mode: str = "artifact"
     ) -> list[Component]:
-        """Reconcile the bootstrap's ``install`` list into staged components.
+        """Resolve the identities to install into staged components.
 
-        Yak knows no component names: every identity the bootstrap
-        declares is resolved through the source index, its wheel (if any)
-        is installed, and its namespace staged — exactly like any
-        component added later with ``yak add``.
+        The identity names the components to compose (a bundle's members,
+        or the single component). Each is resolved through the source
+        index, its wheel (if any) is installed, and its namespace staged —
+        exactly like any component added later.
         """
         components: list[Component] = []
         wheels: list[Path] = []
-        for name in self._install_names():
+        for name in self._install_names(identity):
             comp = self._resolve_component(str(name), mode=mode)
             if comp is None:
                 continue
@@ -183,11 +195,29 @@ class InstallationManager:
         self._install_wheels(wheels, path)
         return components
 
-    def _install_names(self) -> list[str]:
-        """The component identities the Context's bootstrap wants installed."""
+    def _install_names(self, identity: str | None = None) -> list[str]:
+        """The component names to install: the identity's, or the baseline.
+
+        With an identity, a bundle resolves to its members (the names
+        resolve through the shared index, first hit wins) and a component
+        resolves to itself. Without one, the Context's ``install`` list is
+        the baseline — the transition to ADR-21.
+        """
+        if identity is not None:
+            return self._identities(identity)
         if self._context is None:
             return []
         return list(self._context.install)
+
+    def _identities(self, identity: str) -> list[str]:
+        """The component names an identity composes (bundle → members)."""
+        index = self._index()
+        bundle = index.resolve_bundle(identity)
+        if bundle is not None:
+            return list(bundle[1])
+        if index.resolve(identity) is not None:
+            return [identity]
+        raise ValueError(f"Unknown identity: {identity}")
 
     def _install_artifact(self, artifact, path: Path, *, force: bool = False) -> bool:
         """Install a single resolved artifact's wheel (with dependencies).

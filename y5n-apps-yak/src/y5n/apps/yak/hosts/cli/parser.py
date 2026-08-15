@@ -48,7 +48,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "install",
-        help="Create the minimal Yakoon platform (no packs)",
+        help="Compose an environment from a component or bundle (releases)",
+    )
+    p.add_argument(
+        "identity", help="Component or bundle name (e.g. runtime, crm)"
     )
     p.add_argument(
         "--target", "-t", default=".", help="Target directory (default: current)"
