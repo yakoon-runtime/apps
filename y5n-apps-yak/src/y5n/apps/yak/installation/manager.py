@@ -264,10 +264,10 @@ class InstallationManager:
                             )
                         resolved[name] = component
 
+                changed: set[str] = set()
                 for name in desired:
                     component = resolved[name]
                     existing_record = merged.get(name)
-                    resolved_all.append(component)
                     drift = existing_record is not None and (
                         component.mode != existing_record.mode
                         or (
@@ -282,8 +282,15 @@ class InstallationManager:
                         merged[name] = self._ensure_component(
                             root, name, component, force=True
                         )
+                        changed.add(name)
                     else:
                         merged[name] = self._ensure_component(root, name, component)
+
+                # Only components that are new or changed are handed to pip:
+                # a no-op update reinstalls nothing.
+                resolved_all = [
+                    resolved[name] for name in desired if name in changed
+                ]
 
             obsolete = [n for n in merged if n not in desired]
             self._remove_orphans(root, set(desired))

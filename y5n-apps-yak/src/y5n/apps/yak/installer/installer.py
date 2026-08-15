@@ -36,9 +36,8 @@ class Installer:
         Artifact wheels and editable source projects are handed to pip
         together, so it can satisfy every ``Requires-Dist`` from within
         the set. pip stays responsible for Python dependencies — Yak adds
-        none.
+        none. Nothing to install (e.g. a no-op update) creates no venv.
         """
-        python = self._ensure_venv(root / ".venv")
         args: list[str] = []
         for candidate in candidates:
             if candidate.wheel is not None:
@@ -48,11 +47,13 @@ class Installer:
                     args.extend(["-e", str(project)])
         if not args:
             return
+        python = self._ensure_venv(root / ".venv")
         self._pip_install_all(python, args)
 
     def _ensure_venv(self, path: Path) -> Path:
-        python = ensure_venv(path)
-        upgrade_pip(python)
+        python, created = ensure_venv(path)
+        if created:
+            upgrade_pip(python)
         return python
 
     def _find_projects(self, pack_dir: Path) -> list[Path]:

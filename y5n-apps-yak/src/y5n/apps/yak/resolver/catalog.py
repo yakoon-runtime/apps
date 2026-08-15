@@ -13,6 +13,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -145,9 +146,13 @@ def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
     The contents API reads the git object directly and is fresh the
     moment a deploy commits; ``raw.githubusercontent``'s CDN can lag
     behind for minutes. The write side already uses the API, so the read
-    side follows the same truth.
+    side follows the same truth. Reads are cached briefly so a repeated
+    command does not re-fetch every source's catalog.
     """
     repo = github_repo(spec)
+    cached = _cached_remote_catalog(spec, repo, catalog_path)
+    if cached is not None:
+        return cached
     url = f"https://api.github.com/repos/{repo}/contents/{catalog_path}"
     headers = {"Accept": "application/vnd.github.raw+json"}
     token = os.environ.get("YAK_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
@@ -160,7 +165,47 @@ def _load_remote_catalog(spec: str, catalog_path: str) -> Catalog:
         raise CatalogError(f"cannot fetch {url}: {exc}") from exc
     if not isinstance(data, dict):
         raise CatalogError(f"{url} must be a mapping")
+    _store_remote_catalog(spec, repo, catalog_path, data)
     return _parse_catalog(spec, None, data)
+
+
+# How long a fetched remote catalog may be reused before re-fetching.
+CATALOG_TTL_SECONDS = 60.0
+
+
+def _catalog_cache_path(repo: str, catalog_path: str) -> Path:
+    return (
+        Path.home()
+        / ".yak"
+        / "cache"
+        / "catalogs"
+        / repo.replace("/", "_")
+        / catalog_path
+    )
+
+
+def _cached_remote_catalog(spec: str, repo: str, catalog_path: str) -> Catalog | None:
+    path = _catalog_cache_path(repo, catalog_path)
+    if not path.exists() or time.time() - path.stat().st_mtime > CATALOG_TTL_SECONDS:
+        return None
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return _parse_catalog(spec, None, data)
+
+
+def _store_remote_catalog(
+    spec: str, repo: str, catalog_path: str, data: dict
+) -> None:
+    try:
+        path = _catalog_cache_path(repo, catalog_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(data, default_flow_style=False, sort_keys=False))
+    except Exception:
+        pass
 
 
 def fetch_github_release(spec: str, name: str, release: str) -> Path | None:

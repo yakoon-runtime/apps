@@ -12,19 +12,24 @@ import sys
 from pathlib import Path
 
 
-def ensure_venv(path: Path) -> Path:
-    """Create a venv at ``path`` if missing; return its python binary."""
-    if not (path / "bin" / "python").exists():
+def ensure_venv(path: Path) -> tuple[Path, bool]:
+    """Create a venv at ``path`` if missing; return (python, created)."""
+    created = not (path / "bin" / "python").exists()
+    if created:
         subprocess.run(
             [sys.executable, "-m", "venv", str(path)],
             check=True,
             capture_output=True,
         )
-    return path / "bin" / "python"
+    return path / "bin" / "python", created
 
 
 def upgrade_pip(python: Path) -> None:
-    """Upgrade pip in the venv to the bundled interpreter's version."""
+    """Upgrade pip in the venv to the bundled interpreter's version.
+
+    Only run once, right after the venv is created — pip in a fresh venv
+    is the bundled version already.
+    """
     subprocess.run(
         [str(python), "-m", "pip", "install", "--upgrade", "pip"],
         check=True,
