@@ -23,3 +23,4 @@ deployment. Runtime-internal decisions live in the runtime repository.
 | 008 | Component Source Resolution | Accepted |
 | 019 | Declarative Deployment | Accepted |
 | 020 | Source Catalogs | Accepted |
+| 021 | The Install Contract | Accepted |
