@@ -93,6 +93,46 @@ class InstallationManager:
                 self._index_cache = Index()
         return self._index_cache
 
+    def _paths_index(self, paths) -> Index | None:
+        """The preferred local index built from the ``--path`` catalogs.
+
+        None when no ``--path`` was given. This index is preferred, not
+        exclusive: a component found here resolves as a source; one that
+        is absent still resolves through the Context index.
+        """
+        if not paths:
+            return None
+        context_root = self._context.path if self._context is not None else Path.cwd()
+        return build_index([str(p) for p in paths], context_root)
+
+    def _combined_index(self, paths=None) -> Index:
+        """The identity lookup index: ``--path`` catalogs, then Context.
+
+        A target (component or bundle) is looked up here — first hit wins,
+        so ``--path`` catalogs precede the Context sources. The per-
+        component resolution later decides source vs artifact.
+        """
+        if not paths:
+            return self._index()
+        context_root = self._context.path if self._context is not None else Path.cwd()
+        sources = [str(p) for p in paths] + list(self._context.sources or [])
+        return build_index(sources, context_root)
+
+    def _resolve_preferred(self, target: str, *, paths_index=None, mode: str = "artifact"):
+        """Resolve a component: ``--path`` source first, release otherwise.
+
+        A component in any ``--path`` catalog uses its ``location`` (a
+        local source); everything else resolves through the Context index
+        using its ``release``. There is no global mode — the decision is
+        per component.
+        """
+        if paths_index is not None:
+            hit = paths_index.resolve(target)
+            if hit is not None:
+                catalog, ref = hit
+                return self._component_from_ref(target, catalog, ref, mode="source")
+        return self._resolve_component(target, mode=mode)
+
     # ── Install ──
 
     def install(
@@ -100,6 +140,7 @@ class InstallationManager:
         path: Path,
         *,
         identity: str | None = None,
+        paths: list[str] | None = None,
         asker: StoreAsker | None = None,
         ui=None,
         workspace_path: str = "structure",
@@ -112,11 +153,15 @@ class InstallationManager:
         resolves to its members through the shared index; every member
         resolves like any other component.
 
+        ``paths`` are repeatable ``--path`` catalogs: a component found in
+        any of them resolves through its ``location`` (source); everything
+        else resolves through its ``release`` (artifact) — per component,
+        no global mode.
+
         On a fresh environment the identity is materialized from scratch;
         on an existing environment its components are added — the same
-        reconciliation as ``add``. ``mode`` decides how each component is
-        obtained (release for ``install``). ``workspace_path`` is the
-        workspace layout for a fresh environment.
+        reconciliation as ``add``. ``workspace_path`` is the workspace
+        layout for a fresh environment.
 
         Without ``identity`` the operation falls back to the Context's
         ``install`` baseline — the transition to ADR-21, removed with the
@@ -124,8 +169,9 @@ class InstallationManager:
         """
         root = path.resolve()
         if identity is not None and load_env(root) is not None:
-            for name in self._identities(identity):
-                self.add(str(name), root, asker=asker, ui=ui, mode=mode)
+            index = self._combined_index(paths)
+            for name in self._identities(identity, index=index):
+                self.add(str(name), root, asker=asker, ui=ui, mode=mode, paths=paths)
             return self.load(root)
 
         now = datetime.now(UTC)
@@ -133,7 +179,9 @@ class InstallationManager:
         structure_dir = root / workspace_path
         with self._step(ui, "Workspace"):
             root.mkdir(parents=True, exist_ok=True)
-            platform = self._materialize_install(root, identity=identity, mode=mode)
+            platform = self._materialize_install(
+                root, identity=identity, paths=paths, mode=mode
+            )
             mounts = self._component_mounts(root, platform)
             self._materializer.materialize(
                 structure_dir,
@@ -172,19 +220,27 @@ class InstallationManager:
         return inst
 
     def _materialize_install(
-        self, path: Path, *, identity: str | None = None, mode: str = "artifact"
+        self,
+        path: Path,
+        *,
+        identity: str | None = None,
+        paths: list[str] | None = None,
+        mode: str = "artifact",
     ) -> list[Component]:
         """Resolve the identities to install into staged components.
 
         The identity names the components to compose (a bundle's members,
-        or the single component). Each is resolved through the source
-        index, its wheel (if any) is installed, and its namespace staged —
-        exactly like any component added later.
+        or the single component). Each is resolved per component: source
+        from any ``--path`` catalog, release otherwise. Its wheel (if any)
+        is installed, and its namespace staged — exactly like any
+        component added later.
         """
+        index = self._combined_index(paths)
+        paths_index = self._paths_index(paths)
         components: list[Component] = []
         wheels: list[Path] = []
-        for name in self._install_names(identity):
-            comp = self._resolve_component(str(name), mode=mode)
+        for name in self._install_names(identity, index=index):
+            comp = self._resolve_preferred(str(name), paths_index=paths_index, mode=mode)
             if comp is None:
                 continue
             if comp.artifact is not None and comp.mode == "artifact":
@@ -195,7 +251,9 @@ class InstallationManager:
         self._install_wheels(wheels, path)
         return components
 
-    def _install_names(self, identity: str | None = None) -> list[str]:
+    def _install_names(
+        self, identity: str | None = None, *, index: Index | None = None
+    ) -> list[str]:
         """The component names to install: the identity's, or the baseline.
 
         With an identity, a bundle resolves to its members (the names
@@ -204,14 +262,16 @@ class InstallationManager:
         the baseline — the transition to ADR-21.
         """
         if identity is not None:
-            return self._identities(identity)
+            return self._identities(identity, index=index)
         if self._context is None:
             return []
         return list(self._context.install)
 
-    def _identities(self, identity: str) -> list[str]:
+    def _identities(
+        self, identity: str, *, index: Index | None = None
+    ) -> list[str]:
         """The component names an identity composes (bundle → members)."""
-        index = self._index()
+        index = index or self._index()
         bundle = index.resolve_bundle(identity)
         if bundle is not None:
             return list(bundle[1])
@@ -266,6 +326,7 @@ class InstallationManager:
         from_source: str | None = None,
         force: bool = False,
         mode: str = "artifact",
+        paths: list[str] | None = None,
     ) -> Installation | None:
         """Add a component (a pack or an artifact) to an installation.
 
@@ -273,16 +334,19 @@ class InstallationManager:
         materialize → discover requirements → reconcile deployment →
         persist. ``--from <source>`` builds an exclusive index from that
         single source (and its subgraph) — nothing else is consulted, and
-        a miss is an error, never a fallback. ``mode`` decides how the
-        component is obtained: ``artifact`` (released, via ``release``)
-        is the default, ``source`` (a local checkout, via ``location``)
-        is the development mode. Returns None when the component is
-        already part of the installation.
+        a miss is an error, never a fallback. ``paths`` are repeatable
+        ``--path`` catalogs: a component found in any of them resolves
+        through its ``location`` (source); everything else through its
+        ``release`` (artifact) — per component, no global mode. ``mode``
+        is the fallback for components absent from all ``--path``
+        catalogs. Returns None when the component is already part of the
+        installation.
         """
         exclusive_index = None
         if from_source is not None:
             context_root = self._context.path if self._context is not None else path
             exclusive_index = build_index([from_source], context_root)
+        paths_index = self._paths_index(paths)
 
         with self._step(ui, "Resolving"):
             env = load_env(path)
@@ -290,9 +354,14 @@ class InstallationManager:
                 raise RuntimeError(f"No installation found at {path}")
             existing = list(env.components)
 
-            component = self._resolve_component(
-                target, index=exclusive_index, mode=mode
-            )
+            if exclusive_index is not None:
+                component = self._resolve_component(
+                    target, index=exclusive_index, mode=mode
+                )
+            else:
+                component = self._resolve_preferred(
+                    target, paths_index=paths_index, mode=mode
+                )
             if component is None:
                 raise ValueError(f"Unknown component: {target}")
 

@@ -1,9 +1,10 @@
-"""yak install <component|bundle> [--target <dir>] — compose an environment.
+"""yak install <component|bundle> [--path <catalog>]... [--target <dir>].
 
 The first argument is always an identity: a component name or a bundle
 name. On a fresh environment the identity is materialized; on an
-existing environment its components are added. Every component resolves
-through its release.
+existing environment its components are added. ``--path`` catalogs are
+preferred local sources: a component found there resolves through its
+``location``, everything else through its ``release`` — per component.
 """
 
 from __future__ import annotations
@@ -17,12 +18,13 @@ def run(args, mgr) -> None:
     ui = TerminalUI(verbose=getattr(args, "verbose", False))
     root = Path(getattr(args, "target", ".")).resolve()
     identity = args.identity
+    paths = getattr(args, "path", None)
 
     _ensure_context(root)
 
     ui.title(f'Installing "{identity}"')
     try:
-        mgr.install(root, ui=ui, identity=identity)
+        mgr.install(root, ui=ui, identity=identity, paths=paths)
         ui.ok(f"Installed {identity}")
     except Exception as e:
         ui.fail(f"Installation failed: {e}")

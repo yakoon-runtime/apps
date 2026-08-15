@@ -54,6 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
         "identity", help="Component or bundle name (e.g. runtime, crm)"
     )
     p.add_argument(
+        "--path",
+        action="append",
+        default=None,
+        metavar="CATALOG",
+        help="Local catalog source (repeatable, preferred)",
+    )
+    p.add_argument(
         "--target", "-t", default=".", help="Target directory (default: current)"
     )
     p.add_argument("--verbose", "-v", action="store_true")
