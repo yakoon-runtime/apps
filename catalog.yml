@@ -11,3 +11,10 @@ components:
     location: y5n-apps-web
   y5n-apps-yak:
     location: y5n-apps-yak
+
+bundles:
+  shell:
+    - y5n-apps-shell
+
+  web:
+    - y5n-apps-web
