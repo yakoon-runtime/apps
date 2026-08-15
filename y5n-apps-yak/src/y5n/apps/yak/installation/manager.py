@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -241,6 +242,7 @@ class InstallationManager:
         merged = {c.name: c for c in (inst.components if inst else [])}
         original_names = set(merged)
         resolved_all: list[_Component] = []
+        backups: dict[str, Path] = {}
         try:
             with self._step(ui, "Reconciling"):
                 # Resolution is network-bound (release digests, downloads)
@@ -279,6 +281,14 @@ class InstallationManager:
                         )
                     )
                     if existing_record is None or drift:
+                        # Preserve the previously staged structure (AAA)
+                        # so a failed transaction can restore it — the
+                        # workspace must never show BBB while state and
+                        # venv are still AAA.
+                        if existing_record is not None:
+                            backup = self._backup_structure(root, name)
+                            if backup is not None:
+                                backups[name] = backup
                         merged[name] = self._ensure_component(
                             root, name, component, force=True
                         )
@@ -316,14 +326,27 @@ class InstallationManager:
             with self._step(ui, "Installing"):
                 self._installer.install(root, self._python_candidates(resolved_all))
         except Exception:
-            # The run failed before the state was committed: roll back
-            # components that were staged by this run so no residue claims
-            # them, then re-raise. Previously installed components stay —
-            # state still describes them truthfully.
+            # The run failed before the state was committed. Restore the
+            # preserved structures of drifted components (the workspace
+            # must look like AAA again — state still says AAA), then
+            # clean up freshly staged components so no residue claims
+            # them. Previously installed components that did not drift
+            # stay untouched. State is never rewritten on failure.
+            for name, backup in backups.items():
+                self._restore_backup(root, name, backup)
             for name in desired:
                 if name not in original_names:
                     self._cleanup_component(root, merged.get(name, Component(name=name)))
             raise
+
+        # Preserved structures are no longer needed once the transaction
+        # succeeded.
+        for backup in backups.values():
+            if backup.exists() or backup.is_symlink():
+                if backup.is_symlink() or backup.is_file():
+                    backup.unlink()
+                else:
+                    shutil.rmtree(backup)
 
         # Removals only after the install transaction succeeded: a failed
         # run must never uninstall ahead of a broken state.
@@ -828,6 +851,36 @@ class InstallationManager:
         else:
             target.symlink_to(source_dir.absolute(), target_is_directory=True)
         return target
+
+    def _backup_structure(self, path: Path, name: str) -> Path | None:
+        """Move a staged structure aside so a failed run can restore it.
+
+        Returns the backup path, or None when nothing was staged. The
+        move is an atomic rename and keeps the previous mode (symlink for
+        source, directory for artifact).
+        """
+        staged = self._component_structure(path, name)
+        if not (staged.exists() or staged.is_symlink()):
+            return None
+        backup = staged.with_name(staged.name + ".bak")
+        if backup.exists() or backup.is_symlink():
+            if backup.is_symlink() or backup.is_file():
+                backup.unlink()
+            else:
+                shutil.rmtree(backup)
+        os.replace(staged, backup)
+        return backup
+
+    def _restore_backup(self, path: Path, name: str, backup: Path) -> None:
+        """Put a preserved structure back in place after a failed run."""
+        staged = self._component_structure(path, name)
+        if staged.exists() or staged.is_symlink():
+            if staged.is_symlink() or staged.is_file():
+                staged.unlink()
+            else:
+                shutil.rmtree(staged)
+        if backup.exists() or backup.is_symlink():
+            os.replace(backup, staged)
 
     def _component_mounts(self, path: Path, components: list[Component]) -> list:
         """The mounts a set of components materializes in the workspace."""
