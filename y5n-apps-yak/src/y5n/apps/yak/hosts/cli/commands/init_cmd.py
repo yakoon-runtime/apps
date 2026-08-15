@@ -1,9 +1,9 @@
 """yak init — create a Yak context in the current directory.
 
-``init`` is deliberately dumb: it copies the packaged ``bootstrap.toml``
+``init`` is deliberately dumb: it copies the packaged ``sources.toml``
 (where the world starts) into ``.yak/context.toml`` and stamps the local
 identity. Everything else reads that file. Yak knows mechanisms, not
-deployments — the bootstrap is data.
+deployments — the sources are data.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ def _init(root: Path) -> None:
     now = datetime.now(UTC).isoformat()
     (yak_dir / "logs").mkdir(exist_ok=True)
 
-    # The bootstrap configuration ships with the tool — data, not code.
-    packaged = Path(__file__).resolve().parents[3] / "bootstrap.toml"
+    # The sources configuration ships with the tool — data, not code.
+    packaged = Path(__file__).resolve().parents[3] / "sources.toml"
     default = packaged.read_text() if packaged.exists() else ""
 
     # Detect known subdirectories for build-time roots (transition).

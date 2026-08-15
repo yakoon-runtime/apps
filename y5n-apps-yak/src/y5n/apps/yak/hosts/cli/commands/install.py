@@ -31,7 +31,7 @@ def run(args, mgr) -> None:
 
 
 def _ensure_context(root: Path) -> None:
-    """Create the context (bootstrap → .yak/context.toml) if it is missing.
+    """Create the context (sources → .yak/context.toml) if it is missing.
 
     The context carries the sources; without it no later command (add,
     update, shell) can resolve anything. Creating it is a no-op when the

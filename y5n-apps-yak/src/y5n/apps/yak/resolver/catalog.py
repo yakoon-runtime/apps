@@ -1,8 +1,8 @@
 """Declared source catalogs — what a source offers (ADR-20).
 
 A source provides a catalog. A catalog answers one question: which
-component identities exist here and where is each located. ``bootstrap``
-knows catalog locations; the catalog knows component locations; the
+component identities exist here and where is each located. The source
+list knows catalog locations; the catalog knows component locations; the
 resolver knows component identities. Nothing else.
 """
 
@@ -88,8 +88,8 @@ def _split_spec(spec: str) -> tuple[str, str, str]:
     - a local path
 
     The spec is always an explicit location — no aliases, no product
-    knowledge. A bootstrap pointer is configuration data (the packaged
-    default context), never code.
+    knowledge. The shipped source list is configuration data (the
+    packaged default context), never code.
     """
     if spec.startswith("github:"):
         rest = spec.removeprefix("github:")
@@ -367,7 +367,7 @@ def build_index(source_specs: list[str], context_root: Path) -> Index:
 
     Declaration order: a component or bundle is taken from the first
     catalog that offers it; later catalogs do not override it. The source
-    list is flat — the bootstrap knows catalog locations, nothing nests.
+    list is flat — it knows catalog locations, nothing nests.
     """
     components: dict[str, tuple[Catalog, ComponentRef]] = {}
     bundles: dict[str, tuple[Catalog, tuple[str, ...]]] = {}
