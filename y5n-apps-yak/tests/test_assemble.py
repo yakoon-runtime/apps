@@ -143,7 +143,7 @@ def test_assemble_reuses_existing_bindings_and_asks_only_new_stores():
             "crm": StoreBinding(
                 store="crm",
                 factory="y5n.runtime.store.event.wire:EventStoreFactory",
-                config={"backend": "postgres", "dsn": "postgresql://.../yakoon_crm"},
+                config={"backend": "postgres", "dsn": "postgresql://.../yakoon_contacts"},
             )
         }
     )
@@ -155,7 +155,7 @@ def test_assemble_reuses_existing_bindings_and_asks_only_new_stores():
     # Existing binding survived untouched — the asker never saw it.
     crm = installation.binding_for("crm")
     assert crm is not None
-    assert crm.config == {"backend": "postgres", "dsn": "postgresql://.../yakoon_crm"}
+    assert crm.config == {"backend": "postgres", "dsn": "postgresql://.../yakoon_contacts"}
     assert "crm" not in asker._backends
 
     # Newly declared store was asked.

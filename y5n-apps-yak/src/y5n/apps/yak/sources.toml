@@ -1,7 +1,7 @@
 sources = [
     "github:yakoon-runtime/caps-system",
     "github:yakoon-runtime/caps-ident",
-    "github:yakoon-runtime/pack-crm",
+    "github:yakoon-runtime/caps-contacts",
     "github:yakoon-runtime/pack-luma",
     "github:yakoon-runtime/caps-labs",
     "github:yakoon-runtime/runtime",

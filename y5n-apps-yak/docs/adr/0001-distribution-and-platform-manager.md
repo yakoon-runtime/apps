@@ -14,7 +14,7 @@ installation.  A closer look revealed four distinct categories:
 |---|---|---|
 | `install.sh` | Workspace setup / development env | **Distribution** |
 | `build-workspace.py` | Workspace builder | `workspace/tools/` or `runtime/y5n-runtime-boot` |
-| `setup-db.sh` / `setup-db/crm.sh` | CRM database installation | `y5n-packs-crm` |
+| `setup-db.sh` / `setup-db/contacts.sh` | CRM database installation | `y5n-caps-contacts` |
 | `test-remote.py` | Runtime demo / lab | `y5n-caps-labs` or `runtime/examples` |
 
 Each script belongs with the component whose lifecycle it supports.  The only

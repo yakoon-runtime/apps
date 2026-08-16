@@ -229,7 +229,7 @@ def _published_artifact(home: Path) -> Path:
         "kind: package\n"
         "builder: python\n"
         "host: python\n"
-        "mount: /opt/crm\n"
+        "mount: /opt/contacts\n"
         "fingerprint: sha256:abc123\n"
     )
     return store

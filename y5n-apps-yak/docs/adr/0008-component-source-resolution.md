@@ -98,7 +98,7 @@ crm = { git = "git@github.com:acme/crm.git", ref = "dev" }
 ```
 
 TOML allows both forms side by side. Keys accept the short name (`crm`) and
-the fully-qualified name (`y5n-packs-crm`).
+the fully-qualified name (`y5n-caps-contacts`).
 
 ### 2. `[repositories]` stays a separate section — a real cardinality boundary
 
