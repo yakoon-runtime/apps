@@ -30,9 +30,9 @@ def test_discovers_highest_published_version_with_valid_asset():
         # An asset not named after the component does not count.
         _release("y5n-runtime-api-v0.4.0", ["other.artifact.tar.gz"]),
         # Another component in the same repository resolves independently.
-        _release("y5n-packs-root-v0.1.0", ["y5n-packs-root.artifact.tar.gz"]),
+        _release("y5n-caps-root-v0.1.0", ["y5n-caps-root.artifact.tar.gz"]),
     ]
     index = _index_repo_releases(releases)
 
     assert index["y5n-runtime-api"] == ("y5n-runtime-api-v0.10.0", "sha256:x")
-    assert index["y5n-packs-root"] == ("y5n-packs-root-v0.1.0", "sha256:x")
+    assert index["y5n-caps-root"] == ("y5n-caps-root-v0.1.0", "sha256:x")

@@ -101,8 +101,8 @@ derive the name from a folder:
 ```yaml
 # runtime/catalog.yml
 components:
-  y5n-packs-root:
-    location: packs/y5n-packs-root
+  y5n-caps-root:
+    location: caps/y5n-caps-root
   y5n-runtime-boot:
     location: runtime/y5n-runtime-boot
   y5n-runtime-api:

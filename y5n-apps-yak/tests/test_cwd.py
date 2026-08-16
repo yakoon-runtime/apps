@@ -65,7 +65,7 @@ def test_init_copies_packaged_default_context(monkeypatch):
         assert "github:yakoon-runtime/sdk" in ctx
         assert "github:yakoon-runtime/apps" in ctx
         assert "install" not in ctx
-        assert "y5n-packs-root" not in ctx
+        assert "y5n-caps-root" not in ctx
         assert "yakoon:official" not in ctx
         assert 'name = "proj"' in ctx
 

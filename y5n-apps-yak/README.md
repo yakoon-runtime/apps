@@ -26,7 +26,7 @@ components:
 
 bundles:
   runtime:
-    - y5n-packs-root
+    - y5n-caps-root
     - y5n-runtime-api
     - y5n-sdk-python
 ```
