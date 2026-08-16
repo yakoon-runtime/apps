@@ -3,7 +3,7 @@ sources = [
     "github:yakoon-runtime/caps-ident",
     "github:yakoon-runtime/pack-crm",
     "github:yakoon-runtime/pack-luma",
-    "github:yakoon-runtime/pack-labs",
+    "github:yakoon-runtime/caps-labs",
     "github:yakoon-runtime/runtime",
     "github:yakoon-runtime/sdk",
     "github:yakoon-runtime/apps",

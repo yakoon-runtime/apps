@@ -15,7 +15,7 @@ installation.  A closer look revealed four distinct categories:
 | `install.sh` | Workspace setup / development env | **Distribution** |
 | `build-workspace.py` | Workspace builder | `workspace/tools/` or `runtime/y5n-runtime-boot` |
 | `setup-db.sh` / `setup-db/crm.sh` | CRM database installation | `y5n-packs-crm` |
-| `test-remote.py` | Runtime demo / lab | `y5n-packs-labs` or `runtime/examples` |
+| `test-remote.py` | Runtime demo / lab | `y5n-caps-labs` or `runtime/examples` |
 
 Each script belongs with the component whose lifecycle it supports.  The only
 script that legitimately spans the whole repository is `install.sh` — but even
