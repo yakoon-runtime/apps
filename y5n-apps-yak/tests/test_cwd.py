@@ -60,7 +60,7 @@ def test_init_copies_packaged_default_context(monkeypatch):
         root = Path(tmp) / "proj"
         init_cmd._init(root)
         ctx = (root / ".yak" / "context.toml").read_text()
-        assert "github:yakoon-runtime/pack-system" in ctx
+        assert "github:yakoon-runtime/caps-system" in ctx
         assert "github:yakoon-runtime/runtime" in ctx
         assert "github:yakoon-runtime/sdk" in ctx
         assert "github:yakoon-runtime/apps" in ctx
@@ -78,7 +78,7 @@ def test_install_ensures_context_when_missing():
         _ensure_context(root)
         ctx = root / ".yak" / "context.toml"
         assert ctx.exists()
-        assert "github:yakoon-runtime/pack-system" in ctx.read_text()
+        assert "github:yakoon-runtime/caps-system" in ctx.read_text()
         # A second call is a no-op.
         _ensure_context(root)
         assert ctx.exists()

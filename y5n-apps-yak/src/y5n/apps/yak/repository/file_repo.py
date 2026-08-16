@@ -17,7 +17,7 @@ class FileRepository:
 
         Folder equals name: a component lives in ``<root>/<name>`` and is
         recognized by its pyproject.toml. The resolver knows no families
-        and no prefixes — ``y5n-packs-system`` and ``my-super-pack``
+        and no prefixes — ``y5n-caps-system`` and ``my-super-pack``
         resolve the same way.
         """
         return self._resolve_pack(name)

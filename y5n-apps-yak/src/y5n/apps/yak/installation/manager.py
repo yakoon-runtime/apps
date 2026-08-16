@@ -169,7 +169,7 @@ class InstallationManager:
         ``paths`` are repeatable ``--path`` catalogs that belong to this
         install decision and are stored per identity. On an existing
         environment the identity's entry is replaced — ``install system``
-        after ``install system --path ./pack-system`` drops the override
+        after ``install system --path ./caps-system`` drops the override
         and converges back to artifacts.
         """
         root = path.resolve()

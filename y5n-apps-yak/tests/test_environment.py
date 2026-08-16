@@ -55,7 +55,7 @@ class TestEnvironmentIO:
             root = Path(tmp)
             env_path = root / ".yak" / "environment.yml"
             env_path.parent.mkdir(parents=True)
-            env_path.write_text("components:\n- y5n-packs-system\n")
+            env_path.write_text("components:\n- y5n-caps-system\n")
             # The old schema stored a resolved component list; it cannot
             # express the user's intent and is treated as absent (clean break).
             assert load(root) is None
