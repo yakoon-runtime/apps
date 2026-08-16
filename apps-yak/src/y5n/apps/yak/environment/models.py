@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 from y5n.apps.yak.cap.models import Mount
 
@@ -23,3 +24,12 @@ class Environment:
     workspace_path: str = "structure"
     created: datetime | None = None
     updated: datetime | None = None
+
+    def workspace_dir(self, context_root: Path) -> Path:
+        """The materialization target, relative to the Yak state root.
+
+        ``workspace_path`` names the workspace inside ``<context_root>/.yak/``
+        — the default ``structure`` resolves to ``<context_root>/.yak/structure``.
+        Mounts are interpreted relative to this directory; ``/`` is its root.
+        """
+        return context_root / ".yak" / self.workspace_path

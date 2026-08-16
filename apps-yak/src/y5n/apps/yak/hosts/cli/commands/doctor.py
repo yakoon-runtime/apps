@@ -40,7 +40,7 @@ def run(args, mgr) -> None:
             else:
                 issues.append(f"✘ Mount:        {m.target} ← {m.source} (not found)")
 
-        structure_dir = ctx / env.workspace_path
+        structure_dir = env.workspace_dir(ctx)
         if structure_dir.is_dir():
             issues.append(f"✓ Workspace:    {structure_dir}")
         else:

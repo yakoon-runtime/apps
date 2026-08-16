@@ -21,7 +21,7 @@ def run(args, mgr) -> None:
         return
 
     print(f"  Environment: {env.name}")
-    print(f"  Workspace:   {ctx / env.workspace_path}")
+    print(f"  Workspace:   {env.workspace_dir(ctx)}")
     print(f"  Mounts:      {len(env.mounts)}")
     for m in env.mounts:
         print(f"    {m.target} ← {m.source}")

@@ -69,3 +69,26 @@ class TestEnvironmentIO:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             assert env_path(root) == root / ".yak" / "environment.yml"
+
+
+class TestWorkspaceDir:
+    def test_default_resolves_under_yak(self):
+        """The workspace lives in the Yak state root, never in the context root."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = Environment(name="dev")
+            assert env.workspace_dir(root) == root / ".yak" / "structure"
+
+    def test_custom_workspace_path_is_relative_to_yak(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = Environment(name="dev", workspace_path="tree")
+            assert env.workspace_dir(root) == root / ".yak" / "tree"
+
+    def test_workspace_path_never_leaks_out_of_yak(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = Environment(name="dev")
+            ws = env.workspace_dir(root)
+            assert ws == root / ".yak" / "structure"
+            assert root / "structure" != ws

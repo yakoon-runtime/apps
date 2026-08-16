@@ -23,7 +23,11 @@ _host = None
 
 
 def _resolve_workspace() -> str:
-    """Read workspace path from .yak/environment.yml, walking up from CWD."""
+    """Read workspace path from .yak/environment.yml, walking up from CWD.
+
+    ``workspace.path`` is relative to the Yak state root — the default
+    ``structure`` resolves to ``<context>/.yak/structure``.
+    """
     import yaml
 
     cwd = Path.cwd()
@@ -37,7 +41,7 @@ def _resolve_workspace() -> str:
                 path = (
                     ws.get("path", "structure") if isinstance(ws, dict) else "structure"
                 )
-                return str(parent / path)
+                return str(parent / ".yak" / path)
             except Exception:
                 pass
 
@@ -65,7 +69,7 @@ def main(args: list[str] | None = None) -> None:
             known=cfg.known,
             workspace_path=workspace_path,
             installation_path=str(
-                Path(workspace_path).parent / ".yak" / "deployment.yml"
+                Path(workspace_path).parent / "deployment.yml"
             ),
         )
     )

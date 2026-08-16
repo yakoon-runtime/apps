@@ -223,7 +223,9 @@ class InstallationManager:
             raise RuntimeError(f"Cannot update running installation: {inst.name}")
 
         env_name = env.name if env else (root.name or "yakoon")
-        structure_dir = root / (env.workspace_path if env else workspace_path)
+        structure_dir = (
+            env.workspace_dir(root) if env else root / ".yak" / workspace_path
+        )
 
         # The environment-wide preferred source index: the union of all
         # active --path overrides. Ownership is per identity (an override

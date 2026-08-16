@@ -40,7 +40,7 @@ def run_add(args, mgr) -> None:
     save(env, ctx)
 
     materializer = Materializer()
-    structure_dir = ctx / env.workspace_path
+    structure_dir = env.workspace_dir(ctx)
     materializer.materialize(
         structure_dir,
         mounts=list(env.mounts),
@@ -71,7 +71,7 @@ def run_remove(args, mgr) -> None:
     save(env, ctx)
 
     materializer = Materializer()
-    structure_dir = ctx / env.workspace_path
+    structure_dir = env.workspace_dir(ctx)
     materializer.materialize(
         structure_dir,
         mounts=list(env.mounts),
