@@ -228,7 +228,7 @@ Built in two isolated steps on a fresh branch — the read side first:
    against component identity; the index walks the graph depth-first with
    cycle detection and merges into `{name: {source, version, location,
    fingerprint}}`; resolution is an exact index lookup. Proof: `add
-   cool-shell`, `add y5n-packs-ident` and a local checkout all resolve
+   cool-shell`, `add y5n-caps-ident` and a local checkout all resolve
    through the same index; source order decides; removing a local source
    returns to the released artifact.
 2. **Write side:** a writable repository updates its resource and its

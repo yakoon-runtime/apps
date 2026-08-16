@@ -1,6 +1,6 @@
 sources = [
     "github:yakoon-runtime/caps-system",
-    "github:yakoon-runtime/pack-ident",
+    "github:yakoon-runtime/caps-ident",
     "github:yakoon-runtime/pack-crm",
     "github:yakoon-runtime/pack-luma",
     "github:yakoon-runtime/pack-labs",
