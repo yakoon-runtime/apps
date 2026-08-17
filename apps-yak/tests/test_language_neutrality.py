@@ -82,7 +82,7 @@ def test_non_python_component_materializes_structure(monkeypatch):
         assert (staged / "hello" / ".yak" / "yak.yml").exists()
 
         ws = inst.root / ".yak" / "structure" / "opt" / "acme"
-        assert ws.is_symlink()
+        assert ws.is_dir() and not ws.is_symlink()
         assert (ws / "hello").exists()
 
         record = next(
