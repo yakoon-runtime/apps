@@ -106,15 +106,25 @@ a materializer special rule.
 
 ## Implementation Notes
 
+Resolved during implementation:
+
+- The manifest (``workspace.toml``, version 2) records the managed set:
+  per mount, the materialized files with content hashes. Yak reconciles
+  new/changed/removed managed entries and leaves unmanaged content
+  untouched.
+- Overlay order is deterministic: the base mount (``target == "/"``)
+  first, then the remaining mounts in declared order.
+- Migration: pre-ADR-22 workspaces, where components were symlinked into
+  the tree, are recognized (link targets inside the component store) and
+  replaced by real content on first update.
+
 Open, implementation-level questions (not architecture):
 
-- Manifest form: extend `workspace.toml`, keep a separate manifest, or
-  use the existing state?
-- How the managed set is recognized vs. foreign content (manifest list,
-  fingerprint, …).
-- Overlay conflict resolution between caps (deterministic order).
-- Migration path from an existing symlink workspace to a materialized
-  one.
+- Payload materialization for non-Python artifacts (e.g. dotnet): an
+  artifact carries its ``structure`` (staged copy in ``.yak/components``)
+  plus a binary ``payload``. Structure materializes like any other
+  mount; where the payload lands (e.g. ``/boot/dotnet/runtime``) is a
+  separate question, orthogonal to structure materialization.
 
 ## Consequences
 
