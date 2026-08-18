@@ -1,8 +1,8 @@
 """Deploy helper — a writable repository receives a resource (ADR-20).
 
 The read side resolves through catalogs and an index; this module only
-serves the write side: publishing a local artifact and deploying it as
-one atomic repository operation (resource + catalog).
+serves the write side: publishing a local artifact to the system-wide
+store and deploying it as a release of its owning repository.
 """
 
 from __future__ import annotations
@@ -47,9 +47,9 @@ def deploy_artifact(name: str, target: str) -> bool | None:
 
     Reads only from the system-wide store (``~/.yak/artifacts/``) — an
     artifact must be published first (``yak publish``). The repository
-    receives the artifact and updates its catalog, so the resource is
-    immediately resolvable (ADR-20). Returns None when the artifact is
-    not published, otherwise the deploy result.
+    receives the artifact as a release, so the version is immediately
+    resolvable (ADR-20). Returns None when the artifact is not published,
+    otherwise the deploy result.
     """
     from y5n.apps.yak.resolver.github import GithubReleaseRepository
 

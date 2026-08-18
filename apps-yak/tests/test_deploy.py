@@ -15,6 +15,7 @@ import base64
 import hashlib
 import json
 import tempfile
+import types
 from pathlib import Path
 from urllib.error import HTTPError
 
@@ -291,47 +292,6 @@ def test_deploy_artifact_requires_published(monkeypatch):
         assert result is None
 
 
-def test_deploy_spec_with_catalog_path_writes_that_catalog(monkeypatch):
-    """A source spec carrying a catalog path deploys into that catalog."""
-    fake = _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        repo = GithubReleaseRepository("github:acme/packs:packs/catalog.yml")
-        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
-        assert fake.catalog_path == "packs/catalog.yml"
-        assert set(_catalog_entries(fake)) == {"ident"}
-        assert _catalog_entries(fake)["ident"] == {
-            "location": "ident",
-        }
-
-
-def test_distribution_comes_from_the_context(monkeypatch):
-    """Without --to, deploy targets the context's distribution repository."""
-    from y5n.apps.yak.hosts.cli.cwd import Context
-    from y5n.apps.yak.installation.manager import InstallationManager
-    from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
-    from y5n.apps.yak.repository.file_repo import FileRepository
-
-    _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        repo = root / "repo"
-        make_source(
-            repo,
-            {"cool-shell": {"location": "cool-shell"}},
-        )
-        ctx = Context(
-            path=root,
-            sources=[str(repo)],
-            distribution="github:acme/dists",
-        )
-        mgr = InstallationManager(
-            FileRepository(), DirectoryArtifactStore(), context=ctx
-        )
-        assert mgr._distribution_spec() == "github:acme/dists"
-        assert InstallationManager(FileRepository(), DirectoryArtifactStore())._distribution_spec() is None
-
-
 def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Path:
     store = home / ".yak" / "artifacts" / f"{name}-{version}.python.artifact"
     (store / "structure").mkdir(parents=True, exist_ok=True)
@@ -348,61 +308,35 @@ def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Pa
     return store
 
 
-def _catalog_entries(fake) -> dict:
-    if fake.catalog_content is None:
-        return {}
-    import yaml
-
-    return (yaml.safe_load(fake.catalog_content) or {}).get("components", {})
+def _args(**kw) -> types.SimpleNamespace:
+    return types.SimpleNamespace(**kw)
 
 
-def test_j_deploy_preserves_existing_catalog_entries(monkeypatch):
-    fake = _mock_github(monkeypatch)
+def test_deploy_requires_to_for_a_local_component(monkeypatch):
+    """A local-source component distributes locally — --to is required."""
+    from y5n.apps.yak.hosts.cli.commands import deploy as deploy_cmd
+    from y5n.apps.yak.hosts.cli.cwd import Context
+    from y5n.apps.yak.installation.manager import InstallationManager
+    from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
+    from y5n.apps.yak.repository.file_repo import FileRepository
+
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        deploy_cmd,
+        "deploy_artifact",
+        lambda name, target: calls.append((name, target)) or True,
+    )
     with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("system", _published(home, "system", "1.0.0")) is True
-        assert set(_catalog_entries(fake)) == {"system"}
-        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
-        assert set(_catalog_entries(fake)) == {"system", "ident"}
+        root = Path(tmp)
+        repo = root / "repo"
+        make_source(repo, {"cool-shell": "cool-shell"})
+        ctx = Context(path=root, sources=[str(repo)])
+        mgr = InstallationManager(
+            FileRepository(), DirectoryArtifactStore(), context=ctx
+        )
 
+        deploy_cmd.run(_args(name="cool-shell", to=None), mgr)
+        assert calls == []  # local default is refused, not guessed
 
-def test_k_redeploy_is_idempotent(monkeypatch):
-    fake = _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
-        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
-        entries = _catalog_entries(fake)
-        assert list(entries) == ["ident"]
-        # The catalog stays a dumb Name → Location map — no version truth.
-        assert entries["ident"] == {"location": "ident"}
-
-
-def test_l_new_version_updates_the_single_entry(monkeypatch):
-    fake = _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is True
-        assert repo.deploy("ident", _published(home, "ident", "2.0.0")) is True
-        entries = _catalog_entries(fake)
-        assert list(entries) == ["ident"]
-        # A new version never touches the catalog — the version lives in
-        # the repository, not in the catalog.
-        assert entries["ident"] == {"location": "ident"}
-
-
-def test_m_failed_catalog_update_keeps_old_catalog_valid(monkeypatch):
-    fake = _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("system", _published(home, "system", "1.0.0")) is True
-        assert "system" in _catalog_entries(fake)
-
-        fake.fail_catalog = True
-        assert repo.deploy("ident", _published(home, "ident", "1.0.0")) is False
-        # The old catalog stays valid — it never points at the new artifact.
-        assert set(_catalog_entries(fake)) == {"system"}
+        deploy_cmd.run(_args(name="cool-shell", to="github:acme/shell-repo"), mgr)
+        assert calls == [("cool-shell", "github:acme/shell-repo")]

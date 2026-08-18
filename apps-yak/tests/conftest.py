@@ -52,16 +52,28 @@ def make_source(
     components: dict | None = None,
     bundles: dict | None = None,
 ) -> Path:
-    """Create a source directory with a declared catalog.yml."""
+    """Create a source directory with a declared catalog.yml (ADR-23 Step 3).
+
+    The catalog lists ``location`` entries only — it never declares an
+    identity. Each location must be a component root, so a
+    ``.yak/component.yml`` declaring the component's own name is created
+    at every listed location (never overwritten).
+    """
     path.mkdir(parents=True, exist_ok=True)
     components = components or {}
     lines = ["components:"]
     if components:
         for name, entry in components.items():
-            lines.append(f"  {name}:")
-            lines.append(f"    location: {entry['location']!r}")
+            location = entry if isinstance(entry, str) else entry["location"]
+            lines.append(f"  - location: {location!r}")
+            root = path / location
+            root.mkdir(parents=True, exist_ok=True)
+            manifest = root / ".yak" / "component.yml"
+            if not manifest.exists():
+                manifest.parent.mkdir(parents=True, exist_ok=True)
+                manifest.write_text(f"name: {name}\nversion: 0.1.0\n")
     else:
-        lines.append("  {}")
+        lines.append("  []")
     if bundles:
         lines.append("bundles:")
         for name, members in bundles.items():

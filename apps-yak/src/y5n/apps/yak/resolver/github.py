@@ -1,8 +1,14 @@
-"""GitHub Release repository — receive deployed resources (ADR-20)."""
+"""GitHub Release repository — receive deployed resources (ADR-20).
+
+The read side resolves through catalogs and the release index; this
+module serves the write side: publishing an artifact as one release and
+uploading its deterministic asset. The component is already discoverable
+through its own source catalog (ADR-23 Step 3) — deploy only adds the
+published version, it never rewrites a catalog.
+"""
 
 from __future__ import annotations
 
-import base64
 import gzip
 import hashlib
 import io
@@ -14,7 +20,6 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-import yaml
 from y5n.apps.yak.resolver.catalog import _split_spec
 
 
@@ -58,24 +63,21 @@ def _asset_digest(release: dict, asset_name: str) -> str | None:
 
 
 class GithubReleaseRepository:
-    """A GitHub source: serves a catalog and receives deployed resources.
+    """A GitHub repository: serves a catalog and receives deployed releases.
 
     Resolution lives in the catalog/index (ADR-20); this adapter is
-    transport: it fetches the declared catalog and serves resources, and
-    on the write side it publishes an artifact plus its catalog entry.
-
-    The catalog stays minimal — ``ComponentName → relative Location``.
-    ``deploy`` only ensures the entry exists (``name → name``); it never
-    writes version, fingerprint or release paths into the catalog.
+    transport. On the write side it publishes an artifact as a release
+    with its deterministic asset. The component is already discoverable
+    through its own source catalog (ADR-23 Step 3) — no catalog is
+    rewritten during deploy.
     """
 
     def __init__(self, spec: str) -> None:
-        _, location, catalog_path = _split_spec(spec)
+        _, location, _catalog_path = _split_spec(spec)
         self._repo = location.removeprefix("github:")
-        self._catalog_path = catalog_path
 
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
-        """Publish a resource and its catalog entry (ADR-20).
+        """Publish a resource (ADR-20).
 
         One repository operation with three outcomes:
 
@@ -86,11 +88,8 @@ class GithubReleaseRepository:
         - REPLACE: the release exists but the asset differs — only the
           asset is replaced, the release itself is never deleted.
 
-        The catalog entry is ensured as the last step and is minimal —
-        ``name → name``. Failing the asset step leaves the old release
-        valid; failing the catalog update leaves the artifact unreferenced
-        but the old catalog valid. Requires YAK_GITHUB_TOKEN — the only
-        credential yak ever reads, and only on the write path.
+        Requires YAK_GITHUB_TOKEN — the only credential yak ever reads,
+        and only on the write path.
         """
         token = os.environ.get("YAK_GITHUB_TOKEN")
         if not token:
@@ -127,15 +126,6 @@ class GithubReleaseRepository:
                     return False
                 if not self._upload_asset(release, name, tarpath, headers, tag):
                     return False
-
-            # Catalog entry is the last step: the resource becomes
-            # resolvable only once the catalog knows it. The entry is
-            # minimal — the component's relative location. The published
-            # version is discovered from the distribution repository, so
-            # the catalog never learns about versions or releases.
-            if not self._upsert_catalog(name, headers):
-                print(f"  Deploy failed: catalog not updated for {name}")
-                return False
             return True
 
     def _create_release(
@@ -216,69 +206,6 @@ class GithubReleaseRepository:
         print(f"  GitHub API error: {exc}")
         if body:
             print(f"  {body}")
-
-    def _upsert_catalog(self, name: str, headers: dict) -> bool:
-        """Ensure the component's entry in the repository's catalog.yml.
-
-        Reads the current catalog from the default branch, adds or
-        replaces ``name → {location}`` and commits it back. Existing
-        entries are preserved. The catalog is a dumb Name → Location
-        map — no versions, no fingerprints, no releases.
-        """
-        url = f"https://api.github.com/repos/{self._repo}/contents/{self._catalog_path}"
-        existing_file = None
-        try:
-            with urlopen(Request(url, headers=headers)) as resp:
-                existing_file = json.loads(resp.read().decode())
-        except HTTPError as exc:
-            if exc.code != 404:
-                print(f"  GitHub API error: {exc}")
-                return False
-        except Exception as exc:
-            print(f"  GitHub API error: {exc}")
-            return False
-
-        if existing_file is not None:
-            try:
-                content = base64.b64decode(existing_file["content"]).decode()
-                catalog = yaml.safe_load(content) or {}
-            except Exception as exc:
-                print(f"  catalog.yml unreadable: {exc}")
-                return False
-            if not isinstance(catalog, dict):
-                catalog = {}
-        else:
-            catalog = {}
-
-        components = catalog.setdefault("components", {})
-        entry = {"location": name}
-        existing_entry = components.get(name)
-        if isinstance(existing_entry, dict) and "location" in existing_entry:
-            entry["location"] = existing_entry["location"]
-        components[name] = entry
-        new_content = yaml.safe_dump(catalog, default_flow_style=False, sort_keys=False)
-        put_data = {
-            "message": f"catalog: upsert {name}",
-            "content": base64.b64encode(new_content.encode()).decode(),
-        }
-        if existing_file is not None and "sha" in existing_file:
-            put_data["sha"] = existing_file["sha"]
-        req = Request(
-            url,
-            data=json.dumps(put_data).encode(),
-            headers=headers,
-            method="PUT",
-        )
-        try:
-            with urlopen(req) as resp:
-                print(f"  Catalog updated: {name}")
-                return True
-        except HTTPError as exc:
-            print(f"  GitHub API error: {exc}")
-            return False
-        except Exception as exc:
-            print(f"  GitHub API error: {exc}")
-            return False
 
     def _release_by_tag(self, tag: str, headers: dict) -> dict | None:
         """Return the release for a tag, or None when it does not exist."""

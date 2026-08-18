@@ -34,7 +34,6 @@ from y5n.apps.yak.resolver.artifact import (
 )
 from y5n.apps.yak.resolver.catalog import (
     CatalogError,
-    CatalogIdentityError,
     Index,
     build_index,
     fetch_github_artifact,
@@ -453,10 +452,10 @@ class InstallationManager:
 
         The caller decides source vs artifact — never the shape of a
         temporary resource. ``source`` uses ``location`` (a checkout),
-        ``artifact`` uses ``release`` (a published artifact). The
-        component's native identity (pyproject) is read only when present,
-        to assert it against the catalog and carry its mount — it never
-        decides the mode.
+        ``artifact`` finds the published release. The component's identity
+        comes from the index, which is built from each location's
+        ``.yak/component.yml`` (ADR-23 Step 3) — `name` and the pack agree
+        by construction, so no catalog/component check is needed.
         """
         if mode == "artifact":
             resource = self._materialize_release(catalog, name)
@@ -481,11 +480,6 @@ class InstallationManager:
         structure_dir = structure if structure.is_dir() else None
         pack = self._read_component(resource)
         if pack is not None:
-            if pack.name != name:
-                raise CatalogIdentityError(
-                    f"catalog declares '{name}' but the component is "
-                    f"'{pack.name}' at {resource}"
-                )
             return _Component(
                 name=pack.name,
                 mode="source",
@@ -497,20 +491,14 @@ class InstallationManager:
             name=name, mode="source", source=resource, structure=structure_dir
         )
 
-    def _distribution_spec(self) -> str | None:
-        """The context's distribution repository (where artifacts live)."""
-        ctx = self._current_context()
-        return ctx.distribution if ctx is not None else None
-
     def _materialize_release(self, catalog, name: str) -> Path | None:
-        """Resolve a component's released artifact from the distribution.
+        """Resolve a component's released artifact from its distribution.
 
-        Released software lives in the context's single distribution
-        repository (``dists``) — discovered from its release list, never
-        from the source catalog. A local source carries its released
-        artifacts in ``artifacts/`` under the catalog root (the same
-        DirectorySource shape as the global store). The catalog names the
-        source; it never names a version.
+        A component's distribution defaults to the source of the catalog
+        that discovered it (ADR-23 Step 3): a local source carries its
+        released artifacts in ``artifacts/`` under the catalog root; a
+        remote source publishes releases to its own repository. The
+        catalog names the source; it never names a version.
         """
         if catalog.base is not None:
             artifact = DirectorySource(catalog.base / "artifacts").resolve(name)
@@ -520,13 +508,12 @@ class InstallationManager:
                     f"catalog instead"
                 )
             return artifact.path
-        spec = self._distribution_spec()
-        if spec is None:
+        if not catalog.spec.startswith("github:"):
             raise CatalogError(
-                f"component '{name}' needs a distribution repository — "
-                "set 'distribution' in .yak/context.toml"
+                f"component '{name}' has no remote distribution — source "
+                f"'{catalog.spec}' is local"
             )
-        return fetch_github_release(spec, name)
+        return fetch_github_release(catalog.spec, name)
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
         """Resolve a source-relative catalog location to a local resource."""

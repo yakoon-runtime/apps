@@ -1,9 +1,11 @@
 """Declared source catalogs — what a source offers (ADR-20).
 
-A source provides a catalog. A catalog answers one question: which
-component identities exist here and where is each located. The source
-list knows catalog locations; the catalog knows component locations; the
-resolver knows component identities. Nothing else.
+A source provides a catalog. A catalog answers two questions: which
+components exist here and where each is located. Since ADR-23 Step 3 the
+catalog never declares an identity — it lists locations, and each
+location's component declares itself in ``.yak/component.yml``. The
+source list knows catalog locations; the catalog knows component
+locations; the resolver knows component identities. Nothing else.
 """
 
 from __future__ import annotations
@@ -21,6 +23,8 @@ from urllib.request import Request, urlopen
 import yaml
 from packaging.version import InvalidVersion, Version
 
+from y5n.apps.yak.cap.models import cap_from_data, read_component
+
 CATALOG_FILENAME = "catalog.yml"
 
 _BRANCH_CACHE: dict[str, str] = {}
@@ -30,18 +34,15 @@ class CatalogError(Exception):
     """A catalog could not be loaded or violated its contract."""
 
 
-class CatalogIdentityError(CatalogError):
-    """A catalog declares a component under a name other than its own."""
-
-
 @dataclass(frozen=True)
 class ComponentRef:
     """One component offered by a source.
 
     ``location`` is the source-relative path of the component's source.
-    The catalog describes what a source offers and where the source is —
-    it never carries a version. Published releases are discovered from
-    the repository itself (see ``_repo_release_index``).
+    The catalog describes *where* a component is — it never carries an
+    identity or a version (ADR-23 Step 3): the component declares itself
+    in ``.yak/component.yml``. Published releases are discovered from the
+    repository itself (see ``_repo_release_index``).
     """
 
     location: str
@@ -54,13 +55,14 @@ class Catalog:
     ``spec`` is the source this catalog came from; ``base`` is the
     filesystem root for relative locations of a local source (None for a
     remote source). Locations are source-relative, never absolute.
-    ``bundles`` maps a bundle name to the component names it composes —
-    nothing else (a bundle never names other bundles).
+    ``components`` lists the locations, in declaration order; ``bundles``
+    maps a bundle name to the component names it composes — nothing else
+    (a bundle never names other bundles).
     """
 
     spec: str
     base: Path | None
-    components: dict[str, ComponentRef] = field(default_factory=dict)
+    components: list[ComponentRef] = field(default_factory=list)
     bundles: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
@@ -454,14 +456,23 @@ def _find_artifact_dir(parent: Path) -> Path | None:
 
 
 def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:
-    components: dict[str, ComponentRef] = {}
-    raw_components = data.get("components", {})
-    if not isinstance(raw_components, dict):
-        raise CatalogError(f"catalog '{spec}': 'components' must be a mapping")
-    for name, entry in raw_components.items():
-        if not isinstance(entry, dict) or not isinstance(entry.get("location"), str):
-            raise CatalogError(f"catalog '{spec}': component '{name}' needs a location")
-        components[str(name)] = ComponentRef(location=entry["location"])
+    components: list[ComponentRef] = []
+    raw_components = data.get("components") or []
+    if not isinstance(raw_components, list):
+        raise CatalogError(
+            f"catalog '{spec}': 'components' must be a list of locations"
+        )
+    for entry in raw_components:
+        if not isinstance(entry, dict) or not isinstance(
+            entry.get("location"), str
+        ):
+            raise CatalogError(
+                f"catalog '{spec}': each component needs a 'location'"
+            )
+        # Only ``location`` is read. The catalog never declares identity
+        # (component.yml owns it) or distribution (the source owns it) —
+        # any other field is ignored for forward compatibility.
+        components.append(ComponentRef(location=entry["location"]))
     bundles = _parse_bundles(spec, data)
     return Catalog(spec=spec, base=base, components=components, bundles=bundles)
 
@@ -495,9 +506,10 @@ def _parse_bundles(spec: str, data: dict) -> dict[str, tuple[str, ...]]:
 class Index:
     """The merged, local view of the declared source catalogs.
 
-    ``components`` maps an exact component identity to its catalog and
-    reference; ``bundles`` maps a bundle name to its catalog and member
-    list. First hit wins (source order) in both namespaces.
+    ``components`` maps an exact component identity (declared in each
+    location's component.yml) to its catalog and reference; ``bundles``
+    maps a bundle name to its catalog and member list. First hit wins
+    (source order) in both namespaces.
     """
 
     components: dict[str, tuple[Catalog, ComponentRef]] = field(default_factory=dict)
@@ -513,16 +525,92 @@ class Index:
 def build_index(source_specs: list[str], context_root: Path) -> Index:
     """Merge the declared source catalogs into a flat index.
 
-    Declaration order: a component or bundle is taken from the first
-    catalog that offers it; later catalogs do not override it. The source
-    list is flat — it knows catalog locations, nothing nests.
+    A catalog lists locations (ADR-23 Step 3); the merged index resolves
+    each location's identity from its ``.yak/component.yml`` — locally
+    from disk, remotely through one small Contents-API request per
+    location. The catalog never declares identity, so no catalog/component
+    identity conflict can exist. Declaration order: a component or bundle
+    is taken from the first catalog that offers it; later catalogs do not
+    override it. The source list is flat — it knows catalog locations,
+    nothing nests.
     """
     components: dict[str, tuple[Catalog, ComponentRef]] = {}
     bundles: dict[str, tuple[Catalog, tuple[str, ...]]] = {}
     for spec in source_specs:
         catalog = load_catalog(spec, context_root)
-        for name, ref in catalog.components.items():
+        for ref in catalog.components:
+            name = discover_component_identity(catalog, ref.location)
             components.setdefault(name, (catalog, ref))
         for name, members in catalog.bundles.items():
             bundles.setdefault(name, (catalog, members))
     return Index(components=components, bundles=bundles)
+
+
+def discover_component_identity(catalog: Catalog, location: str) -> str:
+    """The component identity a catalog location offers.
+
+    The identity is read from the component's own ``.yak/component.yml``
+    (ADR-23) — locally from disk, remotely through the Contents API. A
+    location that does not declare an identity violates the catalog
+    contract (``components`` lists component roots, nothing else).
+    """
+    if catalog.base is not None:
+        cap = read_component(catalog.base / location)
+        if cap is None:
+            raise CatalogError(
+                f"catalog '{catalog.spec}': component at '{location}' has "
+                "no .yak/component.yml"
+            )
+        return cap.name
+    return _fetch_component_yml(catalog.spec, location)
+
+
+def _component_cache_path(repo: str, location: str) -> Path:
+    return (
+        Path.home()
+        / ".yak"
+        / "cache"
+        / "catalogs"
+        / repo.replace("/", "_")
+        / location.replace("/", "_")
+        / "component.yml"
+    )
+
+
+def _fetch_component_yml(spec: str, location: str) -> str:
+    """The identity declared by a remote catalog location (component.yml).
+
+    Remote discovery reads only the component's own manifest through the
+    GitHub Contents API — one small request per location, never a repo
+    tarball. Reads are cached briefly like remote catalogs.
+    """
+    repo = github_repo(spec)
+    path = _component_cache_path(repo, location)
+    if path.exists() and time.time() - path.stat().st_mtime <= CATALOG_TTL_SECONDS:
+        try:
+            cap = cap_from_data(yaml.safe_load(path.read_text()) or {})
+            if cap is not None:
+                return cap.name
+        except Exception:
+            pass
+    url = (
+        f"https://api.github.com/repos/{repo}/contents/"
+        f"{location}/.yak/component.yml"
+    )
+    headers = {"Accept": "application/vnd.github.raw+json"}
+    try:
+        with urlopen(Request(url, headers=headers)) as resp:
+            text = resp.read().decode()
+    except Exception as exc:
+        raise CatalogError(f"cannot fetch {url}: {exc}") from exc
+    cap = cap_from_data(yaml.safe_load(text) or {})
+    if cap is None:
+        raise CatalogError(
+            f"component at '{location}' in {spec} has no .yak/component.yml"
+        )
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    except Exception:
+        pass
+    return cap.name

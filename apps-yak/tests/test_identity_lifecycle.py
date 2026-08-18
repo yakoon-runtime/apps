@@ -34,9 +34,7 @@ def _repo(root: Path) -> Path:
 
 
 def _mgr(root: Path, repo: Path) -> InstallationManager:
-    ctx = Context(
-        path=root, sources=[str(repo)], distribution="github:acme/dists"
-    )
+    ctx = Context(path=root, sources=[str(repo)])
     return InstallationManager(FileRepository(), DirectoryArtifactStore(), context=ctx)
 
 
@@ -116,13 +114,60 @@ def test_publish_expands_bundle(monkeypatch):
         assert calls == ["a", "b"]
 
 
-def test_deploy_expands_bundle_to_distribution(monkeypatch):
+def test_deploy_expands_bundle_members(monkeypatch):
     from y5n.apps.yak.hosts.cli.commands import deploy as deploy_cmd
 
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
         repo = _repo(base)
         mgr = _mgr(base, repo)
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            deploy_cmd,
+            "deploy_artifact",
+            lambda name, target: calls.append(name) or True,
+        )
+        # All members are local-source components — deploy without --to
+        # refuses (their distribution is local) instead of guessing.
+        deploy_cmd.run(_args(name="runtime", to=None), mgr)
+
+        assert calls == []
+
+
+def test_deploy_defaults_to_own_catalog_source(monkeypatch):
+    """Each member deploys to its own catalog's origin — no global target."""
+    from y5n.apps.yak.hosts.cli.commands import deploy as deploy_cmd
+
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        repo = _repo(base)
+        mgr = _mgr(base, repo)
+
+        # Route the members through github catalogs (their own origins).
+        from y5n.apps.yak.resolver.catalog import Catalog, ComponentRef, Index
+
+        index = Index(
+            components={
+                "a": (
+                    Catalog(spec="github:acme/a-repo", base=None),
+                    ComponentRef(location="."),
+                ),
+                "b": (
+                    Catalog(spec="github:acme/b-repo", base=None),
+                    ComponentRef(location="."),
+                ),
+            },
+            bundles={
+                "runtime": (
+                    Catalog(spec="github:acme/a-repo", base=None),
+                    ("a", "b"),
+                )
+            },
+        )
+        import y5n.apps.yak.installation.manager as manager_mod
+
+        monkeypatch.setattr(manager_mod, "build_index", lambda *a, **k: index)
 
         calls: list[tuple[str, str]] = []
         monkeypatch.setattr(
@@ -132,8 +177,8 @@ def test_deploy_expands_bundle_to_distribution(monkeypatch):
         )
         deploy_cmd.run(_args(name="runtime", to=None), mgr)
 
-        # Both members deploy to the shared distribution repository.
-        assert calls == [("a", "github:acme/dists"), ("b", "github:acme/dists")]
+        # Each member goes to its own repo — never to a shared dists.
+        assert calls == [("a", "github:acme/a-repo"), ("b", "github:acme/b-repo")]
 
 
 def test_deploy_rejects_to_for_a_bundle(monkeypatch):

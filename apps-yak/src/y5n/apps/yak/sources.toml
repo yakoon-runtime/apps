@@ -8,5 +8,3 @@ sources = [
     "github:yakoon-runtime/sdk",
     "github:yakoon-runtime/apps",
 ]
-
-distribution = "github:yakoon-runtime/dists"

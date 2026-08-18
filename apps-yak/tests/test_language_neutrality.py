@@ -56,13 +56,11 @@ def test_non_python_component_materializes_structure(monkeypatch):
         root = Path(tmp)
         repo = root / "repo"
         _dotnet_artifact(repo / "artifacts")
+        # The catalog lists the component root; its released artifact is
+        # discovered from the source's artifacts/ store (ADR-23 Step 3).
         make_source(
             repo,
-            {
-                "acme-test": {
-                    "location": "acme-test-1.0.0.dotnet.artifact",
-                }
-            },
+            {"acme-test": "acme-test"},
             bundles={"app": ["acme-test"]},
         )
         ctx = Context(path=root, sources=[str(repo)])

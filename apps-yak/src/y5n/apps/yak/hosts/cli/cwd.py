@@ -9,18 +9,17 @@ class Context:
     """A YakContext — describes a development environment.
 
     Loaded from .yak/context.toml. ``sources`` is the flat ADR-20 source
-    set (catalog locations) — where sources live. ``distribution`` is the
-    single distribution repository — where built software is deployed and
-    discovered. ``source_dirs`` is a transition: the local monorepo
-    folders the installer resolves build roots against until the repo
-    split.
+    set (catalog locations) — where components are discovered. Each source
+    repo is also the default distribution of its own components (ADR-23
+    Step 3), so no global distribution exists. ``source_dirs`` is a
+    transition: the local monorepo folders the installer resolves build
+    roots against until the repo split.
     """
 
     path: Path
     name: str = ""
     schema: str = "1"
     sources: list[str] = field(default_factory=list)
-    distribution: str | None = None
     source_dirs: list[Path] = field(default_factory=list)
 
     def resolve_sources(self) -> list[Path]:
@@ -63,7 +62,6 @@ def _load_context(root: Path) -> Context:
         name=ctx_data.get("name", root.name),
         schema=ctx_data.get("schema", "1"),
         sources=_string_list(data.get("sources")),
-        distribution=data.get("distribution"),
         source_dirs=source_dirs,
     )
 

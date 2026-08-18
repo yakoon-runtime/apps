@@ -1,9 +1,10 @@
 """yak deploy <bundle|name> [--to <repository>] — deploy published artifacts.
 
-A bundle identity expands to its components; each is deployed to the
-context's distribution repository (``dists``) — the single home of built
-software. ``--to`` overrides the target for a component that does not
-belong to the distribution yet.
+A bundle identity expands to its components; each is deployed to its own
+distribution, which defaults to the source of the catalog that discovered
+it (ADR-23 Step 3) — a component of ``github:owner/repo`` deploys to
+``github:owner/repo``. ``--to`` overrides the target for a component that
+does not belong to it yet (a single component, never a bundle).
 """
 
 from __future__ import annotations
@@ -16,19 +17,27 @@ def run(args, mgr) -> None:
     is_bundle = mgr._index().resolve_bundle(args.name) is not None
     if is_bundle and getattr(args, "to", None):
         print(
-            "A bundle deploys to the distribution repository; "
+            "A bundle deploys each member to its own distribution; "
             "--to is only for a single component."
         )
         return
 
     override = getattr(args, "to", None)
-    target = override if override is not None else mgr._distribution_spec()
-    if target is None:
-        print("No distribution repository configured.")
-        print("Set 'distribution' in .yak/context.toml or use --to <repository>.")
-        return
-
     for name in names:
+        target = override
+        if target is None:
+            hit = mgr._index().resolve(name)
+            if hit is None:
+                print(f"Component '{name}' is not discoverable from any source.")
+                continue
+            catalog, _ref = hit
+            if catalog.base is not None:
+                print(
+                    f"Component '{name}' has a local source ({catalog.spec}); "
+                    "use --to <repository> to deploy it."
+                )
+                continue
+            target = catalog.spec
         try:
             result = deploy_artifact(name, target)
         except RuntimeError as exc:

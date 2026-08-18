@@ -31,9 +31,10 @@ The concrete outcome: identity and version exist in up to five places
 (pyproject ↔ catalog key ↔ released tag ↔ artifact.yml ↔ the dead
 `release:` entry), every component — including a company's private one —
 must release through one global repository, and the builder is the only
-component that may know a version at all. Both have since been resolved:
-identity/version now live authoritatively in `.yak/component.yml`
-(Steps 1–2 below), while the distribution question stays open (Step 3).
+component that may know a version at all. All three have since been
+resolved: identity/version live authoritatively in `.yak/component.yml`
+(Steps 1–2 below), and distribution follows the catalog's source, so no
+global repository remains (Step 3).
 
 ## Audit finding
 
@@ -43,39 +44,40 @@ identity/version now live authoritatively in `.yak/component.yml`
 |------|-------|---------|--------------------|
 | `pyproject.toml` | component | name, version, deps, build-system | **yes (Python)** |
 | `.yak/mount.yml` | component | `path = "/usr/bin"` | no |
-| `catalog.yml` | repo / bundle | `components: <name> → location`, `bundles:` | no |
+| `catalog.yml` | repo / bundle | `components: <location list>`, `bundles:` | no |
 | `structure/.yak/yak.yml` | component structure | tree behavior: title, stores, resolvable, host, entry | no |
 | `artifact.yml` | built artifact | name, version, kind, builder, host, mount, fingerprint | partially |
-| `sources.toml` / `context.toml` | context | `sources`, `distribution` | no |
+| `sources.toml` / `context.toml` | context | `sources` | no |
 | `pack.toml` | — | does not exist anymore (ADR-8 → native identity) | — |
 
 ### Field classification
 
 - **Identity** — `.yak/component.yml name` (authoritative since Step 2,
-  read in manager `_read_component`) · `catalog.yml` key (duplicate,
-  verified against component.yml → `CatalogIdentityError`) · `artifact.yml
-  name` (copy).
+  read in manager `_read_component`) · `artifact.yml name` (copy). The
+  catalog-name duplicate was removed in Step 3 — the catalog declares no
+  identity.
 - **Version** — `.yak/component.yml version` (authoritative since Step 2;
-  the build validates the wheel against it) · `catalog.yml release:`
-  (dead) · `artifact.yml version` · release tag `{name}-v{version}`
-  (derived).
-- **Discovery** — `catalog.yml → components.<name>.location` (only source,
-  ADR-20; no directory scanning).
+  the build validates the wheel against it) · `artifact.yml version` ·
+  release tag `{name}-v{version}` (derived). The dead `catalog.yml
+  release:` field was removed in Step 3.
+- **Discovery** — `catalog.yml → components: [location, …]` (only source
+  of locations, ADR-20; no directory scanning).
 - **Build** — `pyproject.toml [build-system]` (Python-specific) ·
   builder discovery finds pyproject.toml only (`_find_buildable_projects`).
-- **Distribution** — `context.toml` / `sources.toml` global
-  `distribution` (single repository for all components today).
+- **Distribution** — no field anywhere (Step 3): a component's
+  distribution defaults to the source of the catalog that discovered it.
 - **Structure/Mount** — `.yak/mount.yml → path` · `structure/.yak/yak.yml`
   (tree behavior, lives inside the mounted structure, not at the repo
   root).
 - **Bundle** — `catalog.yml → bundles`.
 
-### The two real duplications
+### The two real duplications (resolved)
 
-1. **Identity-key** — the catalog must know the name to use it as a key,
-   and the component repeats it in pyproject.toml.
-2. **Version** — one number in up to five places; the catalog's
-   `release:` entry is an unmaintained fifth copy.
+1. **Identity-key** — the catalog had to know the name to use it as a
+   key, and the component repeated it in pyproject.toml. Both are gone:
+   the catalog lists locations, the identity lives in component.yml.
+2. **Version** — one number lived in up to five places; the catalog's
+   `release:` entry was an unmaintained fifth copy. Removed in Step 3.
 
 ## Decision
 
@@ -249,35 +251,56 @@ runtime/
         └── structure/
 ```
 
-### 5. Per-component distribution in the catalog
+### 5. Catalog discovers by location — distribution follows the source
 
-Distribution is **not** an intrinsic property of a component — the same
-component may be mirrored or published to several targets. It is a
-property of the *catalog entry*: where the component can be obtained
-from.
+A catalog lists locations only. It never declares identity (the component
+owns it in `component.yml`), and it never declares distribution. The
+invariant that makes this sound:
 
-```yaml
-# catalog.yml
-components:
-  - location: .
-    distribution: github:yakoon-runtime/caps-system
-```
+> **The catalog discovers components by location; it does not declare
+> component identity.**
 
 ```yaml
-# another catalog, same component, different target
+# caps-system/catalog.yml — a single-component repo
 components:
   - location: .
-    distribution: gitlab:acme/caps-production
+
+# runtime/catalog.yml — a multi-component repo
+components:
+  - location: packages/runtime-api
+  - location: packages/runtime-boot
+  - location: packages/runtime-engine
+  - location: packages/runtime-store
+  - location: caps/caps-root
 ```
 
-- The catalog registers where its components are published and resolved;
-  each component declares its own target. A private company component
-  releases where it lives. No global distribution repository.
-- Same inline spec already serves both sides: `fetch_github_release` and
-  `GithubReleaseRepository` parse `github:owner/repo` through the same
-  `_split_spec`.
-- As a consequence, the global `distribution` in `context.toml` /
-  `sources.toml` and the `dists` repository are removed.
+Each listed location is a component root with `.yak/component.yml`. The
+index resolves every location's identity from that manifest — locally
+from disk, remotely through one small GitHub Contents-API request per
+location (never a repo tarball). Because the catalog never names a
+component, no catalog/component identity conflict can exist —
+`CatalogIdentityError` is gone.
+
+**Distribution follows the source.** A component's distribution defaults
+to the source of the catalog that discovered it: a `github:owner/repo`
+source publishes and resolves releases in `github:owner/repo`; a local
+source carries released artifacts in its `artifacts/` directory. The
+global `distribution` in `context.toml` / `sources.toml` and the `dists`
+repository are removed. A bundle like `runtime` may still cross repos:
+each member resolves and deploys to its *own* catalog's origin.
+
+An explicit per-component override (`distribution: …`) is deliberately
+*not* introduced today. For a split source/artifact setup the field can
+later be added to a location entry and is backwards compatible:
+
+```yaml
+components:
+  - location: .
+    distribution: github:acme/acme-yakoon-releases
+```
+
+Semantics: no `distribution` → the catalog's source; `distribution`
+present → explicit override.
 
 The full model:
 
@@ -288,7 +311,10 @@ COMPONENT
 └── mount.yml              structure deployment
 
 REPOSITORY / DISCOVERY
-catalog.yml                 location, distribution, bundles
+catalog.yml                 locations, bundles
+
+SOURCE
+<source>                    default distribution of its components
 
 TECHNOLOGY
 pyproject / csproj / …      build
@@ -340,14 +366,21 @@ never carries version pins.
 
 - **Builder coupling.** The build backend must accept or validate the
   Yakoon identity — a change to the build contract (done in Step 2).
-- **Migration.** Done in Steps 1–2: every component root now carries
-  `.yak/component.yml` and `.yak/mount.yml`; catalogs still carry the
-  dead `release:` entries until Step 3; tags move from `dists` to each
-  component repository in Step 3.
-- **Identity verification.** The catalog key still double-checks identity;
-  the builder verifies the native build against component.yml. A
-  mismatch between component.yml and the native build metadata is a
-  build error.
+- **Migration.** Done in Steps 1–3: every component root carries
+  `.yak/component.yml` and `.yak/mount.yml`; catalogs are location lists
+  (`release:` fields removed); the global distribution and `dists` are
+  out of the active architecture; tags move from `dists` to each
+  component repository.
+- **Discovery cost.** The remote index reads one small
+  `component.yml` per location via the GitHub Contents API (cached
+  briefly). Deliberately not optimized further until a problem is
+  measured — the price buys the invariant that the catalog never
+  duplicates an identity.
+- **Identity verification.** The catalog no longer double-checks identity
+  (it declares none). The builder verifies the native build against the
+  component's `component.yml`; a mismatch is a build error. The management
+  side reads identity from the same manifest, so no second check exists
+  to disagree with.
 
 ## Implementation Notes
 
@@ -368,15 +401,28 @@ builder/python.py); a mismatch fails the build (`IdentityMismatchError`)
 — artifacts are never relabeled. The derivation chain downstream is
 untouched: verified `ArtifactInfo` → `artifact.yml` → artifact filename
 → release tag → resolved artifact. The installer reads identity from
-`.yak/component.yml` (`_read_component`, formerly `_read_pack`) and
-validates it against the catalog key (`CatalogIdentityError`).
+`.yak/component.yml` (`_read_component`, formerly `_read_pack`); Step 3
+removed the catalog-key cross-check, since the catalog no longer
+declares a name.
 
-### Step 3 (open) — catalog and distribution
+### Step 3 (done) — catalog discovers by location, distribution follows source
 
-Catalog shape, per-component distribution, the dead `release:` fields,
-the global `distribution` and the `dists` repository are all untouched
-— they belong to the next step and are removed or reshaped in one
-coherent commit.
+Catalogs were turned into location lists (`components: [{location: …}]`)
+in every source repository. The index resolves each location's identity
+from its `.yak/component.yml` — locally from disk, remotely through one
+Contents-API request per location (`_fetch_component_yml`), never a repo
+tarball. The management side no longer validates a catalog-declared name
+(`CatalogIdentityError` is gone), because the catalog declares none.
+
+The global `distribution` (context.toml / sources.toml) and the `dists`
+repository were removed from the architecture. Resolution and deploy use
+the catalog's own origin as the default distribution: `_materialize_release`
+reads the component's own repo releases (or `artifacts/` for a local
+source), and `deploy` routes each bundle member to the repository whose
+catalog discovered it (`--to` stays the single-component override).
+`GithubReleaseRepository.deploy` no longer rewrites a catalog — the
+component is already discoverable through its source catalog; deploy only
+publishes the version.
 
 ### Legacy release history
 
@@ -396,8 +442,6 @@ NEW  <component repo>/releases/y5n-caps-*
 
 - `structure/.yak/yak.yml` describes a **node in the Yakoon filesystem**,
   not the component, and is out of this ADR's scope entirely.
-- How `distribution` in a catalog entry is validated against the
-  transport it names.
 - A future `yak component init` would only need to produce the `.yak/`
   contract (component.yml + mount.yml) — no language scaffolding. This
   ADR does not decide whether or when such a command exists.
@@ -410,5 +454,6 @@ NEW  <component repo>/releases/y5n-caps-*
 This ADR answers: **in `.yak/` at the component root — the portable
 Yakoon contract of a component, with `component.yml` (name, version)
 and `.yak/mount.yml` (structure deployment) as its first contents.**
-Identity and version ownership are implemented (Steps 1–2); catalog and
-distribution follow in Step 3.
+Steps 1–3 are implemented: the component owns identity and version, the
+catalog discovers by location, and distribution follows the catalog's
+source.

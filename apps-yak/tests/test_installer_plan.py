@@ -23,7 +23,7 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 
 def _world(root: Path):
-    """remote: app/lib-a/lib-b as wheels; local: app as a source project."""
+    """remote: app/lib-a/lib-b as released wheels; local: app as a source."""
     remote = root / "remote"
     wheel_artifact(remote / "artifacts" / "lib-a", "lib-a", "0.1.0")
     wheel_artifact(remote / "artifacts" / "lib-b", "lib-b", "0.1.0")
@@ -31,16 +31,16 @@ def _world(root: Path):
     make_source(
         remote,
         {
-            "lib-a": {"location": "artifacts/lib-a"},
-            "lib-b": {"location": "artifacts/lib-b"},
-            "app": {"location": "artifacts/app"},
+            "lib-a": "src/lib-a",
+            "lib-b": "src/lib-b",
+            "app": "src/app",
         },
         bundles={"platform": ["app", "lib-a", "lib-b"]},
     )
 
     local = root / "local"
     source_proj(local / "projects" / "app", "app", "0.1.0", deps=("lib-a",))
-    make_source(local, {"app": {"location": "projects/app"}})
+    make_source(local, {"app": "projects/app"})
     return remote, local
 
 
@@ -102,7 +102,7 @@ def test_pip_failure_leaves_no_state(monkeypatch):
         )
         make_source(
             bad,
-            {"broken": {"location": "artifacts/broken"}},
+            {"broken": "src/broken"},
             bundles={"bad": ["broken"]},
         )
         mgr = _mgr(root, [bad])
