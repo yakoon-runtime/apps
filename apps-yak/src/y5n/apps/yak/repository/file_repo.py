@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from y5n.apps.yak.cap.models import Cap, read_mount
+from y5n.apps.yak.cap.models import Cap, read_component
 
 
 class FileRepository:
@@ -13,12 +13,12 @@ class FileRepository:
         return list(self._roots)
 
     def resolve_pack(self, name: str) -> Cap | None:
-        """Resolve a source component from its native project manifest.
+        """Resolve a source component from its .yak/component.yml.
 
         Folder equals name: a component lives in ``<root>/<name>`` and is
-        recognized by its pyproject.toml. The resolver knows no families
-        and no prefixes — ``y5n-caps-system`` and ``my-super-pack``
-        resolve the same way.
+        recognized by its .yak/component.yml contract (ADR-23). The
+        resolver knows no families and no prefixes — ``y5n-caps-system``
+        and ``my-super-pack`` resolve the same way.
         """
         return self._resolve_pack(name)
 
@@ -30,7 +30,7 @@ class FileRepository:
         """A source root that holds the component's folder (folder == name)."""
         for root in self._roots:
             candidate = root / name
-            if (candidate / "pyproject.toml").exists():
+            if (candidate / ".yak" / "component.yml").exists():
                 return candidate
         return None
 
@@ -41,4 +41,5 @@ class FileRepository:
         return None
 
     def _parse(self, project_dir: Path) -> Cap:
-        return Cap(name=project_dir.name, mount=read_mount(project_dir))
+        cap = read_component(project_dir)
+        return cap if cap is not None else Cap(name=project_dir.name, version="")

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from y5n.apps.yak.builder.protocol import Builder
+from y5n.apps.yak.builder.protocol import Builder, IdentityMismatchError
 from y5n.apps.yak.builder.python import PythonBuildProvider
+from y5n.apps.yak.cap.models import read_component
 
 
 def _find_buildable_projects(root: Path) -> list[Path]:
@@ -80,12 +81,22 @@ def build(project_dir: Path | None = None, output_dir: Path | None = None) -> bo
             all_ok = False
             continue
 
-        print(
-            f"  Building {p.relative_to(source.parent) if source.parent else p.name} ..."
-        )
-        info = builder.build(p, output_dir)
+        rel = p.relative_to(source.parent) if source.parent else p.name
+        expected = read_component(p)
+        if expected is None:
+            print(f"  ✘ {rel}  (no .yak/component.yml — cannot verify identity)")
+            all_ok = False
+            continue
+
+        print(f"  Building {rel} ...")
+        try:
+            info = builder.build(p, output_dir, expected)
+        except IdentityMismatchError as exc:
+            print(f"  ✘ {rel}: {exc}")
+            all_ok = False
+            continue
         if info is None:
-            print(f"  ✘ {p.name}")
+            print(f"  ✘ {rel}")
             all_ok = False
         else:
             print(f"  ✓ {info.name} {info.version}")

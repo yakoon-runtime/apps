@@ -31,6 +31,12 @@ contextual: false
 """
 
 
+COMPONENT_YML = """\
+name: {name}
+version: 0.1.0
+"""
+
+
 def create_cap(name: str, target: Path | None = None, force: bool = False) -> Path:
     title = name.capitalize()
     root = (target or Path.cwd()) / name
@@ -43,6 +49,13 @@ def create_cap(name: str, target: Path | None = None, force: bool = False) -> Pa
     root.mkdir(parents=True, exist_ok=True)
     (root / "pyproject.toml").write_text(PYPROJECT_TOML.format(name=name))
     (root / "README.md").write_text(f"# {title}\n\n{title} cap.\n")
+
+    # The component contract (ADR-23): .yak/component.yml declares the
+    # identity; .yak/mount.yml is added when the cap mounts a structure.
+    (root / ".yak").mkdir(parents=True, exist_ok=True)
+    (root / ".yak" / "component.yml").write_text(
+        COMPONENT_YML.format(name=name)
+    )
 
     src_dir = root / "src" / "y5n" / "caps" / name
     src_dir.mkdir(parents=True, exist_ok=True)

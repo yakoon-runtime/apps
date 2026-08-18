@@ -35,6 +35,11 @@ class TestCreateCap:
             toml = (root / "pyproject.toml").read_text()
             assert 'name = "hello"' in toml
 
+            # The component contract declares the identity (ADR-23).
+            contract = (root / ".yak" / "component.yml").read_text()
+            assert 'name: hello' in contract
+            assert 'version: 0.1.0' in contract
+
     def test_create_cap_respects_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "subdir"

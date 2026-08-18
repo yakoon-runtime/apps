@@ -9,8 +9,8 @@ import sys
 import zipfile
 from pathlib import Path
 
-from y5n.apps.yak.builder.protocol import ArtifactInfo
-from y5n.apps.yak.cap.models import read_mount
+from y5n.apps.yak.builder.protocol import ArtifactInfo, IdentityMismatchError
+from y5n.apps.yak.cap.models import Cap, read_mount
 
 
 class PythonBuildProvider:
@@ -20,7 +20,9 @@ class PythonBuildProvider:
     def detect(self, project_dir: Path) -> bool:
         return (project_dir / "pyproject.toml").exists()
 
-    def build(self, project_dir: Path, output_dir: Path) -> ArtifactInfo | None:
+    def build(
+        self, project_dir: Path, output_dir: Path, expected: Cap
+    ) -> ArtifactInfo | None:
         if not self.detect(project_dir):
             return None
 
@@ -46,9 +48,11 @@ class PythonBuildProvider:
         if info is None:
             return None
 
-        # The artifact's identity is the builder's result — the wheel's
-        # own name and version from pyproject.toml. No other manifest may
-        # relabel it afterwards.
+        # The artifact's identity is the declared component identity
+        # (ADR-23): the wheel's own name and version must prove it.
+        # Yakoon never relabels — a mismatch is a build error.
+        self._validate(expected, info)
+
         info.mount = read_mount(project_dir)
 
         artifact_dir = output_dir / info.filename
@@ -67,6 +71,26 @@ class PythonBuildProvider:
         wheel.unlink()
         (artifact_dir / "artifact.yml").write_text(info.to_yml())
         return info
+
+    @staticmethod
+    def _validate(expected: Cap, info: ArtifactInfo) -> None:
+        """The built wheel must prove the declared component identity.
+
+        The declared identity (``.yak/component.yml``) is what Yakoon
+        builds; the wheel's own name/version are the proof. A mismatch is
+        a build error — the artifact is never relabeled to force a match.
+        """
+        if info.name != expected.name:
+            raise IdentityMismatchError(
+                f"component '{expected.name}' declared in .yak/component.yml "
+                f"but the build produced '{info.name}'"
+            )
+        if info.version != expected.version:
+            raise IdentityMismatchError(
+                f"component '{expected.name}' declared version "
+                f"{expected.version} in .yak/component.yml but the build "
+                f"produced {info.version}"
+            )
 
     def _parse_wheel(self, wheel: Path) -> ArtifactInfo | None:
         try:

@@ -1,8 +1,11 @@
-"""The version invariant: one version through every station.
+"""The identity invariant: one identity through every station, claimed at
+``.yak/component.yml``.
 
-``pyproject.version`` == wheel METADATA == ArtifactInfo == artifact.yml
-== artifact dir name == release tag == resolved artifact. No second
-manifest may relabel the builder's result — a decoy pack.toml is ignored.
+``.yak/component.yml`` declares name and version (ADR-23). The native
+build's wheel METADATA must prove that declaration — the builder may not
+relabel it. From the verified ArtifactInfo the chain keeps running:
+artifact.yml == artifact dir name == release tag == resolved artifact.
+A decoy pack.toml stays irrelevant.
 """
 
 from __future__ import annotations
@@ -10,51 +13,71 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from y5n.apps.yak.builder.python import PythonBuildProvider
-from y5n.apps.yak.cap.models import read_mount
+from y5n.apps.yak.builder.protocol import IdentityMismatchError
+from y5n.apps.yak.cap.models import read_component, read_mount
 from y5n.apps.yak.resolver.artifact import DirectorySource
 from y5n.apps.yak.resolver.github import release_tag_for
 
 from conftest import _write_wheel
 
 
-def test_one_version_through_the_whole_chain():
+def _project(root: Path, name: str, version: str, mount: str) -> Path:
+    """A native project with its Yakoon contract (component.yml)."""
+    project = root / name
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        "[project]\n"
+        f'name = "{name}"\n'
+        f'version = "{version}"\n'
+    )
+    # A stale pack manifest must be irrelevant (regression guard).
+    (project / "pack.toml").write_text(
+        f'name = "{name}"\nversion = "0.1.0"\n'
+    )
+    (project / ".yak").mkdir()
+    (project / ".yak" / "component.yml").write_text(
+        f"name: {name}\nversion: {version}\n"
+    )
+    (project / ".yak" / "mount.yml").write_text(f"path: {mount}\n")
+    return project
+
+
+def _wheel_for(project: Path, name: str, version: str) -> Path:
+    dist = project / "dist"
+    dist.mkdir(exist_ok=True)
+    _write_wheel(dist, name, version, ())
+    return next(dist.glob("*.whl"))
+
+
+def test_identity_through_the_whole_chain_starts_at_component_yml():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         name, version = "acme-pack", "0.8.0"
+        project = _project(root, name, version, "/opt/acme")
 
-        # A native project with its own manifest.
-        project = root / name
-        project.mkdir()
-        (project / "pyproject.toml").write_text(
-            "[project]\n"
-            f'name = "{name}"\n'
-            f'version = "{version}"\n'
-        )
-        # A stale pack manifest must be irrelevant (regression guard).
-        (project / "pack.toml").write_text(
-            f'name = "{name}"\nversion = "0.1.0"\n'
-        )
-        (project / ".yak").mkdir()
-        (project / ".yak" / "mount.yml").write_text("path: /opt/acme\n")
+        # 1. The declared identity comes from .yak/component.yml.
+        expected = read_component(project)
+        assert expected is not None
+        assert expected.name == name
+        assert expected.version == version
 
         builder = PythonBuildProvider()
 
-        # 1. The wheel carries the native version.
-        dist = project / "dist"
-        dist.mkdir()
-        _write_wheel(dist, name, version, ())
-        wheel = next(dist.glob("*.whl"))
-
-        # 2. The builder reads it back without relabeling.
+        # 2. The wheel carries the same identity and the builder verifies it.
+        wheel = _wheel_for(project, name, version)
         info = builder._parse_wheel(wheel)
+        assert info is not None
+        builder._validate(expected, info)
         assert info.name == name
         assert info.version == version
 
-        # 3. The artifact dir name is built from the same version.
+        # 3. The artifact dir name is built from the same identity.
         assert info.filename == f"{name}-{version}.python.artifact"
 
-        # 4. The artifact manifest records the same version + mount.
+        # 4. The artifact manifest records the same identity + mount.
         info.mount = read_mount(project)
         artifact_dir = root / info.filename
         artifact_dir.mkdir()
@@ -66,29 +89,72 @@ def test_one_version_through_the_whole_chain():
         # 5. The release tag derives from the artifact dir name.
         assert release_tag_for(name, artifact_dir) == f"{name}-v{version}"
 
-        # 6. Resolution reports the same version.
+        # 6. Resolution reports the same identity.
         resolved = DirectorySource(root).resolve(name)
         assert resolved is not None
         assert resolved.version == version
         assert resolved.mount == "/opt/acme"
 
 
+def test_version_mismatch_fails_the_build():
+    """component.yml declares 0.9.0, the wheel proves 0.8.0 → build error."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        name, declared = "acme-pack", "0.9.0"
+        project = _project(root, name, declared, "/opt/acme")
+        # The native metadata disagrees with the declaration.
+        (project / "pyproject.toml").write_text(
+            "[project]\n"
+            f'name = "{name}"\n'
+            'version = "0.8.0"\n'
+        )
+
+        builder = PythonBuildProvider()
+        wheel = _wheel_for(project, name, "0.8.0")
+        info = builder._parse_wheel(wheel)
+        assert info is not None
+
+        expected = read_component(project)
+        assert expected is not None
+        with pytest.raises(IdentityMismatchError, match="0.8.0"):
+            builder._validate(expected, info)
+
+
+def test_name_mismatch_fails_the_build():
+    """component.yml declares a name the wheel does not prove → build error."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        name, version = "acme-pack", "0.1.0"
+        project = _project(root, name, version, "/opt/acme")
+        # The native metadata disagrees with the declaration.
+        (project / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "acme-widget"\n'
+            f'version = "{version}"\n'
+        )
+
+        builder = PythonBuildProvider()
+        wheel = _wheel_for(project, "acme-widget", version)
+        info = builder._parse_wheel(wheel)
+        assert info is not None
+
+        expected = read_component(project)
+        assert expected is not None
+        with pytest.raises(IdentityMismatchError, match="acme-widget"):
+            builder._validate(expected, info)
+
+
 def test_mount_is_optional():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         name, version = "plain-lib", "0.1.0"
-        project = root / name
-        project.mkdir()
-        (project / "pyproject.toml").write_text(
-            "[project]\n"
-            f'name = "{name}"\n'
-            f'version = "{version}"\n'
-        )
+        project = _project(root, name, version, "/opt/acme")
+        # No mount directory → no mount.yml.
+        (project / ".yak" / "mount.yml").unlink()
+
         builder = PythonBuildProvider()
-        dist = project / "dist"
-        dist.mkdir()
-        _write_wheel(dist, name, version, ())
-        wheel = next(dist.glob("*.whl"))
+        wheel = _wheel_for(project, name, version)
         info = builder._parse_wheel(wheel)
+        assert info is not None
         assert info.mount is None
         assert release_tag_for(name, root / info.filename) == f"{name}-v{version}"

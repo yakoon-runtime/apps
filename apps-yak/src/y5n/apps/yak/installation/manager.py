@@ -24,7 +24,7 @@ from y5n.apps.yak.installation.deployment import (
 from y5n.apps.yak.installation.deployment import load_installation, to_dict
 from y5n.apps.yak.installation.models import Component, Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer, PythonCandidate
-from y5n.apps.yak.cap.models import Mount, Cap, CapName, read_mount
+from y5n.apps.yak.cap.models import Mount, Cap, CapName, read_component, read_mount
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import (
@@ -479,7 +479,7 @@ class InstallationManager:
             return None
         structure = resource / "structure"
         structure_dir = structure if structure.is_dir() else None
-        pack = self._read_pack(resource)
+        pack = self._read_component(resource)
         if pack is not None:
             if pack.name != name:
                 raise CatalogIdentityError(
@@ -489,7 +489,7 @@ class InstallationManager:
             return _Component(
                 name=pack.name,
                 mode="source",
-                pack=Cap(name=pack.name, mount=pack.mount),
+                pack=pack,
                 source=resource,
                 structure=structure_dir,
             )
@@ -563,25 +563,15 @@ class InstallationManager:
     # ── Context source mapping (removed in ADR-20; sources replace it) ──
 
     @staticmethod
-    def _read_pack(path: Path) -> Cap | None:
-        """Read a component's native identity and mount, if any.
+    def _read_component(path: Path) -> Cap | None:
+        """Read a component's identity and mount, if any.
 
-        Identity comes from the component's own build manifest
-        (``pyproject.toml``), mount from ``.yak/mount.yml``. No pack
-        manifest exists anymore — a component is its native project plus
-        optional mount semantics.
+        Identity and version come from the component's Yakoon contract
+        ``.yak/component.yml`` (ADR-23); mount from ``.yak/mount.yml``.
+        No pack manifest exists anymore — a component is its native
+        project plus optional mount semantics.
         """
-        manifest = path / "pyproject.toml"
-        if not manifest.exists():
-            return None
-
-        with open(manifest, "rb") as f:
-            data = tomllib.load(f)
-        project = data.get("project", {})
-        return Cap(
-            name=project.get("name", path.name),
-            mount=read_mount(path),
-        )
+        return read_component(path)
 
     def _ensure_component(
         self,

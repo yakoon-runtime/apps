@@ -1,9 +1,26 @@
-"""Builder protocol — language-agnostic interface."""
+"""Builder protocol — language-agnostic interface.
+
+A builder receives the component's expected identity from
+``.yak/component.yml`` (ADR-23) and must build that component — it may
+not relabel. After the native build it validates the produced metadata
+against the expected identity and fails on mismatch.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Protocol
+
+from y5n.apps.yak.cap.models import Cap
+
+
+class IdentityMismatchError(Exception):
+    """The native build did not produce the declared component identity.
+
+    ``.yak/component.yml`` declares identity and version; a builder may
+    build as its technology does, but the produced artifact must match
+    the declaration. Yakoon never relabels the result.
+    """
 
 
 class ArtifactInfo:
@@ -62,4 +79,6 @@ class Builder(Protocol):
 
     def detect(self, project_dir: Path) -> bool: ...
 
-    def build(self, project_dir: Path, output_dir: Path) -> ArtifactInfo | None: ...
+    def build(
+        self, project_dir: Path, output_dir: Path, expected: Cap
+    ) -> ArtifactInfo | None: ...

@@ -1,6 +1,6 @@
 # ADR 23: Component Self-Description — Where a Yakoon Component Tells Its Own Story
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-17
 
 ## Context
@@ -11,7 +11,7 @@ most of which are language-specific:
 
 - `pyproject.toml` is the single source of identity and version — for
   Python.
-- `mount.toml` declares the mount target.
+- `.yak/mount.yml` declares the mount target.
 - `catalog.yml` repeats the identity as a key, declares `location`
   (discovery) and `bundles`.
 - `artifact.yml` (in a built artifact) repeats name, version, kind,
@@ -29,9 +29,11 @@ source, and documentation. There is no visible boundary that says
 
 The concrete outcome: identity and version exist in up to five places
 (pyproject ↔ catalog key ↔ released tag ↔ artifact.yml ↔ the dead
-`release:` entry), the builder is the only component that may know a
-version at all, and every component — including a company's private one —
-must release through one global repository.
+`release:` entry), every component — including a company's private one —
+must release through one global repository, and the builder is the only
+component that may know a version at all. Both have since been resolved:
+identity/version now live authoritatively in `.yak/component.yml`
+(Steps 1–2 below), while the distribution question stays open (Step 3).
 
 ## Audit finding
 
@@ -40,7 +42,7 @@ must release through one global repository.
 | File | Level | Content | Language-dependent |
 |------|-------|---------|--------------------|
 | `pyproject.toml` | component | name, version, deps, build-system | **yes (Python)** |
-| `mount.toml` | component | `path = "/usr/bin"` | no |
+| `.yak/mount.yml` | component | `path = "/usr/bin"` | no |
 | `catalog.yml` | repo / bundle | `components: <name> → location`, `bundles:` | no |
 | `structure/.yak/yak.yml` | component structure | tree behavior: title, stores, resolvable, host, entry | no |
 | `artifact.yml` | built artifact | name, version, kind, builder, host, mount, fingerprint | partially |
@@ -49,19 +51,21 @@ must release through one global repository.
 
 ### Field classification
 
-- **Identity** — `pyproject.toml [project] name` (only source; read in
-  manager `_read_pack`) · `catalog.yml` key (duplicate, verified against
-  pyproject → `CatalogIdentityError`) · `artifact.yml name` (copy).
-- **Version** — `pyproject.toml [project] version` (today's truth) ·
-  `catalog.yml release:` (dead) · `artifact.yml version` · release tag
-  `{name}-v{version}` (derived).
+- **Identity** — `.yak/component.yml name` (authoritative since Step 2,
+  read in manager `_read_component`) · `catalog.yml` key (duplicate,
+  verified against component.yml → `CatalogIdentityError`) · `artifact.yml
+  name` (copy).
+- **Version** — `.yak/component.yml version` (authoritative since Step 2;
+  the build validates the wheel against it) · `catalog.yml release:`
+  (dead) · `artifact.yml version` · release tag `{name}-v{version}`
+  (derived).
 - **Discovery** — `catalog.yml → components.<name>.location` (only source,
   ADR-20; no directory scanning).
 - **Build** — `pyproject.toml [build-system]` (Python-specific) ·
   builder discovery finds pyproject.toml only (`_find_buildable_projects`).
 - **Distribution** — `context.toml` / `sources.toml` global
   `distribution` (single repository for all components today).
-- **Structure/Mount** — `mount.toml → path` · `structure/.yak/yak.yml`
+- **Structure/Mount** — `.yak/mount.yml → path` · `structure/.yak/yak.yml`
   (tree behavior, lives inside the mounted structure, not at the repo
   root).
 - **Bundle** — `catalog.yml → bundles`.
@@ -92,7 +96,7 @@ documentation, and other project files.
 caps-system/
 ├── .yak/
 │   ├── component.yml      REQUIRED
-│   └── mount.toml          REQUIRED for structure/mount
+│   └── mount.yml          REQUIRED for structure/mount
 │
 ├── catalog.yml             repository / discovery (above the component)
 ├── pyproject.toml          language-specific build metadata
@@ -123,23 +127,57 @@ version: 0.8.0
 - `name` and `version` are the **Yakoon identity** of the component.
 - They are language-neutral — the component's language knows how it is
   *built*; Yakoon knows what the component *is*.
-- The version truth flows from `.yak/component.yml` into the build, not
-  the other way around: the build must align its native artifact version
-  with this version (or validate equality).
+- `.yak/component.yml` is the **authoritative source** for identity and
+  version — not the native build metadata. The native build must prove
+  the declaration, and Yakoon never relabels the result:
+
+  > `.yak/component.yml` declares component identity and version.
+  > Native build metadata must match that declaration.
+
+  A builder may build as its technology does; if the produced artifact
+  does not match the declaration, the build fails. A platform may not
+  rebuild an artifact with a different name or version to force a match.
 - **Scope:** this ADR decides identity and version only. Distribution is
   a per-component property of the catalog (section 5), not a component
   intrinsic.
 
-### 3. `.yak/mount.toml` — what do I deliver?
+#### Identity vs. fingerprint
+
+`name + version` identify the **logical component release**; an artifact
+fingerprint identifies a **concrete build** of that component version:
+
+```yaml
+# artifact.yml (built)
+name: y5n-caps-system
+version: 0.8.0
+fingerprint: sha256:abc123…   # this specific build
+```
+
+Two builds of the same component version are the same logical release
+with different fingerprints — the fingerprint is already the build
+identity (python.py sets it from the wheel bytes; `ArtifactInfo` carries
+it; `state.toml` records it).
+
+**Rebuilding and redeploying the same component version is valid.** A
+repeated build of `0.8.0` produces a new artifact with a new fingerprint;
+the next version `0.9.0` is a *version step*, fundamentally different
+from a rebuild. No rule is introduced that a version may only be built
+once, must rise monotonically, or that a release must be new.
+
+Distribution providers may define policies for replacing or retaining
+already published artifacts — that is a distribution policy, not a
+version-semantics rule, and out of this ADR's scope (section 5).
+
+### 3. `.yak/mount.yml` — what do I deliver?
 
 ```text
 <component>/
 └── .yak/
     ├── component.yml       who am I? (name, version)
-    └── mount.toml          what do I deliver? (structure → target)
+    └── mount.yml          what do I deliver? (structure → target)
 ```
 
-`mount.toml` is Yakoon-native infrastructure (structure deployment), so
+`.yak/mount.yml` is Yakoon-native infrastructure (structure deployment), so
 it belongs to the `.yak/` contract, not flat at the root. Its content
 and semantics do not change — only its location.
 
@@ -152,9 +190,9 @@ name: acme-caps-foo
 version: 0.1.0
 ```
 
-```toml
-# .yak/mount.toml
-path = "/opt/foo"
+```yaml
+# .yak/mount.yml
+path: /opt/foo
 ```
 
 Python, .NET, Go or no code at all — the Yakoon side is defined; the
@@ -193,20 +231,20 @@ runtime/
 │   ├── runtime-api/
 │   │   ├── .yak/
 │   │   │   ├── component.yml
-│   │   │   └── mount.toml
+│   │   │   └── mount.yml
 │   │   ├── pyproject.toml
 │   │   └── src/
 │   └── runtime-engine/
 │       ├── .yak/
 │       │   ├── component.yml
-│       │   └── mount.toml
+│       │   └── mount.yml
 │       ├── pyproject.toml
 │       └── src/
 └── caps/
     └── caps-root/
         ├── .yak/
         │   ├── component.yml
-        │   └── mount.toml
+        │   └── mount.yml
         ├── pyproject.toml
         └── structure/
 ```
@@ -247,7 +285,7 @@ The full model:
 COMPONENT
 <component>/.yak/
 ├── component.yml           name, version
-└── mount.toml              structure deployment
+└── mount.yml              structure deployment
 
 REPOSITORY / DISCOVERY
 catalog.yml                 location, distribution, bundles
@@ -289,41 +327,79 @@ never carries version pins.
   for a component — concrete and precise, symmetric to the environment's
   `.yak/`.
 - **One version source.** The fifth, dead `release:` copy disappears;
-  version flows from component.yml into the build.
+  identity and version flow from component.yml into the build — and are
+  validated, not relabeled.
 - **Decentral distribution.** A private company component behaves exactly
   like an official one: source, version, catalog, own releases.
 - **Cleaner catalog.** Discovery is pure layout; the catalog registers
   no identities. Identity lives in one place — component.yml — and is
   validated against the native build metadata (pyproject / csproj /
-  package.json) by the builder or a validation step.
+  package.json) by the builder.
 
 ### Trade-offs
 
 - **Builder coupling.** The build backend must accept or validate the
-  Yakoon version — a change to the build contract.
-- **Migration.** Existing components need a `.yak/component.yml` and a
-  relocated `mount.toml`; catalogs change shape; the dead `release:`
-  entries are dropped; tags move from `dists` to each component
-  repository.
-- **Identity verification.** Without the catalog key, identity exists in
-  one place; a mismatch between component.yml and the native build
-  metadata is caught by the builder or a validation step.
+  Yakoon identity — a change to the build contract (done in Step 2).
+- **Migration.** Done in Steps 1–2: every component root now carries
+  `.yak/component.yml` and `.yak/mount.yml`; catalogs still carry the
+  dead `release:` entries until Step 3; tags move from `dists` to each
+  component repository in Step 3.
+- **Identity verification.** The catalog key still double-checks identity;
+  the builder verifies the native build against component.yml. A
+  mismatch between component.yml and the native build metadata is a
+  build error.
 
 ## Implementation Notes
 
-Open, implementation-level questions:
+### Step 1 (done) — the component boundary
 
-- Builder contract: does Yakoon pass the version in, or validate
-  equality after the build? (Both work; passing it in centralizes the
-  version truth.)
+`.yak/` was established as the portable Yakoon contract of a component:
+every component root gained `.yak/component.yml` (name, version), and
+`mount.toml` moved to `.yak/mount.yml` (YAML). Catalogs, builder,
+version source (`pyproject.toml` stayed authoritative) and distribution
+were untouched.
+
+### Step 2 (done) — identity and version ownership
+
+`.yak/component.yml` became the authoritative source for identity and
+version. The Python builder receives the expected identity and validates
+the built wheel's `Name`/`Version` against it (`_validate` in
+builder/python.py); a mismatch fails the build (`IdentityMismatchError`)
+— artifacts are never relabeled. The derivation chain downstream is
+untouched: verified `ArtifactInfo` → `artifact.yml` → artifact filename
+→ release tag → resolved artifact. The installer reads identity from
+`.yak/component.yml` (`_read_component`, formerly `_read_pack`) and
+validates it against the catalog key (`CatalogIdentityError`).
+
+### Step 3 (open) — catalog and distribution
+
+Catalog shape, per-component distribution, the dead `release:` fields,
+the global `distribution` and the `dists` repository are all untouched
+— they belong to the next step and are removed or reshaped in one
+coherent commit.
+
+### Legacy release history
+
+The old `y5n-packs-*` releases in the `dists` repository are legacy and
+are **not migrated**. After ADR-23 + distribution, releases are created
+fresh in the component repositories (`caps-system/releases/`), starting
+with the then-current component version. No historical release migration
+is required:
+
+```text
+OLD  dists/releases/y5n-packs-*
+──── architecture boundary ────────
+NEW  <component repo>/releases/y5n-caps-*
+```
+
+### Open, implementation-level questions
+
 - `structure/.yak/yak.yml` describes a **node in the Yakoon filesystem**,
   not the component, and is out of this ADR's scope entirely.
-- Release tag/asset migration path from `dists` to per-component
-  distribution targets.
 - How `distribution` in a catalog entry is validated against the
   transport it names.
 - A future `yak component init` would only need to produce the `.yak/`
-  contract (component.yml + mount.toml) — no language scaffolding. This
+  contract (component.yml + mount.yml) — no language scaffolding. This
   ADR does not decide whether or when such a command exists.
 
 ## Open question
@@ -333,4 +409,6 @@ Open, implementation-level questions:
 
 This ADR answers: **in `.yak/` at the component root — the portable
 Yakoon contract of a component, with `component.yml` (name, version)
-and `mount.toml` (structure deployment) as its first contents.**
+and `.yak/mount.yml` (structure deployment) as its first contents.**
+Identity and version ownership are implemented (Steps 1–2); catalog and
+distribution follow in Step 3.
