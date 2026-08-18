@@ -14,15 +14,15 @@ members through the shared index.
 
 ## Sources and artifacts
 
-A catalog (`catalog.yml`) is what a source offers. Each component keeps
-both faces — where the source is and which release to use:
+A catalog (`catalog.yml`) is what a source offers. It lists locations
+only — identity lives in each location's `.yak/component.yml`, and
+releases are discovered from the source repository (ADR-23):
 
 ```yaml
 # catalog.yml
 components:
-  y5n-runtime-api:
-    location: packages/runtime-api   # source
-    release: y5n-runtime-api-v0.8.0      # artifact
+  - location: packages/runtime-api
+  - location: packages/runtime-engine
 
 bundles:
   runtime:
@@ -31,9 +31,9 @@ bundles:
     - y5n-sdk-python
 ```
 
-`location` answers *where the source is*; `release` answers *which
-published release to use*. Bundles are global — they name components and
-resolve through the shared index, first hit wins.
+`location` answers *where the component is*; the component declares
+*who it is* in its own `.yak/component.yml`. Bundles are global — they
+name components and resolve through the shared index, first hit wins.
 
 ## Compose an environment
 
