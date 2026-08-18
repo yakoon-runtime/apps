@@ -16,7 +16,7 @@ def _find_buildable_projects(root: Path) -> list[Path]:
         return projects
 
     # A buildable project has a pyproject.toml with a build-system; the
-    # presence of mount.toml/structure is irrelevant to buildability.
+    # presence of .yak/mount.yml or structure is irrelevant to buildability.
     pyproj = root / "pyproject.toml"
     if pyproj.exists() and _is_buildable_pyproject(pyproj):
         projects.append(root)

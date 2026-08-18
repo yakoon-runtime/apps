@@ -567,9 +567,9 @@ class InstallationManager:
         """Read a component's native identity and mount, if any.
 
         Identity comes from the component's own build manifest
-        (``pyproject.toml``), mount from ``mount.toml``. No pack manifest
-        exists anymore — a component is its native project plus optional
-        mount semantics.
+        (``pyproject.toml``), mount from ``.yak/mount.yml``. No pack
+        manifest exists anymore — a component is its native project plus
+        optional mount semantics.
         """
         manifest = path / "pyproject.toml"
         if not manifest.exists():

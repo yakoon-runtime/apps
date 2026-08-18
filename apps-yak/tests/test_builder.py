@@ -75,7 +75,8 @@ class TestFindBuildableProjects:
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "structure-only"
             p.mkdir()
-            (p / "mount.toml").write_text('path = "/opt/x"\n')
+            (p / ".yak").mkdir()
+            (p / ".yak" / "mount.yml").write_text("path: /opt/x\n")
             result = _find_buildable_projects(Path(tmp))
             assert result == []
 

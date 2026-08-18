@@ -35,7 +35,8 @@ def test_one_version_through_the_whole_chain():
         (project / "pack.toml").write_text(
             f'name = "{name}"\nversion = "0.1.0"\n'
         )
-        (project / "mount.toml").write_text('path = "/opt/acme"\n')
+        (project / ".yak").mkdir()
+        (project / ".yak" / "mount.yml").write_text("path: /opt/acme\n")
 
         builder = PythonBuildProvider()
 

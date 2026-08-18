@@ -73,7 +73,7 @@ def make_source(
 
 
 def source_pack(path: Path, name: str, mount: str) -> Path:
-    """A source component: pyproject identity + mount.toml + structure."""
+    """A source component: pyproject identity + .yak/mount.yml + structure."""
     (path / "structure").mkdir(parents=True, exist_ok=True)
     (path / "structure" / "payload.txt").write_text(f"{name}-source")
     (path / "pyproject.toml").write_text(
@@ -85,7 +85,8 @@ def source_pack(path: Path, name: str, mount: str) -> Path:
         f'name = "{name}"\n'
         'version = "0.1.0"\n'
     )
-    (path / "mount.toml").write_text(f'path = "{mount}"\n')
+    (path / ".yak").mkdir(parents=True, exist_ok=True)
+    (path / ".yak" / "mount.yml").write_text(f"path: {mount}\n")
     return path
 
 
@@ -203,5 +204,6 @@ def source_proj(
     if mount:
         (path / "structure").mkdir(parents=True, exist_ok=True)
         (path / "structure" / "payload.txt").write_text(f"{name}-source")
-        (path / "mount.toml").write_text(f'path = "{mount}"\n')
+        (path / ".yak").mkdir(parents=True, exist_ok=True)
+        (path / ".yak" / "mount.yml").write_text(f"path: {mount}\n")
     return path

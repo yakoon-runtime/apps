@@ -25,3 +25,4 @@ deployment. Runtime-internal decisions live in the runtime repository.
 | 020 | Source Catalogs | Accepted |
 | 021 | The Install Contract | Accepted |
 | 022 | The Workspace as a Materialized Filesystem | Accepted |
+| 023 | Component Self-Description | Proposed |
