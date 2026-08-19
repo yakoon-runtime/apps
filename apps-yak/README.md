@@ -170,7 +170,10 @@ Any installation can then resolve the component from that repository:
 
     yak install acme-erp
 
-Credentials come from the environment, never from configuration files:
+**Public repositories can be discovered and installed without any
+credentials** — discovery, resolution and install read over the public
+GitHub Contents API with no token. `YAK_GITHUB_TOKEN` is required only for
+operations that write to GitHub, such as `yak deploy`:
 
     export YAK_GITHUB_TOKEN=<token>
 
