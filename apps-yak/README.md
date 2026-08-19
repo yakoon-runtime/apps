@@ -135,8 +135,13 @@ the identity is already part of the environment.
 ## Build and distribute a component
 
 `yak` builds a component from its own `.yak/component.yml` identity, then
-publishes it. Distribution follows the source — a component deploys to the
-repository whose catalog discovered it:
+publishes it. `.yak/component.yml` is the authority for component identity
+and version. Native build metadata must match that declaration — for
+example, a Python wheel built from `pyproject.toml` must carry the same
+name and version; a mismatch fails the build. `yak` never relabels a
+native artifact to make it fit the component declaration. Distribution
+follows the source — a component deploys to the repository whose catalog
+discovered it:
 
     Source
       │ build
@@ -160,6 +165,14 @@ artifact into the source repository of the component, updating
     yak build acme-erp
     yak publish acme-erp
     yak deploy acme-erp --to github:acme/packs
+
+**To release a new version, raise the `version` in the component's
+`.yak/component.yml`** — that is the one authority for identity and
+version. Your native build metadata must agree with it: for a Python
+component, the `version` in `pyproject.toml` has to match the declared
+one. `yak build` validates the built wheel against the declaration and
+**fails (it does not relabel)** if they disagree. Keep the two consistent;
+nothing else needs to change to ship a new version.
 
 Any installation can then resolve the component from that repository:
 
