@@ -1,13 +1,16 @@
 components:
-  - location: apps-console
-  - location: apps-runtime
-  - location: apps-shell
-  - location: apps-web
-  - location: apps-yak
-
+  y5n-apps-console:
+    location: apps-console
+  y5n-apps-runtime:
+    location: apps-runtime
+  y5n-apps-shell:
+    location: apps-shell
+  y5n-apps-web:
+    location: apps-web
+  y5n-apps-yak:
+    location: apps-yak
 bundles:
   shell:
     - y5n-apps-shell
-
   web:
     - y5n-apps-web
