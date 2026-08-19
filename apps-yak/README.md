@@ -1,7 +1,10 @@
 # yak — Yakoon CLI
 
-`yak` is the command-line interface for Yakoon — a composable,
-language-neutral runtime platform.
+`yak` is the command-line tool for Yakoon — it owns *installation* and
+*distribution* (assemble an environment, build/publish/deploy components).
+`yak` is a **tool / assembler**: it does not own what a component is, what
+it delivers, or how it runs. Those belong to each component's own
+`.yak/` contract (`component.yml`, `mount.yml`) and to the runtime.
 
 Yakoon starts empty. One composition primitive makes a component or a
 bundle part of an environment:
@@ -12,7 +15,16 @@ The first argument is always an identity: a component name or a bundle
 name. A bundle is a name → list of component names; it resolves to its
 members through the shared index.
 
-## Sources and artifacts
+## Discovery, resolution, authority
+
+Three owners, cleanly separated:
+
+| File | Owner | Answers |
+|------|-------|---------|
+| `catalog.yml` | repository | `name → location` (discovery) |
+| `releases.yml` | repository | offered artifact (`version + tag + digest`) |
+| `.yak/component.yml` | component | identity + version (authority) |
+| `.yak/mount.yml` | component | delivery (`source → path`) |
 
 A catalog (`catalog.yml`) is what a source offers. It is a `name →
 location` mapping — the key is a discovery binding / index key only, never
@@ -61,7 +73,8 @@ number of offered components.
 
 A component delivers into the tree only when it declares it, in
 `.yak/mount.yml` as an explicit `source → path` mapping (no hard-coded
-directory name):
+directory name). The component owns this declaration; `yak` only honors
+it during materialization:
 
 ```yaml
 # .yak/mount.yml
@@ -71,12 +84,20 @@ path: /usr/bin           # its target in the materialized tree
 
 No `mount.yml` means the component delivers nothing into the tree (a pure
 library). The `source` directory is the deliverable and may be any
-component-relative path the project chooses:
+component-relative path the project chooses — there is no imposed layout
+outside `.yak/`:
+
+```yaml
+# a .NET component mounting an idiomatic folder
+# .yak/mount.yml
+source: yakoon/commands
+path: /usr/bin
+```
 
 ## Compose an environment
 
-    yak install runtime          # the runtime bundle, from releases
-    yak install crm              # one component, from its release
+    yak install system          # the system bundle, from releases
+    yak install crm             # one component, from its release
     yak install crm --path ./my-catalog
 
 `--path` is a repeatable **source override**: it points at a source with
@@ -113,7 +134,9 @@ the identity is already part of the environment.
 
 ## Build and distribute a component
 
-Yak in one picture:
+`yak` builds a component from its own `.yak/component.yml` identity, then
+publishes it. Distribution follows the source — a component deploys to the
+repository whose catalog discovered it:
 
     Source
       │ build
@@ -123,8 +146,6 @@ Yak in one picture:
       ▼
     ~/.yak/artifacts/
       │
-      ├── install ──→ Installation
-      │
       │ deploy
       ▼
     Repository
@@ -133,8 +154,8 @@ Yak in one picture:
 
 `build` produces artifacts from a project; `publish` lifts a built
 artifact into the system-global store; `deploy` ships a *published*
-artifact into a remote repository, where other installations can resolve
-it immediately.
+artifact into the source repository of the component, updating
+`releases.yml` so other installations resolve it immediately:
 
     yak build acme-erp
     yak publish acme-erp
@@ -146,7 +167,7 @@ Any installation can then resolve the component from that repository:
 
 Credentials come from the environment, never from configuration files:
 
-    export GITHUB_TOKEN=<token>
+    export YAK_GITHUB_TOKEN=<token>
 
 `deploy` needs permission to create releases in the target repository: a
 fine-grained token requires **Contents: Read and write** for that
