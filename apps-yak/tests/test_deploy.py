@@ -57,6 +57,9 @@ class FakeGithub:
         self.catalog_sha = "sha-catalog"
         self.fail_catalog = False
         self.catalog_path: str | None = None
+        self.release_yml_content: bytes | None = None
+        self.release_yml_sha: str | None = None
+        self.release_yml_writes: int = 0
 
     def _release(self, repo: str) -> dict | None:
         return self.releases.get(repo)
@@ -194,6 +197,30 @@ class FakeGithub:
             repo = full.split("/repos/", 1)[1].split("/contents/", 1)[0]
             path = full.split("/contents/", 1)[1]
             contents_url = f"https://api.github.com/repos/{repo}/contents/{path}"
+            if path.endswith("releases.yml"):
+                if method == "GET":
+                    if self.release_yml_content is None:
+                        raise HTTPError(contents_url, 404, "Not Found", {}, None)
+                    return _FakeResp(
+                        json.dumps(
+                            {
+                                "path": path,
+                                "content": base64.b64encode(
+                                    self.release_yml_content
+                                ).decode(),
+                                "encoding": "base64",
+                                "sha": self.release_yml_sha,
+                            }
+                        ).encode()
+                    )
+                if method == "PUT":
+                    body = json.loads((data or b"").decode())
+                    self.release_yml_content = base64.b64decode(body["content"])
+                    self.release_yml_sha = f"sha-{len(self.release_yml_content)}"
+                    self.release_yml_writes += 1
+                    return _FakeResp(
+                        json.dumps({"path": path, "sha": self.release_yml_sha}).encode()
+                    )
             is_catalog = path.endswith("catalog.yml")
             if not is_catalog or method == "GET":
                 if self.catalog_content is None:
@@ -290,6 +317,101 @@ def test_deploy_artifact_requires_published(monkeypatch):
         home = _mock_home(monkeypatch, tmp)
         result = deploy_artifact("crm", "github:acme/packs")
         assert result is None
+
+
+def test_deploy_writes_release_index_entry(monkeypatch):
+    """deploy publishes the release and offers it through releases.yml."""
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        store = _published_artifact(home)
+
+        repo = GithubReleaseRepository("acme/packs")
+        assert repo.deploy("crm", store) is True
+
+        assert fake.releases["acme/packs"]["tag"] == "crm-v1.0.0"
+        assert fake.release_yml_writes == 1
+        content = fake.release_yml_content.decode()
+        assert "crm:" in content
+        assert "version: 1.0.0" in content
+        assert "tag: crm-v1.0.0" in content
+        # The digest is the sha256 of the published tarball — the concrete
+        # build identity (version alone does not identify a build).
+        tarball = fake.releases["acme/packs"]["assets"]["crm.artifact.tar.gz"][1]
+        expected_digest = "sha256:" + hashlib.sha256(tarball).hexdigest()
+        assert f"digest: {expected_digest}" in content
+
+
+def test_redeploy_same_build_is_noop_including_release_index(monkeypatch):
+    """An unchanged artifact stays a NO-OP: no re-upload, no re-write of
+    releases.yml (the entry already offers exactly that artifact)."""
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        store = _published_artifact(home)
+
+        repo = GithubReleaseRepository("acme/packs")
+        assert repo.deploy("crm", store) is True
+        release_id = fake.releases["acme/packs"]["id"]
+        writes_after_first = fake.release_yml_writes
+        assert writes_after_first == 1
+
+        # Same build again: the release and the release index stay as-is.
+        assert repo.deploy("crm", store) is True
+        assert fake.releases["acme/packs"]["id"] == release_id
+        assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
+        assert fake.release_yml_writes == writes_after_first
+
+        # A changed build of the same version: the asset is replaced and
+        # the release index is updated to the new digest.
+        (store / "structure" / "x.txt").write_text("changed")
+        assert repo.deploy("crm", store) is True
+        assert fake.releases["acme/packs"]["id"] == release_id
+        assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 2
+        assert fake.release_yml_writes == writes_after_first + 1
+        content = fake.release_yml_content.decode()
+        tarball = fake.releases["acme/packs"]["assets"]["crm.artifact.tar.gz"][1]
+        expected_digest = "sha256:" + hashlib.sha256(tarball).hexdigest()
+        assert f"digest: {expected_digest}" in content
+
+
+def test_missing_release_index_is_repaired_on_redeploy(monkeypatch):
+    """Release+asset already correct + releases.yml missing → the deploy
+    must repair the index: 'unchanged artifact' refers to the release and
+    asset, not to the release index. A missing/stale index is written."""
+    fake = _mock_github(monkeypatch)
+    with tempfile.TemporaryDirectory() as tmp:
+        home = _mock_home(monkeypatch, tmp)
+        store = _published_artifact(home)
+
+        repo = GithubReleaseRepository("acme/packs")
+        # First deploy creates the release + asset, but simulate that the
+        # release-index write failed or never happened (index absent).
+        assert repo.deploy("crm", store) is True
+        release_id = fake.releases["acme/packs"]["id"]
+        assert fake.release_yml_writes == 1
+
+        # Drop the release index as if it had never been written.
+        fake.release_yml_content = None
+        fake.release_yml_sha = None
+
+        # Redeploy of the unchanged build: the release + asset are a no-op,
+        # but the missing index is repaired (written once, then stable).
+        assert repo.deploy("crm", store) is True
+        assert fake.releases["acme/packs"]["id"] == release_id
+        assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
+        repair_writes = fake.release_yml_writes
+        assert repair_writes == 2  # first write + repair write
+
+        # Once repaired, the next redeploy is a full no-op — no write.
+        assert repo.deploy("crm", store) is True
+        assert fake.release_yml_writes == repair_writes
+
+        # The repaired index reflects the exact published artifact.
+        content = fake.release_yml_content.decode()
+        tarball = fake.releases["acme/packs"]["assets"]["crm.artifact.tar.gz"][1]
+        expected_digest = "sha256:" + hashlib.sha256(tarball).hexdigest()
+        assert f"digest: {expected_digest}" in content
 
 
 def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Path:

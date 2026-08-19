@@ -1,14 +1,16 @@
 """GitHub Release repository — receive deployed resources (ADR-20).
 
 The read side resolves through catalogs and the release index; this
-module serves the write side: publishing an artifact as one release and
-uploading its deterministic asset. The component is already discoverable
-through its own source catalog (ADR-23 Step 3) — deploy only adds the
-published version, it never rewrites a catalog.
+module serves the write side: publishing an artifact as one release,
+uploading its deterministic asset and maintaining the repository-local
+``releases.yml`` (ADR-23 Step 4). The component is already discoverable
+through its own source catalog — deploy adds the published version and
+offers it through the release index; it never rewrites a catalog.
 """
 
 from __future__ import annotations
 
+import base64
 import gzip
 import hashlib
 import io
@@ -20,7 +22,9 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from y5n.apps.yak.resolver.catalog import _split_spec
+import yaml
+
+from y5n.apps.yak.resolver.catalog import _split_spec, release_index_path
 
 
 def release_tag_for(name: str, artifact_dir: Path) -> str:
@@ -33,6 +37,16 @@ def release_tag_for(name: str, artifact_dir: Path) -> str:
     """
     version_part = artifact_dir.name.replace(f"{name}-", "").rsplit(".", 2)[0]
     return f"{name}-v{version_part}"
+
+
+def version_for(name: str, artifact_dir: Path) -> str:
+    """The version of a built artifact — from its directory name.
+
+    ``crm-0.1.0.python.artifact`` → ``0.1.0``. The deploy writes this into
+    ``releases.yml``; the version does not identify a unique build (the
+    digest does).
+    """
+    return artifact_dir.name.replace(f"{name}-", "").rsplit(".", 2)[0]
 
 
 def _write_artifact_tarball(tarpath: Path, artifact_dir: Path, name: str) -> None:
@@ -65,28 +79,37 @@ def _asset_digest(release: dict, asset_name: str) -> str | None:
 class GithubReleaseRepository:
     """A GitHub repository: serves a catalog and receives deployed releases.
 
-    Resolution lives in the catalog/index (ADR-20); this adapter is
-    transport. On the write side it publishes an artifact as a release
-    with its deterministic asset. The component is already discoverable
-    through its own source catalog (ADR-23 Step 3) — no catalog is
-    rewritten during deploy.
+    Resolution lives in the catalog / release index (ADR-20, ADR-23 Step 4);
+    this adapter is transport. On the write side it publishes an artifact
+    as a release with its deterministic asset and updates the repository's
+    ``releases.yml`` so the read side resolves the new artifact. The
+    component is already discoverable through its own source catalog — no
+    catalog is rewritten during deploy.
     """
 
     def __init__(self, spec: str) -> None:
+        self._spec = spec
         _, location, _catalog_path = _split_spec(spec)
         self._repo = location.removeprefix("github:")
 
     def deploy(self, name: str, artifact_dir: Path, *, draft: bool = False) -> bool:
-        """Publish a resource (ADR-20).
+        """Publish a resource (ADR-20) and offer it through the release index.
 
         One repository operation with three outcomes:
 
         - CREATE: no release for ``{name}-v{version}`` yet — the release
           is created and the asset uploaded.
-        - NO-OP: the release exists and its asset digest equals the local
-          tarball — the same build is already deployed; nothing changes.
+        - NO-OP: the release exists, its asset digest equals the local
+          tarball and ``releases.yml`` already records exactly that
+          artifact — nothing changes.
         - REPLACE: the release exists but the asset differs — only the
           asset is replaced, the release itself is never deleted.
+
+        After the release is published, the repository's ``releases.yml``
+        is updated so the read side resolves the artifact (ADR-23 Step 4).
+        The digest is the concrete build identity: an unchanged artifact of
+        the same version stays a NO-OP; a changed artifact is replaced (the
+        provider policy is unchanged).
 
         Requires YAK_GITHUB_TOKEN — the only credential yak ever reads,
         and only on the write path.
@@ -105,8 +128,8 @@ class GithubReleaseRepository:
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github.v3+json",
             }
-            # Extract "0.1.0" from "crm-0.1.0.python.artifact" for the tag.
             tag = release_tag_for(name, artifact_dir)
+            version = version_for(name, artifact_dir)
             asset_name = f"{name}.artifact.tar.gz"
 
             release = self._release_by_tag(tag, headers)
@@ -126,7 +149,79 @@ class GithubReleaseRepository:
                     return False
                 if not self._upload_asset(release, name, tarpath, headers, tag):
                     return False
+
+            # Offering the artifact through the release index is part of
+            # deploy — the read side resolves over releases.yml.
+            if not self._update_release_index(name, version, tag, digest, token):
+                return False
             return True
+
+    def _update_release_index(
+        self, name: str, version: str, tag: str, digest: str, token: str
+    ) -> bool:
+        """Record the deployed artifact in the repository's releases.yml.
+
+        The release index is the read side's only source of what a
+        repository currently offers (ADR-23 Step 4) — writing it is part
+        of deploy and the catalog is never touched here. An entry that
+        already records exactly this artifact (tag + version + digest) is
+        a no-op; a missing or stale entry is repaired.
+        """
+        path = release_index_path(self._spec)
+        url = f"https://api.github.com/repos/{self._repo}/contents/{path}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github.v3+json",
+        }
+        current_sha: str | None = None
+        data: dict = {}
+        try:
+            with urlopen(Request(url, headers=headers)) as resp:
+                meta = json.loads(resp.read().decode())
+            if meta.get("encoding") == "base64" and isinstance(meta.get("content"), str):
+                current_text = base64.b64decode(meta["content"]).decode()
+                current_sha = meta.get("sha")
+                parsed = yaml.safe_load(current_text) or {}
+                if isinstance(parsed, dict):
+                    data = parsed
+        except HTTPError as exc:
+            if exc.code != 404:
+                self._api_error(exc)
+                return False
+        except Exception as exc:
+            self._api_error(exc)
+            return False
+
+        raw = data.get("components") or {}
+        components = raw if isinstance(raw, dict) else {}
+        entry = components.get(name)
+        if (
+            isinstance(entry, dict)
+            and entry.get("tag") == tag
+            and entry.get("version") == version
+            and entry.get("digest") == digest
+        ):
+            return True  # the index already offers exactly this artifact
+
+        components[name] = {"version": version, "tag": tag, "digest": digest}
+        payload = yaml.safe_dump(
+            {"components": components}, default_flow_style=False, sort_keys=False
+        )
+        body = {
+            "message": f"yak deploy: offer {name} {tag}",
+            "content": base64.b64encode(payload.encode()).decode(),
+        }
+        if current_sha:
+            body["sha"] = current_sha
+        write_req = Request(
+            url, data=json.dumps(body).encode(), headers=headers, method="PUT"
+        )
+        try:
+            with urlopen(write_req) as resp:
+                return True
+        except Exception as exc:
+            self._api_error(exc)
+            return False
 
     def _create_release(
         self, name: str, tag: str, draft: bool, headers: dict

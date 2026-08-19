@@ -159,6 +159,37 @@ def test_removed_mount_cleans_up():
         assert not (structure_dir / "opt" / "app" / "hello.txt").exists()
 
 
+def test_add_mount_on_update_does_not_trip_over_old_manifest():
+    """A new mount on a later materialization has no prior entries — the
+    reconcile must not assume every mount already exists in the manifest."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp) / "base" / "structure"
+        base.mkdir(parents=True)
+        (base / "root.txt").write_text("root")
+
+        overlay = Path(tmp) / "overlay" / "structure"
+        overlay.mkdir(parents=True)
+        (overlay / "cmd.txt").write_text("cmd")
+
+        structure_dir = Path(tmp) / "workspace" / "structure"
+        mat = Materializer()
+        mat.materialize(
+            structure_dir, mounts=[Mount(source=str(base.resolve()), target="/")]
+        )
+
+        # The overlay mount is new — it must materialize cleanly.
+        mat.materialize(
+            structure_dir,
+            mounts=[
+                Mount(source=str(base.resolve()), target="/"),
+                Mount(source=str(overlay.resolve()), target="/opt/tools"),
+            ],
+        )
+
+        assert (structure_dir / "root.txt").exists()
+        assert (structure_dir / "opt" / "tools" / "cmd.txt").read_text() == "cmd"
+
+
 def test_legacy_symlink_is_replaced():
     with tempfile.TemporaryDirectory() as tmp:
         source_dir = Path(tmp) / "my-pack" / "structure"

@@ -371,8 +371,8 @@ class InstallationManager:
             packs=[CapName(c.name) for c in new_records],
             components=new_records,
             status=InstallationStatus.CREATED,
-            created=now,
-            updated=datetime.now(UTC),
+            created=now if inst is None else inst.created,
+            updated=now,
         )
         # State is the truth about an established environment: written
         # only after the pip transaction succeeded. A failed install or
@@ -452,10 +452,11 @@ class InstallationManager:
 
         The caller decides source vs artifact — never the shape of a
         temporary resource. ``source`` uses ``location`` (a checkout),
-        ``artifact`` finds the published release. The component's identity
-        comes from the index, which is built from each location's
-        ``.yak/component.yml`` (ADR-23 Step 3) — `name` and the pack agree
-        by construction, so no catalog/component check is needed.
+        ``artifact`` finds the offered release. The catalog key is a
+        discovery binding only (ADR-23 Step 4): the component's own
+        contract is validated at the actual access — the source's
+        ``.yak/component.yml`` or the artifact's ``artifact.yml`` must
+        declare exactly the expected name, and a mismatch fails loudly.
         """
         if mode == "artifact":
             resource = self._materialize_release(catalog, name)
@@ -463,6 +464,11 @@ class InstallationManager:
                 return None
             artifact = self._parse_artifact(resource)
             if artifact is not None:
+                self._validate_identity(
+                    expected=name,
+                    actual=artifact.name,
+                    what=f"artifact.yml of '{name}' from '{catalog.spec}'",
+                )
                 return _Component(name=name, mode="artifact", artifact=artifact)
             structure = resource / "structure"
             structure_dir = structure if structure.is_dir() else None
@@ -479,17 +485,39 @@ class InstallationManager:
         structure = resource / "structure"
         structure_dir = structure if structure.is_dir() else None
         pack = self._read_component(resource)
-        if pack is not None:
-            return _Component(
-                name=pack.name,
-                mode="source",
-                pack=pack,
-                source=resource,
-                structure=structure_dir,
-            )
-        return _Component(
-            name=name, mode="source", source=resource, structure=structure_dir
+        actual = pack.name if pack is not None else None
+        self._validate_identity(
+            expected=name,
+            actual=actual,
+            what=f"the component at '{ref.location}' in '{catalog.spec}'",
         )
+        return _Component(
+            name=name,
+            mode="source",
+            pack=pack,
+            source=resource,
+            structure=structure_dir,
+        )
+
+    def _validate_identity(self, expected: str, actual: str | None, what: str) -> None:
+        """A catalog key must match the component's own declared identity.
+
+        The catalog key is a discovery binding, never a normative identity
+        (ADR-23 Step 4). Whenever the component is actually accessed the
+        expected name is checked against its own contract and a mismatch
+        fails loudly and unambiguously.
+        """
+        if actual is None:
+            raise CatalogError(
+                f"{what} has no .yak/component.yml / artifact.yml "
+                "(so no declared identity)"
+            )
+        if actual != expected:
+            raise CatalogError(
+                f"identity mismatch for '{expected}': the catalog key does "
+                f"not match the component's own declaration ({what} "
+                f"declares '{actual}')"
+            )
 
     def _materialize_release(self, catalog, name: str) -> Path | None:
         """Resolve a component's released artifact from its distribution.

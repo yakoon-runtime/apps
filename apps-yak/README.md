@@ -14,15 +14,20 @@ members through the shared index.
 
 ## Sources and artifacts
 
-A catalog (`catalog.yml`) is what a source offers. It lists locations
-only — identity lives in each location's `.yak/component.yml`, and
-releases are discovered from the source repository (ADR-23):
+A catalog (`catalog.yml`) is what a source offers. It is a `name →
+location` mapping — the key is a discovery binding / index key only, never
+a normative identity. Identity and version live in each location's
+`.yak/component.yml`, and the currently offered artifact of each component
+resolves through the repository-local `releases.yml` at the same boundary
+as the catalog (ADR-23):
 
 ```yaml
 # catalog.yml
 components:
-  - location: packages/runtime-api
-  - location: packages/runtime-engine
+  y5n-runtime-api:
+    location: packages/runtime-api
+  y5n-runtime-engine:
+    location: packages/runtime-engine
 
 bundles:
   runtime:
@@ -31,9 +36,26 @@ bundles:
     - y5n-sdk-python
 ```
 
-`location` answers *where the component is*; the component declares
-*who it is* in its own `.yak/component.yml`. Bundles are global — they
-name components and resolve through the shared index, first hit wins.
+`location` answers *where the component is*; the component declares *who
+it is* in its own `.yak/component.yml`. The catalog key is validated
+against that declaration at the actual materialization — a mismatch fails
+loudly. Bundles are global — they name components and resolve through the
+shared index, first hit wins.
+
+```yaml
+# releases.yml — what a repository currently offers
+components:
+  y5n-caps-system:
+    version: 0.8.0
+    tag: y5n-caps-system-v0.8.0
+    digest: sha256:…
+```
+
+`yak deploy` publishes the release and updates the repository's
+`releases.yml`. Remote resolution reads catalogs and `releases.yml` over
+the Contents API only — it never scans the GitHub Releases API, so
+discovery and release resolution scale with repositories, not with the
+number of offered components.
 
 ## Compose an environment
 

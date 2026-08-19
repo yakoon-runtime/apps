@@ -151,11 +151,11 @@ def test_deploy_defaults_to_own_catalog_source(monkeypatch):
             components={
                 "a": (
                     Catalog(spec="github:acme/a-repo", base=None),
-                    ComponentRef(location="."),
+                    ComponentRef(name="a", location="."),
                 ),
                 "b": (
                     Catalog(spec="github:acme/b-repo", base=None),
-                    ComponentRef(location="."),
+                    ComponentRef(name="b", location="."),
                 ),
             },
             bundles={
@@ -179,6 +179,29 @@ def test_deploy_defaults_to_own_catalog_source(monkeypatch):
 
         # Each member goes to its own repo — never to a shared dists.
         assert calls == [("a", "github:acme/a-repo"), ("b", "github:acme/b-repo")]
+
+
+def test_update_preserves_created_timestamp(monkeypatch):
+    """update must not rewrite the installation's created timestamp — only
+    updated moves. An idempotent update leaves the state stable."""
+    from y5n.apps.yak.installer.installer import Installer
+
+    monkeypatch.setattr(Installer, "install", lambda self, root, candidates: None)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        repo = _repo(base)
+        mgr = _mgr(base, repo)
+        root = base / "inst"
+
+        mgr.install(root, identity="runtime", paths=[str(repo)])
+        created_after_install = mgr.load(root).created
+
+        mgr.update(root)
+        assert mgr.load(root).created == created_after_install
+
+        mgr.update(root)
+        assert mgr.load(root).created == created_after_install
 
 
 def test_deploy_rejects_to_for_a_bundle(monkeypatch):

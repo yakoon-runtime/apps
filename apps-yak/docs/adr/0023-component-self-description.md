@@ -2,6 +2,12 @@
 
 **Status:** Accepted
 **Date:** 2026-08-17
+**Updated:** 2026-08-19 — Step 4 (catalog mapping + repository-local
+`releases.yml`). Section 4 and Section 5 and the Step 3 notes that
+describe a remote per-location `component.yml` fetch are **superseded
+for the catalog shape and the remote resolution path**; everything about
+`.yak/` being the portable component contract and `component.yml` owning
+identity/version is unchanged.
 
 ## Context
 
@@ -203,6 +209,12 @@ comes afterwards, independently.
 
 ### 4. Discovery becomes pure layout
 
+> **Superseded by Step 4 for the catalog shape.** The catalog is a
+> `name → location` mapping again (Step 4 §1). This section's conclusion
+> — "the catalog never declares identity" — still holds; the *shape* it
+> suggests (a bare location list) does not. Validation moves from
+> index-build time to the actual materialization (Step 4 §2).
+
 `catalog.yml` only answers *where* components live; it no longer repeats
 identity or carries versions:
 
@@ -252,6 +264,12 @@ runtime/
 ```
 
 ### 5. Catalog discovers by location — distribution follows the source
+
+> **Superseded by Step 4 for the catalog shape and release resolution.**
+> The catalog is a `name → location` mapping (Step 4 §1) and releases
+> resolve over the repository-local `releases.yml` (Step 4 §3–4); the
+> per-location `component.yml` fetch described below no longer exists.
+> "Distribution follows the source" is unchanged.
 
 A catalog lists locations only. It never declares identity (the component
 owns it in `component.yml`), and it never declares distribution. The
@@ -371,16 +389,16 @@ never carries version pins.
   (`release:` fields removed); the global distribution and `dists` are
   out of the active architecture; tags move from `dists` to each
   component repository.
-- **Discovery cost.** The remote index reads one small
-  `component.yml` per location via the GitHub Contents API (cached
-  briefly). Deliberately not optimized further until a problem is
-  measured — the price buys the invariant that the catalog never
-  duplicates an identity.
-- **Identity verification.** The catalog no longer double-checks identity
-  (it declares none). The builder verifies the native build against the
-  component's `component.yml`; a mismatch is a build error. The management
-  side reads identity from the same manifest, so no second check exists
-  to disagree with.
+- **Discovery cost.** The remote index reads the **catalogs only** — one
+  Contents-API request per repository (cached briefly), never one per
+  location. Releases resolve through the repository-local `releases.yml`
+  over the same Contents-API transport (Step 4). This is what keeps
+  remote discovery and release resolution scaling with repositories, not
+  with the number of available components.
+- **Identity verification.** The catalog key is a discovery binding only;
+  identity is validated against the component's own contract at the
+  actual materialization (source: `.yak/component.yml`, artifact:
+  `artifact.yml`) and fails loudly on mismatch (Step 4 §2).
 
 ## Implementation Notes
 
@@ -424,6 +442,134 @@ catalog discovered it (`--to` stays the single-component override).
 component is already discoverable through its source catalog; deploy only
 publishes the version.
 
+### Step 4 (done) — catalog mapping + repository-local releases.yml (delta)
+
+Step 3 turned the catalog into a location list and made the remote index
+fetch one `component.yml` per location. That scaled with the number of
+offered components: a working install of a bundle from 8 public sources
+needs more than the anonymous GitHub core API budget (60 requests/hour)
+in a single run. This step keeps everything `.yak/`-owned unchanged, but
+changes **discovery shape** and **release resolution**:
+
+> The catalog **discovers**: a mapping `name → location`. The catalog key
+> is a discovery binding / index key — never a normative identity.
+> `releases.yml` **resolves**: the published artifact a repository
+> currently offers. `component.yml` **owns** identity and version.
+
+#### 1. `catalog.yml` is a mapping again
+
+```yaml
+# runtime/catalog.yml
+components:
+  y5n-runtime-api:
+    location: packages/runtime-api
+  y5n-runtime-engine:
+    location: packages/runtime-engine
+```
+
+The component name in the catalog is **only a discovery binding / index
+key** — the index resolves by it without reading the component's own
+manifest. `.yak/component.yml` remains the sole normative source for
+identity and version; the catalog still never declares a version, a
+release, a digest or a distribution. Remote discovery performs **no
+eager `component.yml` fetch per location anymore** — the remote index is
+built in O(catalogs/repositories), not O(components).
+
+#### 2. Identity is validated at the actual access
+
+The catalog key is not blindly trusted. When a component is actually
+materialized the expectation is checked against the component's own
+contract, and a mismatch fails loudly and unambiguously:
+
+- **Source materialization:** expected catalog name
+  `== .yak/component.yml name`.
+- **Artifact materialization:** expected resolved name
+  `== artifact.yml name`.
+
+Local catalogs may validate eagerly purely as extra error detection;
+the discovery model itself never depends on it.
+
+#### 3. Repository-local `releases.yml` — the release index
+
+Each repository keeps a `releases.yml` at the same boundary as its
+catalog (next to `catalog.yml`; for a `github:owner/repo:path/catalog`
+source beside that catalog). First deliberately small contract:
+
+```yaml
+# runtime/releases.yml
+components:
+  y5n-caps-system:
+    version: 0.8.0
+    tag: y5n-caps-system-v0.8.0
+    digest: sha256:…
+```
+
+An entry describes the artifact a repository currently offers for a
+component. No history, no list of old versions, no version pinning. The
+`version` does not identify a unique build — the `digest` identifies the
+concrete offered build. Redeploying the same version with the identical
+artifact stays a NO-OP; the existing provider policy for changed
+artifacts is unchanged. The format is a Yakoon release index; GitHub
+details are not pulled into the contract. If the concrete artifact
+reference ever needs more than `tag`, that is reported before extending
+the registry contract.
+
+#### 4. Resolution over `releases.yml`
+
+The normal remote install path no longer needs the GitHub Releases API
+to scan available releases:
+
+```text
+catalog.yml
+    ↓
+component/repository determined
+    ↓
+releases.yml            → Contents API (same transport as catalogs)
+    ↓
+version + tag + digest
+    ↓
+GitHub Release Asset / CDN download
+    ↓
+digest check
+    ↓
+artifact.yml identity check
+```
+
+Artifact downloads still go through the release asset CDN and count
+separately from API discovery.
+
+#### 5. `yak deploy` maintains `releases.yml`
+
+Deploy publishes the release + asset in the source repository (unchanged)
+and subsequently updates that repository's `releases.yml` entry for the
+component. `catalog.yml` is not modified by deploy. Distribution follows
+source, unchanged — no global distribution, no `dists`.
+
+#### 6. Verified end-to-end
+
+Measured against the live public repositories (2026-08-19; all 8 org
+sources migrated; the three offered components deployed through the new
+release index):
+
+```text
+fresh environment, github: sources only, no token, install system+core
+  (y5n-caps-system, y5n-runtime-api, y5n-sdk-python):
+
+  Catalog reads           8   (over the Contents API, one per source)
+  releases.yml reads      3   (only the 3 installed components' repos)
+  component.yml GETs      0   (no per-location discovery)
+  /releases API scans     0   (release resolution entirely over releases.yml)
+  Artifact downloads      CDN (digest-guarded cache; 0 re-downloads on reuse)
+
+  pip check               clean
+  yak update ×2           stable (no drift, no network within TTL,
+                          created timestamp preserved)
+  dists                   not involved anywhere
+```
+
+Remote discovery and release resolution scale with repositories/catalogs —
+the number of available components is out of the cost model.
+
 ### Legacy release history
 
 The old `y5n-packs-*` releases in the `dists` repository are legacy and
@@ -454,6 +600,7 @@ NEW  <component repo>/releases/y5n-caps-*
 This ADR answers: **in `.yak/` at the component root — the portable
 Yakoon contract of a component, with `component.yml` (name, version)
 and `.yak/mount.yml` (structure deployment) as its first contents.**
-Steps 1–3 are implemented: the component owns identity and version, the
-catalog discovers by location, and distribution follows the catalog's
-source.
+Steps 1–4 are implemented: the component owns identity and version, the
+catalog discovers by a `name → location` mapping, releases resolve over
+the repository-local `releases.yml` (no Releases-API scan), and
+distribution follows the catalog's source.

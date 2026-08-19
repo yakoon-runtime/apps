@@ -104,11 +104,11 @@ class Materializer:
         materialized (in the old manifest) may be created, changed or
         removed; anything else in the target tree is left untouched.
         """
-        old_entries = (
-            old.mount(str(source.absolute()), mount.target).by_path()
-            if old is not None
-            else {}
-        )
+        old_entries = {}
+        if old is not None:
+            prior = old.mount(str(source.absolute()), mount.target)
+            if prior is not None:
+                old_entries = prior.by_path()
         current = self._walk(source)
         result: list[MaterializedFile] = []
 
