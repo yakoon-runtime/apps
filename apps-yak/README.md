@@ -166,14 +166,6 @@ artifact into the source repository of the component, updating
     yak publish acme-erp
     yak deploy acme-erp --to github:acme/packs
 
-**To release a new version, raise the `version` in the component's
-`.yak/component.yml`** — that is the one authority for identity and
-version. Your native build metadata must agree with it: for a Python
-component, the `version` in `pyproject.toml` has to match the declared
-one. `yak build` validates the built wheel against the declaration and
-**fails (it does not relabel)** if they disagree. Keep the two consistent;
-nothing else needs to change to ship a new version.
-
 Any installation can then resolve the component from that repository:
 
     yak install acme-erp
