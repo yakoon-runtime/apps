@@ -102,7 +102,9 @@ def source_pack(path: Path, name: str, mount: str) -> Path:
     (path / ".yak" / "component.yml").write_text(
         f"name: {name}\nversion: 0.1.0\n"
     )
-    (path / ".yak" / "mount.yml").write_text(f"path: {mount}\n")
+    (path / ".yak" / "mount.yml").write_text(
+        f"source: structure\npath: {mount}\n"
+    )
     return path
 
 
@@ -113,9 +115,9 @@ def artifact(
     content: str = "data",
     fingerprint: str | None = None,
 ) -> Path:
-    """An artifact component: artifact.yml + structure."""
-    (path / "structure").mkdir(parents=True, exist_ok=True)
-    (path / "structure" / "payload.txt").write_text(content)
+    """An artifact component: artifact.yml + mounted content."""
+    (path / "mount").mkdir(parents=True, exist_ok=True)
+    (path / "mount" / "payload.txt").write_text(content)
     (path / "artifact.yml").write_text(
         "name: " + name + "\n"
         "version: 0.1.0\n"
@@ -136,8 +138,8 @@ def wheel_artifact(
     mount: str | None = None,
 ) -> Path:
     """An artifact component with a real wheel: artifact.yml + wheel."""
-    (path / "structure").mkdir(parents=True, exist_ok=True)
-    (path / "structure" / "payload.txt").write_text("data")
+    (path / "mount").mkdir(parents=True, exist_ok=True)
+    (path / "mount" / "payload.txt").write_text("data")
     _write_wheel(path, name, version, deps)
     mount_line = f"mount: {mount}\n" if mount else ""
     (path / "artifact.yml").write_text(
@@ -225,5 +227,7 @@ def source_proj(
         f"name: {name}\nversion: {version}\n"
     )
     if mount:
-        (path / ".yak" / "mount.yml").write_text(f"path: {mount}\n")
+        (path / ".yak" / "mount.yml").write_text(
+            f"source: structure\npath: {mount}\n"
+        )
     return path

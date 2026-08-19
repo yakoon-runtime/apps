@@ -36,6 +36,11 @@ name: {name}
 version: 0.1.0
 """
 
+MOUNT_YML = """\
+source: structure
+path: /usr/bin
+"""
+
 
 def create_cap(name: str, target: Path | None = None, force: bool = False) -> Path:
     title = name.capitalize()
@@ -51,11 +56,13 @@ def create_cap(name: str, target: Path | None = None, force: bool = False) -> Pa
     (root / "README.md").write_text(f"# {title}\n\n{title} cap.\n")
 
     # The component contract (ADR-23): .yak/component.yml declares the
-    # identity; .yak/mount.yml is added when the cap mounts a structure.
+    # identity; .yak/mount.yml declares the delivery (source → path) —
+    # the source directory is configurable, never a hard-coded name.
     (root / ".yak").mkdir(parents=True, exist_ok=True)
     (root / ".yak" / "component.yml").write_text(
         COMPONENT_YML.format(name=name)
     )
+    (root / ".yak" / "mount.yml").write_text(MOUNT_YML)
 
     src_dir = root / "src" / "y5n" / "caps" / name
     src_dir.mkdir(parents=True, exist_ok=True)

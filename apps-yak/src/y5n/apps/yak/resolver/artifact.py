@@ -45,11 +45,21 @@ class Artifact:
 
     @property
     def structure(self) -> Path | None:
-        """The artifact's materializable tree (its pack structure)."""
+        """The artifact's materializable tree (its mounted content).
+
+        The mounted content is packaged into the artifact's canonical
+        ``mount`` subdirectory (the component-side source name is a build
+        concern — the relative source lives in the artifact's mount
+        declaration). ``structure`` is kept as a read fallback for
+        artifacts built before the canonical name existed.
+        """
         if self.path is None:
             return None
-        structure = self.path / "structure"
-        return structure if structure.is_dir() else None
+        for candidate in ("mount", "structure"):
+            path = self.path / candidate
+            if path.is_dir():
+                return path
+        return None
 
     @property
     def manifest(self) -> Path | None:
@@ -99,7 +109,7 @@ class DirectorySource:
                     dependencies=meta.get("dependencies", []),
                     fingerprint=fp,
                     path=entry,
-                    mount=meta.get("mount"),
+                    mount=_mount_target(meta.get("mount")),
                 )
         return None
 
@@ -121,6 +131,18 @@ class DirectorySource:
                     (name, f"{meta.get('kind', 'package')} {meta.get('version', '?')}")
                 )
         return found
+
+
+def _mount_target(mount) -> str | None:
+    """The tree target of an artifact.yml ``mount`` value.
+
+    ``mount`` may be the plain target string (legacy) or a mapping
+    ``{source, path}`` (the full delivery declaration).
+    """
+    if isinstance(mount, dict):
+        target = mount.get("path")
+        return str(target) if target else None
+    return str(mount) if mount else None
 
 
 def _parse_manifest(path: Path) -> dict:

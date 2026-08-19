@@ -9,21 +9,47 @@ import yaml
 CapName = NewType("CapName", str)
 
 
-def read_mount(path: Path) -> str | None:
-    """Read a component's mount target from .yak/mount.yml, if any.
+class MountError(Exception):
+    """A .yak/mount.yml violates the component delivery contract."""
 
-    The mount is part of the component-local Yakoon contract (ADR-23);
-    the manifest is YAML (``path: /usr/bin``).
+
+@dataclass(frozen=True)
+class ComponentMount:
+    """A component's delivery declaration (mount.yml): source → path.
+
+    ``source`` is a path relative to the component root whose content is
+    mounted; ``path`` is its target in the materialized tree. Both are
+    mandatory: a mount.yml that exists declares the complete mapping.
+    """
+
+    source: str
+    target: str
+
+
+def read_mount(path: Path) -> ComponentMount | None:
+    """Read a component's delivery declaration from .yak/mount.yml, if any.
+
+    No mount.yml means the component delivers nothing into the tree. A
+    mount.yml that exists must declare both ``source`` (component-relative
+    path) and ``path`` (tree target) — the component layout is otherwise
+    free (no ``structure`` magic anywhere).
     """
     manifest = path / ".yak" / "mount.yml"
     if not manifest.exists():
         return None
     try:
         data = yaml.safe_load(manifest.read_text()) or {}
-    except Exception:
-        return None
-    value = data.get("path")
-    return str(value) if value else None
+    except Exception as exc:
+        raise MountError(f"cannot read {manifest}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise MountError(f"{manifest} must be a mapping")
+    source = data.get("source")
+    target = data.get("path")
+    if not isinstance(source, str) or not source:
+        raise MountError(f"{manifest} needs a 'source' (component-relative path)")
+    if not isinstance(target, str) or not target:
+        raise MountError(f"{manifest} needs a 'path' (tree target)")
+    return ComponentMount(source=source, target=target)
 
 
 def cap_from_data(data) -> "Cap | None":
@@ -70,14 +96,13 @@ class Mount:
 
 @dataclass(frozen=True)
 class Cap:
-    """Source component metadata: identity plus optional mount.
+    """Source component metadata: identity plus optional delivery.
 
     ``name`` and ``version`` are the component's Yakoon identity,
-    declared in ``.yak/component.yml`` (ADR-23); ``mount`` is the tree
-    path the component's structure is mounted into (e.g. ``/usr/bin``
-    for the system cap), declared in ``.yak/mount.yml``.
+    declared in ``.yak/component.yml`` (ADR-23); ``mount`` is the delivery
+    declaration (source → path), if any, from ``.yak/mount.yml``.
     """
 
     name: str
     version: str
-    mount: str | None = None
+    mount: ComponentMount | None = None

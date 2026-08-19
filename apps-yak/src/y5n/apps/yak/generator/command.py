@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from y5n.apps.yak.cap.models import read_component
+
 YAK_YML = """\
 title: {title}
 
@@ -85,7 +87,14 @@ def create_command(
 
     title = name.capitalize()
 
-    structure_dir = cap_root / "structure" / name
+    mount = read_component(cap_root)
+    if mount is None or mount.mount is None or not mount.mount.source:
+        raise RuntimeError(
+            f"cap '{cap_name}' has no .yak/mount.yml — commands live in the "
+            "cap's mounted directory (declare 'source' in mount.yml)"
+        )
+    mounted_dir = cap_root / mount.mount.source
+    structure_dir = mounted_dir / name
     if structure_dir.exists() and not force:
         raise FileExistsError(
             f"command '{name}' already exists at {structure_dir} (use --force to overwrite)"

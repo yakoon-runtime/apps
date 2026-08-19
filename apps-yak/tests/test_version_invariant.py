@@ -41,7 +41,9 @@ def _project(root: Path, name: str, version: str, mount: str) -> Path:
     (project / ".yak" / "component.yml").write_text(
         f"name: {name}\nversion: {version}\n"
     )
-    (project / ".yak" / "mount.yml").write_text(f"path: {mount}\n")
+    (project / ".yak" / "mount.yml").write_text(
+        f"source: structure\npath: {mount}\n"
+    )
     return project
 
 
@@ -84,7 +86,9 @@ def test_identity_through_the_whole_chain_starts_at_component_yml():
         (artifact_dir / "artifact.yml").write_text(info.to_yml())
         yml = (artifact_dir / "artifact.yml").read_text()
         assert f"version: {version}" in yml
-        assert "mount: /opt/acme" in yml
+        assert "mount:" in yml
+        assert "path: /opt/acme" in yml
+        assert "source: structure" in yml
 
         # 5. The release tag derives from the artifact dir name.
         assert release_tag_for(name, artifact_dir) == f"{name}-v{version}"
@@ -153,8 +157,90 @@ def test_mount_is_optional():
         (project / ".yak" / "mount.yml").unlink()
 
         builder = PythonBuildProvider()
+        expected = read_component(project)
+        assert expected is not None and expected.mount is None
+        # A component without a mount delivers nothing into the tree.
         wheel = _wheel_for(project, name, version)
         info = builder._parse_wheel(wheel)
         assert info is not None
         assert info.mount is None
         assert release_tag_for(name, root / info.filename) == f"{name}-v{version}"
+
+
+def test_mount_without_source_or_path_fails_loudly(tmp_path):
+    """mount.yml that exists must declare source AND path — no magic."""
+    from y5n.apps.yak.cap.models import MountError, read_mount
+
+    project = _project(tmp_path, "acme-c", "0.1.0", "/opt/acme")
+    (project / ".yak" / "mount.yml").write_text("path: /opt/acme\n")
+    with pytest.raises(MountError, match="source"):
+        read_mount(project)
+
+    (project / ".yak" / "mount.yml").write_text("source: structure\n")
+    with pytest.raises(MountError, match="path"):
+        read_mount(project)
+
+
+def test_mount_source_is_used_by_the_resolver(tmp_path):
+    """The mount source (not a hard-coded name) selects the delivered tree."""
+    from conftest import make_source
+    from y5n.apps.yak.hosts.cli.cwd import Context
+    from y5n.apps.yak.installation.manager import InstallationManager
+    from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
+    from y5n.apps.yak.repository.file_repo import FileRepository
+
+    src = tmp_path / "src"
+    cap = src / "acme-tool"
+    (cap / "deploy" / "bin").mkdir(parents=True)
+    (cap / "deploy" / "bin" / "hello.txt").write_text("deployed")
+    (cap / "pyproject.toml").write_text(
+        "[project]\nname = 'acme-tool'\nversion = '0.1.0'\n"
+    )
+    (cap / ".yak").mkdir(parents=True)
+    (cap / ".yak" / "component.yml").write_text(
+        "name: acme-tool\nversion: 0.1.0\n"
+    )
+    (cap / ".yak" / "mount.yml").write_text(
+        "source: deploy/bin\npath: /usr/lib/acme\n"
+    )
+    make_source(src, {"acme-tool": "acme-tool"})
+
+    mgr = InstallationManager(
+        FileRepository(),
+        DirectoryArtifactStore(),
+        context=Context(path=tmp_path, sources=[str(src)]),
+    )
+    catalog, ref = mgr._index().resolve("acme-tool")
+    component = mgr._component_from_ref("acme-tool", catalog, ref, mode="source")
+    assert component.structure is not None
+    assert component.structure.name == "bin"
+    assert (component.structure / "hello.txt").read_text() == "deployed"
+
+
+def test_mount_source_missing_raises_loudly(tmp_path):
+    """A declared mount source that does not exist is a broken component."""
+    from conftest import make_source
+    from y5n.apps.yak.hosts.cli.cwd import Context
+    from y5n.apps.yak.installation.manager import InstallationManager
+    from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
+    from y5n.apps.yak.repository.file_repo import FileRepository
+
+    src = tmp_path / "src"
+    cap = src / "acme-tool"
+    (cap / ".yak").mkdir(parents=True)
+    (cap / ".yak" / "component.yml").write_text(
+        "name: acme-tool\nversion: 0.1.0\n"
+    )
+    (cap / ".yak" / "mount.yml").write_text(
+        "source: does/not/exist\npath: /usr/lib/acme\n"
+    )
+    make_source(src, {"acme-tool": "acme-tool"})
+
+    mgr = InstallationManager(
+        FileRepository(),
+        DirectoryArtifactStore(),
+        context=Context(path=tmp_path, sources=[str(src)]),
+    )
+    catalog, ref = mgr._index().resolve("acme-tool")
+    with pytest.raises(Exception, match="does/not/exist"):
+        mgr._component_from_ref("acme-tool", catalog, ref, mode="source")

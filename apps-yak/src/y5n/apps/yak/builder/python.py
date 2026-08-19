@@ -59,10 +59,10 @@ class PythonBuildProvider:
         artifact_dir.mkdir(parents=True, exist_ok=True)
 
         if info.mount:
-            structure = project_dir / "structure"
+            structure = project_dir / info.mount.source
             if structure.is_dir():
                 shutil.copytree(
-                    structure, artifact_dir / "structure", dirs_exist_ok=True
+                    structure, artifact_dir / "mount", dirs_exist_ok=True
                 )
 
         info.fingerprint = fingerprint

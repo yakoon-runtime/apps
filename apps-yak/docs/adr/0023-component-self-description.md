@@ -3,11 +3,12 @@
 **Status:** Accepted
 **Date:** 2026-08-17
 **Updated:** 2026-08-19 — Step 4 (catalog mapping + repository-local
-`releases.yml`). Section 4 and Section 5 and the Step 3 notes that
-describe a remote per-location `component.yml` fetch are **superseded
-for the catalog shape and the remote resolution path**; everything about
-`.yak/` being the portable component contract and `component.yml` owning
-identity/version is unchanged.
+`releases.yml`) and Step 5 (mount is an explicit `source → path`
+declaration). Section 4, Section 5 and the Step 3 notes that describe a
+remote per-location `component.yml` fetch are **superseded for the catalog
+shape and the remote resolution path**; the `.yak/` portable contract and
+`component.yml` owning identity/version are unchanged. Section 3 is
+superseded for the mount shape (source is now declared).
 
 ## Context
 
@@ -178,16 +179,26 @@ version-semantics rule, and out of this ADR's scope (section 5).
 
 ### 3. `.yak/mount.yml` — what do I deliver?
 
+> **Updated (Step 5).** `mount.yml` now declares the full delivery as a
+> mapping — `source → path` — with `source` the component-relative
+> directory to mount and `path` its target in the tree. ``source`` is
+> mandatory: there is no hard-coded ``structure`` name anywhere; a
+> component may lay out its delivered tree under any directory.
+
 ```text
 <component>/
 └── .yak/
     ├── component.yml       who am I? (name, version)
-    └── mount.yml          what do I deliver? (structure → target)
+    └── mount.yml          what do I deliver? (source → target)
 ```
 
 `.yak/mount.yml` is Yakoon-native infrastructure (structure deployment), so
-it belongs to the `.yak/` contract, not flat at the root. Its content
-and semantics do not change — only its location.
+it belongs to the `.yak/` contract, not flat at the root. Its semantics:
+when the manifest is absent the component delivers nothing into the tree;
+when it exists it must declare both `source` (component-relative, the
+directory whose content is mounted) and `path` (the tree target). The
+component layout outside `.yak/` is otherwise free — Python, .NET, Go or
+a proprietary project are not prescribed a directory name.
 
 A new component therefore starts with a copy of the contract and two
 edits, before any implementation language is chosen:
@@ -200,12 +211,20 @@ version: 0.1.0
 
 ```yaml
 # .yak/mount.yml
+source: structure
 path: /opt/foo
 ```
 
 Python, .NET, Go or no code at all — the Yakoon side is defined; the
 technology stack (pyproject.toml, *.csproj, go.mod, structure-only)
-comes afterwards, independently.
+comes afterwards, independently. A `.NET` component may equally mount an
+idiomatic folder:
+
+```yaml
+# .yak/mount.yml
+source: yakoon/commands
+path: /usr/bin
+```
 
 ### 4. Discovery becomes pure layout
 
@@ -599,8 +618,9 @@ NEW  <component repo>/releases/y5n-caps-*
 
 This ADR answers: **in `.yak/` at the component root — the portable
 Yakoon contract of a component, with `component.yml` (name, version)
-and `.yak/mount.yml` (structure deployment) as its first contents.**
-Steps 1–4 are implemented: the component owns identity and version, the
+and `.yak/mount.yml` (delivery: source → path) as its first contents.**
+Steps 1–5 are implemented: the component owns identity and version, the
 catalog discovers by a `name → location` mapping, releases resolve over
-the repository-local `releases.yml` (no Releases-API scan), and
-distribution follows the catalog's source.
+the repository-local `releases.yml` (no Releases-API scan), the mount
+is an explicitly declared `source → path` (no hard-coded directory),
+and distribution follows the catalog's source.

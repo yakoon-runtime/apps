@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from y5n.apps.yak.cap.models import Cap
+from y5n.apps.yak.cap.models import Cap, ComponentMount
 
 
 class IdentityMismatchError(Exception):
@@ -31,7 +31,7 @@ class ArtifactInfo:
     builder: str
     entry: str | None
     fingerprint: str
-    mount: str | None = None
+    mount: ComponentMount | None = None
 
     def __init__(
         self,
@@ -42,7 +42,7 @@ class ArtifactInfo:
         builder: str = "python",
         entry: str | None = None,
         fingerprint: str = "",
-        mount: str | None = None,
+        mount: ComponentMount | None = None,
     ) -> None:
         self.name = name
         self.version = version
@@ -66,7 +66,9 @@ class ArtifactInfo:
             f"builder: {self.builder}",
         ]
         if self.mount:
-            lines.append(f"mount: {self.mount}")
+            lines.append("mount:")
+            lines.append(f"  source: {self.mount.source}")
+            lines.append(f"  path: {self.mount.target}")
         if self.entry:
             lines.append(f"entry: {self.entry}")
         if self.fingerprint:

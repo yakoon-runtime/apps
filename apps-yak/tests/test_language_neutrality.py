@@ -19,16 +19,16 @@ from y5n.apps.yak.repository.file_repo import FileRepository
 
 def _dotnet_artifact(staging: Path) -> Path:
     store = staging / "acme-test-1.0.0.dotnet.artifact"
-    (store / "structure" / ".yak").mkdir(parents=True)
-    (store / "structure" / ".yak" / "yak.yml").write_text(
+    (store / "mount" / ".yak").mkdir(parents=True)
+    (store / "mount" / ".yak" / "yak.yml").write_text(
         "title: Acme\n"
         "resolvable: false\n"
         "navigable: true\n"
         "contextual: false\n"
         "expose: true\n"
     )
-    (store / "structure" / "hello" / ".yak").mkdir(parents=True)
-    (store / "structure" / "hello" / ".yak" / "yak.yml").write_text(
+    (store / "mount" / "hello" / ".yak").mkdir(parents=True)
+    (store / "mount" / "hello" / ".yak" / "yak.yml").write_text(
         "title: Acme Hello\n"
         "resolvable: true\n"
         "navigable: false\n"

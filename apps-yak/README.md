@@ -57,6 +57,22 @@ the Contents API only — it never scans the GitHub Releases API, so
 discovery and release resolution scale with repositories, not with the
 number of offered components.
 
+## Mount — what a component delivers where
+
+A component delivers into the tree only when it declares it, in
+`.yak/mount.yml` as an explicit `source → path` mapping (no hard-coded
+directory name):
+
+```yaml
+# .yak/mount.yml
+source: structure        # component-relative directory to mount
+path: /usr/bin           # its target in the materialized tree
+```
+
+No `mount.yml` means the component delivers nothing into the tree (a pure
+library). The `source` directory is the deliverable and may be any
+component-relative path the project chooses:
+
 ## Compose an environment
 
     yak install runtime          # the runtime bundle, from releases

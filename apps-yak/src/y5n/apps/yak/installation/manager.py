@@ -470,8 +470,7 @@ class InstallationManager:
                     what=f"artifact.yml of '{name}' from '{catalog.spec}'",
                 )
                 return _Component(name=name, mode="artifact", artifact=artifact)
-            structure = resource / "structure"
-            structure_dir = structure if structure.is_dir() else None
+            structure_dir = self._mounted_dir(resource)
             return _Component(
                 name=name,
                 mode="artifact",
@@ -482,8 +481,6 @@ class InstallationManager:
         resource = self._materialize_location(catalog, ref.location)
         if resource is None:
             return None
-        structure = resource / "structure"
-        structure_dir = structure if structure.is_dir() else None
         pack = self._read_component(resource)
         actual = pack.name if pack is not None else None
         self._validate_identity(
@@ -491,6 +488,7 @@ class InstallationManager:
             actual=actual,
             what=f"the component at '{ref.location}' in '{catalog.spec}'",
         )
+        structure_dir = self._component_mount_dir(resource, pack)
         return _Component(
             name=name,
             mode="source",
@@ -498,6 +496,42 @@ class InstallationManager:
             source=resource,
             structure=structure_dir,
         )
+
+    @staticmethod
+    def _mounted_dir(resource: Path) -> Path | None:
+        """The mounted content inside a fetched resource.
+
+        Artifacts package the mounted content into the canonical ``mount``
+        subdirectory; ``structure`` remains a read fallback for artifacts
+        built before that name existed.
+        """
+        for candidate in ("mount", "structure"):
+            path = resource / candidate
+            if path.is_dir():
+                return path
+        return None
+
+    @staticmethod
+    def _component_mount_dir(
+        resource: Path, pack: Cap | None
+    ) -> Path | None:
+        """The component-relative mount source, resolved against the source.
+
+        The component's delivery is declared in ``.yak/mount.yml``
+        (source → path), never by a hard-coded directory name. A declared
+        source that does not exist is a contract violation and fails
+        loudly — a mount without content is a broken component.
+        """
+        if pack is None or pack.mount is None:
+            return None
+        mounted = resource / pack.mount.source
+        if not mounted.is_dir():
+            raise CatalogError(
+                f"component '{pack.name}' declares mount source "
+                f"'{pack.mount.source}' in .yak/mount.yml but "
+                f"'{mounted}' is not a directory"
+            )
+        return mounted
 
     def _validate_identity(self, expected: str, actual: str | None, what: str) -> None:
         """A catalog key must match the component's own declared identity.
@@ -554,6 +588,8 @@ class InstallationManager:
     @staticmethod
     def _parse_artifact(resource: Path):
         """Build an Artifact from a resolved ``artifact.yml`` directory."""
+        from y5n.apps.yak.resolver.artifact import _mount_target
+
         manifest = resource / "artifact.yml"
         if not manifest.exists():
             return None
@@ -572,7 +608,7 @@ class InstallationManager:
             dependencies=meta.get("dependencies", []),
             fingerprint=fp,
             path=resource,
-            mount=meta.get("mount"),
+            mount=_mount_target(meta.get("mount")),
         )
 
     # ── Context source mapping (removed in ADR-20; sources replace it) ──
@@ -609,7 +645,9 @@ class InstallationManager:
 
         if component.source is not None:
             pack = component.pack
-            mount = pack.mount if pack is not None else None
+            mount = (
+                pack.mount.target if pack is not None and pack.mount is not None else None
+            )
             structure = component.structure
             copy = component.mode == "artifact"
             if structure is not None and structure.is_dir():

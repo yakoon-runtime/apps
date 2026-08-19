@@ -40,6 +40,11 @@ class TestCreateCap:
             assert 'name: hello' in contract
             assert 'version: 0.1.0' in contract
 
+            # The delivery contract declares source + path explicitly.
+            mount = (root / ".yak" / "mount.yml").read_text()
+            assert "source: structure" in mount
+            assert "path: /usr/bin" in mount
+
     def test_create_cap_respects_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "subdir"

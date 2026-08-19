@@ -133,3 +133,41 @@ def test_install_without_release_is_an_error(tmp_path):
     mgr = _mgr(tmp_path, [str(src)])
     with pytest.raises(Exception, match="no release"):
         mgr.install(tmp_path / "inst", identity="acme-widget")
+
+
+def test_install_mounts_explicit_source_into_target(tmp_path):
+    """The component layout is free: the mount's ``source`` (not a hard-coded
+    ``structure`` name) is resolved, staged and materialized into ``path``."""
+    src = tmp_path / "src"
+    cap = src / "acme-cap"
+    # .NET-ish layout: the deliverable lives under a non-"structure" path.
+    (cap / "deploy" / "commands" / "greet" / ".yak").mkdir(parents=True)
+    (cap / "deploy" / "commands" / "greet" / ".yak" / "yak.yml").write_text(
+        "title: Greet\n"
+    )
+    (cap / "deploy" / "commands" / "greet" / "hello.txt").write_text("hi")
+    (cap / "pyproject.toml").write_text(
+        "[project]\nname = 'acme-cap'\nversion = '0.1.0'\n"
+    )
+    (cap / ".yak").mkdir(parents=True)
+    (cap / ".yak" / "component.yml").write_text(
+        "name: acme-cap\nversion: 0.1.0\n"
+    )
+    (cap / ".yak" / "mount.yml").write_text(
+        "source: deploy/commands\n"
+        "path: /usr/bin\n"
+    )
+    make_source(src, {"acme-cap": {"location": "acme-cap"}})
+
+    mgr = _mgr(tmp_path, [str(src)])
+    inst = mgr.install(tmp_path / "inst", identity="acme-cap", paths=[str(src)])
+
+    assert inst is not None
+    record = next(c for c in inst.components if c.name == "acme-cap")
+    assert record.mode == "source"
+    assert record.mount == "/usr/bin"
+
+    # The fully materialized tree contains the delivered content at path.
+    rooted = inst.root / ".yak" / "structure" / "usr" / "bin"
+    assert rooted.is_dir()
+    assert (rooted / "greet" / "hello.txt").read_text() == "hi"
