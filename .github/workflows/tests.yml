@@ -23,7 +23,10 @@ jobs:
             "git+https://github.com/yakoon-runtime/runtime.git#subdirectory=packages/runtime-engine" \
             "git+https://github.com/yakoon-runtime/runtime.git#subdirectory=packages/runtime-transport" \
             "git+https://github.com/yakoon-runtime/sdk.git#subdirectory=sdk-python"
-          pip install -e apps-yak apps-runtime apps-shell apps-web
+          pip install -e ./apps-yak
+          pip install -e ./apps-runtime
+          pip install -e ./apps-shell
+          pip install -e ./apps-web
           pip install pytest pytest-asyncio
 
       - name: Run tests
