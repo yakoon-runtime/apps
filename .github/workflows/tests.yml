@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            "git+https://github.com/yakoon-runtime/runtime.git#subdirectory=packages/runtime-api" \
+            "git+https://github.com/yakoon-runtime/runtime.git#subdirectory=packages/runtime-store" \
+            "git+https://github.com/yakoon-runtime/runtime.git#subdirectory=packages/runtime-engine" \
+            "git+https://github.com/yakoon-runtime/runtime.git#subdirectory=packages/runtime-transport" \
+            "git+https://github.com/yakoon-runtime/sdk.git#subdirectory=sdk-python"
+          pip install -e apps-yak apps-runtime apps-shell apps-web
+          pip install pytest pytest-asyncio
+
+      - name: Run tests
+        run: |
+          cd apps-yak
+          pytest tests -x --tb=short

@@ -1,5 +1,10 @@
 # yak — Yakoon CLI
 
+[![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](../LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)]()
+[![Tests](https://github.com/yakoon-runtime/apps/actions/workflows/tests.yml/badge.svg)](https://github.com/yakoon-runtime/apps/actions/workflows/tests.yml)
+
 `yak` is the command-line tool for Yakoon — it owns *installation* and
 *distribution* (assemble an environment, build/publish/deploy components).
 `yak` is a **tool / assembler**: it does not own what a component is, what
