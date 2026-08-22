@@ -1,0 +1,4 @@
+releases:
+  0.1.0:
+    tag: y5n-apps-runtime-v0.1.0
+    digest: sha256:1be15566a484de3a298bd93006578692bd917f8991117ecaa1fcee72d1db00aa
