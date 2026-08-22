@@ -61,8 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--distribution",
+        action="append",
         metavar="URL",
-        help="Distribution index URL to resolve against",
+        help="Distribution index URL to resolve against (repeatable; later wins)",
     )
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_install.run)

@@ -162,6 +162,23 @@ def load_distribution(url: str) -> Distribution:
     return Distribution(url, data)
 
 
+def merge_distributions(seq: list[Distribution]) -> Distribution:
+    """Merge ordered distributions into one installable universe.
+
+    A context lists distributions in priority order: for an identical
+    identity (component or bundle) the **later** distribution wins. There
+    is no special default origin — ``runtime`` is simply the bundle found
+    in the merged index, wherever it is offered.
+    """
+    merged = Distribution(
+        url=", ".join(d.url for d in seq), data={"components": {}, "bundles": {}}
+    )
+    for dist in seq:
+        merged.components.update(dist.components)
+        merged.bundles.update(dist.bundles)
+    return merged
+
+
 def _cache_root(url: str) -> Path:
     digest = hashlib.sha256(url.encode()).hexdigest()[:16]
     return Path.home() / ".yak" / "cache" / "dist" / digest

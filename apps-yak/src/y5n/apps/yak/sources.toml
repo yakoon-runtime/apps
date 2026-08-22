@@ -9,4 +9,6 @@ sources = [
     "github:yakoon-runtime/apps",
 ]
 
-distribution = "https://raw.githubusercontent.com/yakoon-runtime/dists/main/distribution.yml"
+distributions = [
+    "https://raw.githubusercontent.com/yakoon-runtime/dists/main/distribution.yml"
+]

@@ -327,6 +327,30 @@ No silent fallback from a distribution to remote catalogs. Catalogs and the
 index remain the source/development model (ADR-0020); only the
 remote-distribution hybrid is gone.
 
+## Follow-up — a context owns ordered distributions
+
+A context can list **several distributions** in order; the resolver merges
+them into one installable universe, and for an identical identity (component
+or bundle) **the later distribution wins**:
+
+```toml
+# .yak/context.toml
+distributions = [
+  "https://…/yakoon-runtime/dists/distribution.yml",
+  "https://…/acme/dists/distribution.yml",
+]
+```
+
+```text
+yak install runtime       → the `runtime` bundle from whichever offers it (later wins)
+yak install acme-crm      → ACME's own cap
+```
+
+There is **no special default origin**: Yakoon itself uses the same
+mechanism as anyone else, identity stays separate from origin, and no
+`extends` or company copy of the official index exists. Two static HTTP
+requests (official + company), merged locally.
+
 ## Implementation sketch
 
 One vertical slice, then generalization:

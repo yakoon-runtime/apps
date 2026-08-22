@@ -21,6 +21,7 @@ from y5n.apps.yak.resolver.distribution import (
     DistributionError,
     fetch_distribution_artifact,
     load_distribution,
+    merge_distributions,
 )
 
 
@@ -123,6 +124,52 @@ def test_load_distribution_requires_mapping(monkeypatch):
     monkeypatch.setattr(dist_mod, "Request", lambda url, headers=None: object())
     with pytest.raises(DistributionError, match="mapping"):
         load_distribution("https://example.org/distribution.yml")
+
+
+def test_merge_distributions_later_wins():
+    """The context lists distributions in priority order: for an identical
+    identity (component or bundle) the later distribution wins; identities
+    only one side offers stay available."""
+    official = Distribution(
+        "u/official",
+        {
+            "components": {
+                "engine": {
+                    "releases": {"0.8.0": {"url": "u/official/engine", "digest": None}}
+                },
+                "shared": {
+                    "releases": {"1.0.0": {"url": "u/official/shared", "digest": None}}
+                },
+            },
+            "bundles": {"runtime": ["engine"]},
+        },
+    )
+    acme = Distribution(
+        "u/acme",
+        {
+            "components": {
+                "engine": {
+                    "releases": {"0.8.1": {"url": "u/acme/engine", "digest": None}}
+                },
+                "acme-foo": {
+                    "releases": {"0.1.0": {"url": "u/acme/foo", "digest": None}}
+                },
+            },
+            "bundles": {"runtime": ["engine"], "biz": ["acme-foo"]},
+        },
+    )
+    merged = merge_distributions([official, acme])
+
+    assert merged.components["engine"]["0.8.1"].url == "u/acme/engine"  # later wins
+    assert merged.components["shared"]["1.0.0"].url == "u/official/shared"  # kept
+    assert merged.components["acme-foo"]["0.1.0"].url == "u/acme/foo"
+    assert merged.latest("engine").version == "0.8.1"
+    assert merged.resolve_bundle("runtime") == ("engine",)  # later bundle wins
+    assert merged.resolve_bundle("biz") == ("acme-foo",)
+
+    # Only one side listed → same identity still resolves from the provider.
+    only_acme = merge_distributions([acme])
+    assert only_acme.components["engine"]["0.8.1"].url == "u/acme/engine"
 
 
 def _tarball(name: str, content: bytes = b"data") -> bytes:

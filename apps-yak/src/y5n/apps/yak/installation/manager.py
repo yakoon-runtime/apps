@@ -44,6 +44,7 @@ from y5n.apps.yak.resolver.distribution import (
     DistributionError,
     fetch_distribution_artifact,
     load_distribution,
+    merge_distributions,
 )
 from y5n.apps.yak.workspace.materializer import Materializer
 
@@ -71,6 +72,13 @@ class _Component:
 COMPONENTS_DIR = "components"
 
 
+def _load_merged(urls: list[str]) -> Distribution | None:
+    """Build the merged installable universe from an ordered URL list."""
+    if not urls:
+        return None
+    return merge_distributions([load_distribution(url) for url in urls])
+
+
 class InstallationManager:
     def __init__(
         self,
@@ -91,23 +99,27 @@ class InstallationManager:
 
         self.runtime = RuntimeService(mark_running=self._mark_running)
 
-    def set_distribution(self, url: str | None) -> None:
-        """Pin resolution to a distribution index (ADR-24) for this command."""
-        self._distribution_override = load_distribution(url) if url else None
+    def set_distributions(self, urls: list[str]) -> None:
+        """Pin resolution to distribution indexes for this command.
+
+        The URLs are an ordered list; later wins per identity (the merged
+        installable universe, ADR-24).
+        """
+        self._distribution_override = _load_merged(urls)
 
     def _distribution(self) -> Distribution | None:
-        """The distribution for this command, loaded lazily.
+        """The merged distribution universe for this command, loaded lazily.
 
-        An explicit ``set_distribution`` override wins; otherwise the
-        Context's ``distribution`` address is used. Loaded once per
-        command so a fresh ``install`` picks up its own ``init``.
+        An explicit ``set_distributions`` override wins; otherwise the
+        Context's ``distributions`` list is used. Loaded once per command
+        so a fresh ``install`` picks up its own ``init``.
         """
         if self._distribution_override is not None:
             return self._distribution_override
         if self._distribution_cache is None:
             ctx = self._current_context()
-            url = ctx.distribution if ctx is not None else None
-            self._distribution_cache = load_distribution(url) if url else None
+            urls = list(ctx.distributions) if ctx is not None else []
+            self._distribution_cache = _load_merged(urls)
         return self._distribution_cache
 
     def _index(self):

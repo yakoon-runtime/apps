@@ -20,7 +20,7 @@ def run(args, mgr) -> None:
     paths = getattr(args, "path", None)
 
     if getattr(args, "distribution", None):
-        mgr.set_distribution(args.distribution)
+        mgr.set_distributions(list(args.distribution))
 
     if not _is_bundle_or_component(mgr, identity, paths):
         ui.fail(
