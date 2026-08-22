@@ -43,8 +43,11 @@ def _init(root: Path) -> None:
         [
             "",
             "[context]",
+            "# Human-readable name of this Yak context.",
             f'name = "{root.name}"',
+            "# Context creation time in UTC.",
             f'created = "{now}"',
+            "# Yak context file format version.",
             'schema = "1"',
             "",
         ]

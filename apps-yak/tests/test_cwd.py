@@ -59,15 +59,37 @@ def test_init_copies_packaged_default_context(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "proj"
         init_cmd._init(root)
-        ctx = (root / ".yak" / "context.toml").read_text()
-        assert "github:yakoon-runtime/caps-system" in ctx
-        assert "github:yakoon-runtime/runtime" in ctx
-        assert "github:yakoon-runtime/sdk" in ctx
-        assert "github:yakoon-runtime/apps" in ctx
-        assert "install" not in ctx
-        assert "y5n-caps-root" not in ctx
-        assert "yakoon:official" not in ctx
-        assert 'name = "proj"' in ctx
+        text = (root / ".yak" / "context.toml").read_text()
+        assert "github:yakoon-runtime/caps-system" in text
+        assert "github:yakoon-runtime/runtime" in text
+        assert "github:yakoon-runtime/sdk" in text
+        assert "github:yakoon-runtime/apps" in text
+        assert "y5n-caps-root" not in text
+        assert "yakoon:official" not in text
+        assert "# yak install" not in text
+        assert 'name = "proj"' in text
+
+
+def test_init_generates_commented_valid_toml(tmp_path):
+    """init documents model concepts with short comments — the file stays
+    valid TOML and parses back cleanly."""
+    import tomllib
+
+    from y5n.apps.yak.hosts.cli.commands import init_cmd
+
+    root = tmp_path / "proj"
+    init_cmd._init(root)
+    text = (root / ".yak" / "context.toml").read_text()
+    assert "# Source catalogs used for development" in text
+    assert "# Ordered distributions providing installable bundles" in text
+    assert "# Human-readable name of this Yak context." in text
+    assert "# Yak context file format version." in text
+
+    data = tomllib.loads(text)
+    assert isinstance(data["sources"], list)
+    assert isinstance(data["distributions"], list)
+    assert data["context"]["schema"] == "1"
+    assert data["context"]["name"] == "proj"
 
 
 def test_install_ensures_context_when_missing():

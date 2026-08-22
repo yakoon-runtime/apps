@@ -1,3 +1,5 @@
+# Source catalogs used for development, building, publishing, deploying,
+# and local (--path) resolution.
 sources = [
     "github:yakoon-runtime/caps-system",
     "github:yakoon-runtime/caps-ident",
@@ -9,6 +11,8 @@ sources = [
     "github:yakoon-runtime/apps",
 ]
 
+# Ordered distributions providing installable bundles and components.
+# Later distributions override earlier ones on identity conflicts.
 distributions = [
     "https://raw.githubusercontent.com/yakoon-runtime/dists/main/distribution.yml"
 ]
