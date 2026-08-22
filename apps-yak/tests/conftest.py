@@ -24,6 +24,7 @@ def _no_real_github(monkeypatch):
     test that would reach the real network fails loudly instead of
     operating on the real repositories or uploading fake artifacts.
     """
+
     def _block(*args, **kwargs):
         raise AssertionError(
             "real GitHub network call attempted in tests — fake the "
@@ -31,12 +32,15 @@ def _no_real_github(monkeypatch):
         )
 
     import y5n.apps.yak.resolver.catalog as catalog_mod
+    import y5n.apps.yak.resolver.distribution as dist_mod
     import y5n.apps.yak.resolver.github as github_mod
 
     monkeypatch.setattr(github_mod, "urlopen", _block)
     monkeypatch.setattr(github_mod, "Request", _block)
     monkeypatch.setattr(catalog_mod, "urlopen", _block)
     monkeypatch.setattr(catalog_mod, "Request", _block)
+    monkeypatch.setattr(dist_mod, "urlopen", _block)
+    monkeypatch.setattr(dist_mod, "Request", _block)
 
 
 @pytest.fixture(autouse=True)
@@ -99,12 +103,8 @@ def source_pack(path: Path, name: str, mount: str) -> Path:
         'version = "0.1.0"\n'
     )
     (path / ".yak").mkdir(parents=True, exist_ok=True)
-    (path / ".yak" / "component.yml").write_text(
-        f"name: {name}\nversion: 0.1.0\n"
-    )
-    (path / ".yak" / "mount.yml").write_text(
-        f"source: structure\npath: {mount}\n"
-    )
+    (path / ".yak" / "component.yml").write_text(f"name: {name}\nversion: 0.1.0\n")
+    (path / ".yak" / "mount.yml").write_text(f"source: structure\npath: {mount}\n")
     return path
 
 
@@ -160,9 +160,7 @@ def _write_wheel(artifact_dir: Path, name: str, version: str, deps: tuple) -> No
     meta = (
         "Metadata-Version: 2.1\n"
         f"Name: {name}\n"
-        f"Version: {version}\n"
-        + "".join(f"Requires-Dist: {d}\n" for d in deps)
-        + "\n"
+        f"Version: {version}\n" + "".join(f"Requires-Dist: {d}\n" for d in deps) + "\n"
     )
     wheel_text = (
         "Wheel-Version: 1.0\n"
@@ -177,9 +175,11 @@ def _write_wheel(artifact_dir: Path, name: str, version: str, deps: tuple) -> No
     }
     record_lines = []
     for filename, content in files.items():
-        digest = base64.urlsafe_b64encode(
-            hashlib.sha256(content.encode()).digest()
-        ).rstrip(b"=").decode()
+        digest = (
+            base64.urlsafe_b64encode(hashlib.sha256(content.encode()).digest())
+            .rstrip(b"=")
+            .decode()
+        )
         record_lines.append(f"{filename},sha256={digest},{len(content)}\n")
     record = "".join(record_lines) + f"{dist}-{version}.dist-info/RECORD,,\n"
     files[f"{dist}-{version}.dist-info/RECORD"] = record
@@ -223,11 +223,7 @@ def source_proj(
         (path / "structure").mkdir(parents=True, exist_ok=True)
         (path / "structure" / "payload.txt").write_text(f"{name}-source")
     (path / ".yak").mkdir(parents=True, exist_ok=True)
-    (path / ".yak" / "component.yml").write_text(
-        f"name: {name}\nversion: {version}\n"
-    )
+    (path / ".yak" / "component.yml").write_text(f"name: {name}\nversion: {version}\n")
     if mount:
-        (path / ".yak" / "mount.yml").write_text(
-            f"source: structure\npath: {mount}\n"
-        )
+        (path / ".yak" / "mount.yml").write_text(f"source: structure\npath: {mount}\n")
     return path

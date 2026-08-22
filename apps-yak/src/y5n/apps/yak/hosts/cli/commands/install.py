@@ -19,7 +19,10 @@ def run(args, mgr) -> None:
     identity = args.identity
     paths = getattr(args, "path", None)
 
-    if not _is_bundle(mgr, identity, paths):
+    if getattr(args, "distribution", None):
+        mgr.set_distribution(args.distribution)
+
+    if not _is_bundle_or_component(mgr, identity, paths):
         ui.fail(
             f"'{identity}' is not a bundle — install identities are bundles "
             f"(e.g. 'runtime', 'system')."
@@ -36,8 +39,12 @@ def run(args, mgr) -> None:
         ui.fail(f"Installation failed: {e}")
 
 
-def _is_bundle(mgr, identity: str, paths) -> bool:
+def _is_bundle_or_component(mgr, identity: str, paths) -> bool:
     """Whether the identity names a bundle (the public install language)."""
+    if mgr._distribution() is not None:
+        return mgr._distribution().resolve_bundle(
+            identity
+        ) is not None or mgr._distribution().has(identity)
     index = mgr._combined_index(paths)
     return index.resolve_bundle(identity) is not None
 

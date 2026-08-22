@@ -40,6 +40,12 @@ from y5n.apps.yak.resolver.catalog import (
     fetch_github_artifact,
     fetch_github_release,
 )
+from y5n.apps.yak.resolver.distribution import (
+    Distribution,
+    DistributionError,
+    fetch_distribution_artifact,
+    load_distribution,
+)
 from y5n.apps.yak.workspace.materializer import Materializer
 
 
@@ -80,9 +86,30 @@ class InstallationManager:
         self._installer = Installer()
         self._context = context
         self._index_cache = None
+        self._distribution_cache = None
+        self._distribution_override = None
         from y5n.apps.yak.runtime.service import RuntimeService
 
         self.runtime = RuntimeService(mark_running=self._mark_running)
+
+    def set_distribution(self, url: str | None) -> None:
+        """Pin resolution to a distribution index (ADR-24) for this command."""
+        self._distribution_override = load_distribution(url) if url else None
+
+    def _distribution(self) -> Distribution | None:
+        """The distribution for this command, loaded lazily.
+
+        An explicit ``set_distribution`` override wins; otherwise the
+        Context's ``distribution`` address is used. Loaded once per
+        command so a fresh ``install`` picks up its own ``init``.
+        """
+        if self._distribution_override is not None:
+            return self._distribution_override
+        if self._distribution_cache is None:
+            ctx = self._current_context()
+            url = ctx.distribution if ctx is not None else None
+            self._distribution_cache = load_distribution(url) if url else None
+        return self._distribution_cache
 
     def _index(self):
         """The merged source index (ADR-20), built from the Context sources."""
@@ -150,7 +177,64 @@ class InstallationManager:
             if hit is not None:
                 catalog, ref = hit
                 return self._component_from_ref(target, catalog, ref, mode="source")
+        dist = self._distribution()
+        if dist is not None and dist.has(target):
+            return self._resolve_from_distribution(target, dist)
         return self._resolve_component(target, mode=mode)
+
+    def _resolve_from_distribution(
+        self, target: str, dist: Distribution
+    ) -> _Component | None:
+        """Resolve a component through the distribution (ADR-24).
+
+        ``(name, version → url, digest)`` comes from the distribution — one
+        metadata object, no catalogs, no Contents API. The artifact is
+        downloaded by URL and verified against the recorded digest before
+        it is trusted; identity is validated against the artifact's own
+        ``artifact.yml``.
+        """
+        release = dist.latest(target)
+        if release is None:
+            raise CatalogError(
+                f"component '{target}' has no release in distribution {dist.url}"
+            )
+        resource = fetch_distribution_artifact(release.url, target, release.digest)
+        if resource is None:
+            return None
+        artifact = self._parse_artifact(resource)
+        if artifact is not None:
+            self._validate_identity(
+                expected=target,
+                actual=artifact.name,
+                what=f"artifact.yml of '{target}' from '{dist.url}'",
+            )
+            return _Component(name=target, mode="artifact", artifact=artifact)
+        structure_dir = self._mounted_dir(resource)
+        return _Component(
+            name=target, mode="artifact", source=resource, structure=structure_dir
+        )
+
+    def _distribution_closure(self, dist: Distribution, names: list[str]) -> list[str]:
+        """Bundle members plus transitive distribution-known dependencies.
+
+        Dependencies are materialized in the distribution (ADR-24 Q3), so a
+        bundle's full install set is computable from one metadata fetch.
+        Third-party dependencies are not distribution components — pip
+        resolves them from PyPI during the install transaction.
+        """
+        seen: list[str] = []
+        queue = list(names)
+        while queue:
+            name = queue.pop(0)
+            if name in seen:
+                continue
+            seen.append(name)
+            release = dist.latest(name)
+            if release is not None:
+                for dep in release.dependencies:
+                    if dist.has(dep) and dep not in seen:
+                        queue.append(dep)
+        return seen
 
     # ── Install ──
 
@@ -234,8 +318,14 @@ class InstallationManager:
         # dies with its identity); resolution uses the union — one
         # environment, not isolated install islands.
         all_paths = sorted({p for paths in install.values() for p in paths})
-        combined = self._combined_index(all_paths)
-        paths_index = self._paths_index(all_paths)
+        # In distribution mode (ADR-24) with no --path overrides the catalog
+        # index is never built — resolution is the distribution alone, so no
+        # source catalogs are crawled.
+        combined: Index | None = None
+        paths_index = None
+        if not (self._distribution() is not None and not all_paths):
+            combined = self._combined_index(all_paths)
+            paths_index = self._paths_index(all_paths)
 
         desired: list[str] = []
         with self._step(ui, "Resolving"):
@@ -404,7 +494,21 @@ class InstallationManager:
         return candidates
 
     def _identities(self, identity: str, *, index: Index | None = None) -> list[str]:
-        """The component names an identity composes (bundle → members)."""
+        """The component names an identity composes.
+
+        With a distribution (ADR-24), a bundle expands to its members plus
+        their transitive distribution-known dependencies; a plain name
+        passes through. In source mode the catalog index decides: bundle →
+        members, else the name itself. Unknown identities raise.
+        """
+        dist = self._distribution()
+        if dist is not None:
+            bundle = dist.resolve_bundle(identity)
+            if bundle is not None:
+                return self._distribution_closure(dist, list(bundle))
+            if dist.has(identity):
+                return self._distribution_closure(dist, [identity])
+            raise ValueError(f"Unknown identity: {identity}")
         index = index or self._index()
         bundle = index.resolve_bundle(identity)
         if bundle is not None:

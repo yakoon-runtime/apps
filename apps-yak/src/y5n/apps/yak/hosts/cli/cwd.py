@@ -13,7 +13,9 @@ class Context:
     repo is also the default distribution of its own components (ADR-23
     Step 3), so no global distribution exists. ``source_dirs`` is a
     transition: the local monorepo folders the installer resolves build
-    roots against until the repo split.
+    roots against until the repo split. ``distribution`` is the consumer
+    address of a distribution index (ADR-24) — a plain HTTPS URL that
+    installation resolves against first.
     """
 
     path: Path
@@ -21,6 +23,7 @@ class Context:
     schema: str = "1"
     sources: list[str] = field(default_factory=list)
     source_dirs: list[Path] = field(default_factory=list)
+    distribution: str | None = None
 
     def resolve_sources(self) -> list[Path]:
         paths = list(self.source_dirs)
@@ -63,6 +66,7 @@ def _load_context(root: Path) -> Context:
         schema=ctx_data.get("schema", "1"),
         sources=_string_list(data.get("sources")),
         source_dirs=source_dirs,
+        distribution=_optional_string(data.get("distribution")),
     )
 
 
@@ -70,6 +74,12 @@ def _string_list(raw) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(item) for item in raw]
+
+
+def _optional_string(raw) -> str | None:
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
 
 
 def find_context_root() -> Path | None:

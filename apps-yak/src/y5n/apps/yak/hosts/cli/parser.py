@@ -12,8 +12,8 @@ def _add_action(sub, name: str, actions: list[str], func):
 
 def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import build as _build
-    from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
     from y5n.apps.yak.hosts.cli.commands import create_cap as _create_cap
+    from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
     from y5n.apps.yak.hosts.cli.commands import deploy as _deploy
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
@@ -48,9 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
         "install",
         help="Compose an environment from a component or bundle (releases)",
     )
-    p.add_argument(
-        "identity", help="Component or bundle name (e.g. runtime, crm)"
-    )
+    p.add_argument("identity", help="Component or bundle name (e.g. runtime, crm)")
     p.add_argument(
         "--path",
         action="append",
@@ -60,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--target", "-t", default=".", help="Target directory (default: current)"
+    )
+    p.add_argument(
+        "--distribution",
+        metavar="URL",
+        help="Distribution index URL to resolve against (ADR-24)",
     )
     p.add_argument("--verbose", "-v", action="store_true")
     p.set_defaults(func=_install.run)
@@ -101,7 +104,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shell", help="Open the Yakoon shell")
     p.set_defaults(func=_shell.run)
 
-    p = sub.add_parser("publish", help="Publish a bundle's artifacts to the local store")
+    p = sub.add_parser(
+        "publish", help="Publish a bundle's artifacts to the local store"
+    )
     p.add_argument(
         "name", help="Bundle or component name (e.g. runtime, y5n-packs-hello)"
     )
