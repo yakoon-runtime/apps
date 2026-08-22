@@ -3,14 +3,16 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tomllib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-import tomllib
 import yaml
+
+from y5n.apps.yak.cap.models import Cap, CapName, Mount, read_component, read_mount
 from y5n.apps.yak.environment.io import load as load_env
 from y5n.apps.yak.environment.io import touch
 from y5n.apps.yak.installation.assemble import (
@@ -24,7 +26,6 @@ from y5n.apps.yak.installation.deployment import (
 from y5n.apps.yak.installation.deployment import load_installation, to_dict
 from y5n.apps.yak.installation.models import Component, Installation, InstallationStatus
 from y5n.apps.yak.installer.installer import Installer, PythonCandidate
-from y5n.apps.yak.cap.models import Mount, Cap, CapName, read_component, read_mount
 from y5n.apps.yak.repository.artifact import ArtifactStore
 from y5n.apps.yak.repository.interface import Repository
 from y5n.apps.yak.resolver.artifact import (
@@ -133,7 +134,9 @@ class InstallationManager:
         sources = [str(p) for p in paths] + list(ctx.sources or [])
         return build_index(sources, context_root)
 
-    def _resolve_preferred(self, target: str, *, paths_index=None, mode: str = "artifact"):
+    def _resolve_preferred(
+        self, target: str, *, paths_index=None, mode: str = "artifact"
+    ):
         """Resolve a component: ``--path`` source first, release otherwise.
 
         A component in any ``--path`` catalog uses its ``location`` (a
@@ -300,16 +303,16 @@ class InstallationManager:
 
                 # Only components that are new or changed are handed to pip:
                 # a no-op update reinstalls nothing.
-                resolved_all = [
-                    resolved[name] for name in desired if name in changed
-                ]
+                resolved_all = [resolved[name] for name in desired if name in changed]
 
             obsolete = [n for n in merged if n not in desired]
             self._remove_orphans(root, set(desired))
 
             new_records = [merged.get(n, Component(name=n)) for n in desired]
             component_mounts = self._component_mounts(root, new_records)
-            manual = [m for m in (env.mounts if env else []) if m not in component_mounts]
+            manual = [
+                m for m in (env.mounts if env else []) if m not in component_mounts
+            ]
             all_mounts = component_mounts + manual
 
             with self._step(ui, "Workspace"):
@@ -338,7 +341,9 @@ class InstallationManager:
                 self._restore_backup(root, name, backup)
             for name in desired:
                 if name not in original_names:
-                    self._cleanup_component(root, merged.get(name, Component(name=name)))
+                    self._cleanup_component(
+                        root, merged.get(name, Component(name=name))
+                    )
             raise
 
         # Preserved structures are no longer needed once the transaction
@@ -398,9 +403,7 @@ class InstallationManager:
                 candidates.append(PythonCandidate(project=comp.source))
         return candidates
 
-    def _identities(
-        self, identity: str, *, index: Index | None = None
-    ) -> list[str]:
+    def _identities(self, identity: str, *, index: Index | None = None) -> list[str]:
         """The component names an identity composes (bundle → members)."""
         index = index or self._index()
         bundle = index.resolve_bundle(identity)
@@ -459,7 +462,7 @@ class InstallationManager:
         declare exactly the expected name, and a mismatch fails loudly.
         """
         if mode == "artifact":
-            resource = self._materialize_release(catalog, name)
+            resource = self._materialize_release(catalog, name, ref.location)
             if resource is None:
                 return None
             artifact = self._parse_artifact(resource)
@@ -512,9 +515,7 @@ class InstallationManager:
         return None
 
     @staticmethod
-    def _component_mount_dir(
-        resource: Path, pack: Cap | None
-    ) -> Path | None:
+    def _component_mount_dir(resource: Path, pack: Cap | None) -> Path | None:
         """The component-relative mount source, resolved against the source.
 
         The component's delivery is declared in ``.yak/mount.yml``
@@ -553,14 +554,15 @@ class InstallationManager:
                 f"declares '{actual}')"
             )
 
-    def _materialize_release(self, catalog, name: str) -> Path | None:
+    def _materialize_release(self, catalog, name: str, location: str) -> Path | None:
         """Resolve a component's released artifact from its distribution.
 
         A component's distribution defaults to the source of the catalog
         that discovered it (ADR-23 Step 3): a local source carries its
         released artifacts in ``artifacts/`` under the catalog root; a
-        remote source publishes releases to its own repository. The
-        catalog names the source; it never names a version.
+        remote source resolves the component's own ``.yak/release.yml`` at
+        its catalog ``location`` and publishes releases to its repository.
+        The catalog names the source; it never names a version.
         """
         if catalog.base is not None:
             artifact = DirectorySource(catalog.base / "artifacts").resolve(name)
@@ -575,7 +577,7 @@ class InstallationManager:
                 f"component '{name}' has no remote distribution — source "
                 f"'{catalog.spec}' is local"
             )
-        return fetch_github_release(catalog.spec, name)
+        return fetch_github_release(catalog.spec, name, location)
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
         """Resolve a source-relative catalog location to a local resource."""
@@ -646,7 +648,9 @@ class InstallationManager:
         if component.source is not None:
             pack = component.pack
             mount = (
-                pack.mount.target if pack is not None and pack.mount is not None else None
+                pack.mount.target
+                if pack is not None and pack.mount is not None
+                else None
             )
             structure = component.structure
             copy = component.mode == "artifact"

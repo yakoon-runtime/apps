@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 from conftest import make_source
+
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -126,7 +127,7 @@ def test_deploy_expands_bundle_members(monkeypatch):
         monkeypatch.setattr(
             deploy_cmd,
             "deploy_artifact",
-            lambda name, target: calls.append(name) or True,
+            lambda name, target, location: calls.append(name) or True,
         )
         # All members are local-source components — deploy without --to
         # refuses (their distribution is local) instead of guessing.
@@ -173,12 +174,16 @@ def test_deploy_defaults_to_own_catalog_source(monkeypatch):
         monkeypatch.setattr(
             deploy_cmd,
             "deploy_artifact",
-            lambda name, target: calls.append((name, target)) or True,
+            lambda name, target, location: calls.append((name, target, location))
+            or True,
         )
         deploy_cmd.run(_args(name="runtime", to=None), mgr)
 
         # Each member goes to its own repo — never to a shared dists.
-        assert calls == [("a", "github:acme/a-repo"), ("b", "github:acme/b-repo")]
+        assert calls == [
+            ("a", "github:acme/a-repo", "."),
+            ("b", "github:acme/b-repo", "."),
+        ]
 
 
 def test_update_preserves_created_timestamp(monkeypatch):
@@ -216,7 +221,8 @@ def test_deploy_rejects_to_for_a_bundle(monkeypatch):
         monkeypatch.setattr(
             deploy_cmd,
             "deploy_artifact",
-            lambda name, target: calls.append((name, target)) or True,
+            lambda name, target, location: calls.append((name, target, location))
+            or True,
         )
         deploy_cmd.run(_args(name="runtime", to="github:acme/packs"), mgr)
 

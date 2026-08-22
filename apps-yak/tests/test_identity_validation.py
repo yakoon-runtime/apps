@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from conftest import artifact, make_source
+
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -34,7 +35,7 @@ def _no_pip(monkeypatch):
 def test_source_identity_mismatch_fails_loudly(tmp_path):
     """The catalog keys a name the component.yml does not declare."""
     src = tmp_path / "src"
-    (src / "apps"/ "widget").mkdir(parents=True)
+    (src / "apps" / "widget").mkdir(parents=True)
     (src / "apps" / "widget" / ".yak").mkdir(parents=True)
     (src / "apps" / "widget" / ".yak" / "component.yml").write_text(
         "name: other\nversion: 0.1.0\n"
@@ -69,7 +70,7 @@ def test_artifact_identity_mismatch_fails_loudly(monkeypatch, tmp_path):
     wrong = tmp_path / "wrong"
     artifact(wrong, "other", "/opt/x")
     monkeypatch.setattr(
-        type(mgr), "_materialize_release", lambda self, catalog, name: wrong
+        type(mgr), "_materialize_release", lambda self, catalog, name, location: wrong
     )
 
     with pytest.raises(Exception, match="identity mismatch.*acme-widget.*other"):

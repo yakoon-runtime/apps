@@ -24,13 +24,14 @@ def run(args, mgr) -> None:
 
     override = getattr(args, "to", None)
     for name in names:
+        hit = mgr._index().resolve(name)
+        if hit is None:
+            print(f"Component '{name}' is not discoverable from any source.")
+            continue
+        catalog, ref = hit
+        location = ref.location
         target = override
         if target is None:
-            hit = mgr._index().resolve(name)
-            if hit is None:
-                print(f"Component '{name}' is not discoverable from any source.")
-                continue
-            catalog, _ref = hit
             if catalog.base is not None:
                 print(
                     f"Component '{name}' has a local source ({catalog.spec}); "
@@ -39,7 +40,7 @@ def run(args, mgr) -> None:
                 continue
             target = catalog.spec
         try:
-            result = deploy_artifact(name, target)
+            result = deploy_artifact(name, target, location)
         except RuntimeError as exc:
             print(str(exc))
             continue
