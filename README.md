@@ -1,11 +1,12 @@
 # Yakoon Apps
 
-Host applications for Yakoon, sharing one repository.
-
-[![Version](https://img.shields.io/badge/Version-0.3.0-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)]()
 [![Tests](https://github.com/yakoon-runtime/apps/actions/workflows/tests.yml/badge.svg)](https://github.com/yakoon-runtime/apps/actions/workflows/tests.yml)
+
+**Status: Active development**
+
+Host applications for Yakoon, sharing one repository.
 
 ## Applications
 
@@ -24,6 +25,11 @@ pyproject and — where present — its own tests.
 
 The repository CI runs the `apps-yak` test suite (the only component with
 tests today). See `apps-yak/README.md` for the CLI.
+
+## Links
+
+- Developer setup: [yakoon-runtime/developer](https://github.com/yakoon-runtime/developer)
+- Runtime: [yakoon-runtime/runtime](https://github.com/yakoon-runtime/runtime)
 
 ## License
 

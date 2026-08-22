@@ -5,6 +5,8 @@
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)]()
 [![Tests](https://github.com/yakoon-runtime/apps/actions/workflows/tests.yml/badge.svg)](https://github.com/yakoon-runtime/apps/actions/workflows/tests.yml)
 
+**Status: Active development**
+
 `yak` is the command-line tool for Yakoon — it owns *installation* and
 *distribution* (assemble an environment, build/publish/deploy components).
 `yak` is a **tool / assembler**: it does not own what a component is, what
@@ -194,3 +196,9 @@ stored in `.yak/` configuration.
     build      builds a component
     publish    makes a component available on this system
     deploy     makes a component available outside this system
+
+## Links
+
+- Back to [Yakoon Apps](https://github.com/yakoon-runtime/apps)
+- Developer setup: [yakoon-runtime/developer](https://github.com/yakoon-runtime/developer)
+- Runtime: [yakoon-runtime/runtime](https://github.com/yakoon-runtime/runtime)
