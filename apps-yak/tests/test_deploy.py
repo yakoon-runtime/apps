@@ -287,7 +287,7 @@ def test_deploy_is_not_draft(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         home = _mock_home(monkeypatch, tmp)
         store = _published_artifact(home)
-        GithubReleaseRepository("acme/packs").deploy("crm", store, location="contacts")
+        GithubReleaseRepository("acme/packs").deploy("crm", store)
         assert fake.releases["acme/packs"]["tag"] == "crm-v1.0.0"
 
 
@@ -299,19 +299,19 @@ def test_redeploy_same_version_is_noop_until_content_changes(monkeypatch):
         store = _published_artifact(home)
 
         repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("crm", store, location="contacts") is True
+        assert repo.deploy("crm", store) is True
         release_id = fake.releases["acme/packs"]["id"]
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
 
         # Same build again: no-op — the release stays, no re-upload.
-        assert repo.deploy("crm", store, location="contacts") is True
+        assert repo.deploy("crm", store) is True
         assert fake.releases["acme/packs"]["id"] == release_id
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
 
         # A changed build of the same version: the asset is replaced, the
         # release itself is never recreated.
         (store / "structure" / "x.txt").write_text("changed")
-        assert repo.deploy("crm", store, location="contacts") is True
+        assert repo.deploy("crm", store) is True
         assert fake.releases["acme/packs"]["id"] == release_id
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 2
 
@@ -324,156 +324,66 @@ def test_deploy_artifact_requires_published(monkeypatch):
         assert result is None
 
 
-def test_deploy_registers_release_in_component_local_catalog(monkeypatch):
-    """deploy registers the build in the component's .yak/releases.yml —
-    component-local, keyed by version, tag + digest only."""
+def test_deploy_publishes_asset_without_touching_any_release_index(
+    monkeypatch,
+):
+    """deploy = physical publish: the release asset is uploaded and NO
+    release index is written anywhere (ADR-24 drops .yak/releases.yml) —
+    a deploy never writes into a source repository."""
     fake = _mock_github(monkeypatch)
     with tempfile.TemporaryDirectory() as tmp:
         home = _mock_home(monkeypatch, tmp)
         store = _published_artifact(home)
 
         repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("crm", store, location="contacts") is True
+        assert repo.deploy("crm", store) is True
 
-        rp = "contacts/.yak/releases.yml"
-        assert rp in fake.releases_yml
-        assert set(fake.releases_yml) == {rp}  # strictly component-local
-        assert fake.releases_yml_writes[rp] == 1
-
-        content = fake.releases_yml[rp].decode()
-        assert "1.0.0:" in content  # version is the release key
-        assert "tag: crm-v1.0.0" in content
-        # The digest is the sha256 of the published tarball — the concrete
-        # build identity (version alone does not identify a build).
-        tarball = fake.releases["acme/packs"]["assets"]["crm.artifact.tar.gz"][1]
-        expected_digest = "sha256:" + hashlib.sha256(tarball).hexdigest()
-        assert f"digest: {expected_digest}" in content
-        # The catalog owns published builds only — no second authority.
-        assert "components" not in content
-        assert "name:" not in content
+        assert fake.releases["acme/packs"]["tag"] == "crm-v1.0.0"
+        assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
+        # Nothing was written to any repository's contents — no release file.
+        assert fake.releases_yml == {}
 
 
-def test_redeploy_same_build_is_noop_including_release_catalog(monkeypatch):
-    """An unchanged artifact stays a NO-OP: no re-upload, no re-write of
-    releases.yml (the version already records exactly that build)."""
+def test_redeploy_unchanged_is_noop_without_any_index_write(monkeypatch):
+    """An unchanged artifact redeploys as a no-op; no release index is
+    ever written, unchanged or not."""
     fake = _mock_github(monkeypatch)
     with tempfile.TemporaryDirectory() as tmp:
         home = _mock_home(monkeypatch, tmp)
         store = _published_artifact(home)
-        rp = "contacts/.yak/releases.yml"
 
         repo = GithubReleaseRepository("acme/packs")
-        assert repo.deploy("crm", store, location="contacts") is True
+        assert repo.deploy("crm", store) is True
         release_id = fake.releases["acme/packs"]["id"]
-        writes_after_first = fake.releases_yml_writes[rp]
-        assert writes_after_first == 1
 
-        # Same build again: the release and the release catalog stay as-is.
-        assert repo.deploy("crm", store, location="contacts") is True
+        assert repo.deploy("crm", store) is True
         assert fake.releases["acme/packs"]["id"] == release_id
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
-        assert fake.releases_yml_writes[rp] == writes_after_first
+        assert fake.releases_yml == {}
 
-        # A changed build of the same version: the asset is replaced and
-        # the release catalog is updated to the new digest.
         (store / "structure" / "x.txt").write_text("changed")
-        assert repo.deploy("crm", store, location="contacts") is True
-        assert fake.releases["acme/packs"]["id"] == release_id
+        assert repo.deploy("crm", store) is True
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 2
-        assert fake.releases_yml_writes[rp] == writes_after_first + 1
-        content = fake.releases_yml[rp].decode()
-        tarball = fake.releases["acme/packs"]["assets"]["crm.artifact.tar.gz"][1]
-        expected_digest = "sha256:" + hashlib.sha256(tarball).hexdigest()
-        assert f"digest: {expected_digest}" in content
+        assert fake.releases_yml == {}
 
 
-def test_missing_release_catalog_is_repaired_on_redeploy(monkeypatch):
-    """Release+asset already correct + releases.yml missing → the deploy
-    must repair the catalog: 'unchanged artifact' refers to the release and
-    asset, not to the release catalog. A missing/stale catalog is written."""
-    fake = _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        store = _published_artifact(home)
-        rp = "contacts/.yak/releases.yml"
-
-        repo = GithubReleaseRepository("acme/packs")
-        # First deploy creates the release + asset, but simulate that the
-        # release-catalog write failed or never happened (catalog absent).
-        assert repo.deploy("crm", store, location="contacts") is True
-        release_id = fake.releases["acme/packs"]["id"]
-        assert fake.releases_yml_writes[rp] == 1
-
-        # Drop the release catalog as if it had never been written.
-        fake.releases_yml.pop(rp, None)
-        fake.releases_yml_sha.pop(rp, None)
-
-        # Redeploy of the unchanged build: the release + asset are a no-op,
-        # but the missing catalog is repaired (written once, then stable).
-        assert repo.deploy("crm", store, location="contacts") is True
-        assert fake.releases["acme/packs"]["id"] == release_id
-        assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
-        repair_writes = fake.releases_yml_writes[rp]
-        assert repair_writes == 2  # first write + repair write
-
-        # Once repaired, the next redeploy is a full no-op — no write.
-        assert repo.deploy("crm", store, location="contacts") is True
-        assert fake.releases_yml_writes[rp] == repair_writes
-
-        # The repaired catalog reflects the exact published artifact.
-        content = fake.releases_yml[rp].decode()
-        tarball = fake.releases["acme/packs"]["assets"]["crm.artifact.tar.gz"][1]
-        expected_digest = "sha256:" + hashlib.sha256(tarball).hexdigest()
-        assert f"digest: {expected_digest}" in content
-
-
-def test_deploy_preserves_release_history(monkeypatch):
-    """A second version adds a release; the first is never overwritten."""
+def test_deploy_publishes_two_components_independently(monkeypatch):
+    """Two components publish as independent assets; neither deploy writes
+    into the repository's contents (no release file in any component)."""
     fake = _mock_github(monkeypatch)
     with tempfile.TemporaryDirectory() as tmp:
         home = _mock_home(monkeypatch, tmp)
         repo = GithubReleaseRepository("acme/packs")
-        rp = "contacts/.yak/releases.yml"
-
-        v1 = _published(home, "crm", "1.0.0", mount="/opt/contacts")
-        assert repo.deploy("crm", v1, location="contacts") is True
-
-        v2 = _published(home, "crm", "1.1.0", mount="/opt/contacts")
-        assert repo.deploy("crm", v2, location="contacts") is True
-
-        content = fake.releases_yml[rp].decode()
-        assert "1.0.0:" in content
-        assert "1.1.0:" in content
-        assert "tag: crm-v1.0.0" in content
-        assert "tag: crm-v1.1.0" in content
-
-
-def test_deploy_owns_each_components_release_catalog(monkeypatch):
-    """Two components in one repository own independent release catalogs:
-    deploying runtime-engine never touches runtime-store."""
-    fake = _mock_github(monkeypatch)
-    with tempfile.TemporaryDirectory() as tmp:
-        home = _mock_home(monkeypatch, tmp)
-        repo = GithubReleaseRepository("acme/packs")
-        engine_path = "packages/runtime-engine/.yak/releases.yml"
-        store_path = "packages/runtime-store/.yak/releases.yml"
 
         engine = _published(home, "engine", "0.8.0", mount="/opt/engine")
-        assert repo.deploy("engine", engine, location="packages/runtime-engine") is True
-        assert engine_path in fake.releases_yml
-        assert store_path not in fake.releases_yml
+        assert repo.deploy("engine", engine) is True
 
         store = _published(home, "runtime-store", "0.5.0", mount="/opt/store")
-        assert (
-            repo.deploy("runtime-store", store, location="packages/runtime-store")
-            is True
-        )
-        assert store_path in fake.releases_yml
+        assert repo.deploy("runtime-store", store) is True
 
-        # engine's catalog is byte-identical to before the store deploy.
-        engine_content = fake.releases_yml[engine_path].decode()
-        assert "tag: engine-v0.8.0" in engine_content
-        assert "runtime-store" not in engine_content
+        assert fake.uploaded_assets.count("engine.artifact.tar.gz") == 1
+        assert fake.uploaded_assets.count("runtime-store.artifact.tar.gz") == 1
+        assert fake.releases_yml == {}
 
 
 def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Path:
@@ -504,11 +414,11 @@ def test_deploy_requires_to_for_a_local_component(monkeypatch):
     from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
     from y5n.apps.yak.repository.file_repo import FileRepository
 
-    calls: list[tuple[str, str, str]] = []
+    calls: list[tuple[str, str]] = []
     monkeypatch.setattr(
         deploy_cmd,
         "deploy_artifact",
-        lambda name, target, location: calls.append((name, target, location)) or True,
+        lambda name, target: calls.append((name, target)) or True,
     )
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -523,4 +433,4 @@ def test_deploy_requires_to_for_a_local_component(monkeypatch):
         assert calls == []  # local default is refused, not guessed
 
         deploy_cmd.run(_args(name="cool-shell", to="github:acme/shell-repo"), mgr)
-        assert calls == [("cool-shell", "github:acme/shell-repo", "cool-shell")]
+        assert calls == [("cool-shell", "github:acme/shell-repo")]

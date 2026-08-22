@@ -38,7 +38,6 @@ from y5n.apps.yak.resolver.catalog import (
     Index,
     build_index,
     fetch_github_artifact,
-    fetch_github_release,
 )
 from y5n.apps.yak.resolver.distribution import (
     Distribution,
@@ -566,7 +565,7 @@ class InstallationManager:
         declare exactly the expected name, and a mismatch fails loudly.
         """
         if mode == "artifact":
-            resource = self._materialize_release(catalog, name, ref.location)
+            resource = self._materialize_release(catalog, name)
             if resource is None:
                 return None
             artifact = self._parse_artifact(resource)
@@ -658,30 +657,27 @@ class InstallationManager:
                 f"declares '{actual}')"
             )
 
-    def _materialize_release(self, catalog, name: str, location: str) -> Path | None:
-        """Resolve a component's released artifact from its distribution.
+    def _materialize_release(self, catalog, name: str) -> Path | None:
+        """Resolve a component's released artifact from a LOCAL source.
 
-        A component's distribution defaults to the source of the catalog
-        that discovered it (ADR-23 Step 3): a local source carries its
-        released artifacts in ``artifacts/`` under the catalog root; a
-        remote source resolves the component's own ``.yak/release.yml`` at
-        its catalog ``location`` and publishes releases to its repository.
-        The catalog names the source; it never names a version.
+        The source/dev path (ADR-20) resolves released artifacts from a
+        local catalog's ``artifacts/`` store. Remote artifacts are a
+        distribution concern (ADR-24) — resolution over a remote catalog is
+        gone, so there is no fallback that would crawl GitHub again.
         """
-        if catalog.base is not None:
-            artifact = DirectorySource(catalog.base / "artifacts").resolve(name)
-            if artifact is None or artifact.path is None:
-                raise CatalogError(
-                    f"component '{name}' has no release — use a --path "
-                    f"catalog instead"
-                )
-            return artifact.path
-        if not catalog.spec.startswith("github:"):
+        if catalog.base is None:
             raise CatalogError(
-                f"component '{name}' has no remote distribution — source "
-                f"'{catalog.spec}' is local"
+                f"component '{name}' is offered by a remote source '{catalog.spec}'; "
+                "remote artifacts resolve through a distribution — "
+                "use the context's distribution or a --path catalog"
             )
-        return fetch_github_release(catalog.spec, name, location)
+        artifact = DirectorySource(catalog.base / "artifacts").resolve(name)
+        if artifact is None or artifact.path is None:
+            raise CatalogError(
+                f"component '{name}' has no local release — use a --path "
+                f"catalog instead"
+            )
+        return artifact.path
 
     def _materialize_location(self, catalog, location: str) -> Path | None:
         """Resolve a source-relative catalog location to a local resource."""

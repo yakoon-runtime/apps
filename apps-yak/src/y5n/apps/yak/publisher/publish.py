@@ -42,15 +42,15 @@ def publish_local(name: str) -> Path | None:
     return dest
 
 
-def deploy_artifact(name: str, target: str, location: str = ".") -> bool | None:
-    """Deploy a published artifact to a remote repository.
+def deploy_artifact(name: str, target: str) -> bool | None:
+    """Publish a published artifact as a GitHub release asset (ADR-24).
 
     Reads only from the system-wide store (``~/.yak/artifacts/``) — an
-    artifact must be published first (``yak publish``). The repository
-    receives the artifact as a release, and the component's release
-    (``.yak/release.yml`` at its catalog ``location``) offers it — so the
-    build is immediately resolvable (ADR-20, ADR-23 Step 4). Returns None
-    when the artifact is not published, otherwise the deploy result.
+    artifact must be published first (``yak publish``). The receiving
+    repository gets the artifact as a release, so the build is physically
+    available. Entering it into a distribution (what is installable) is the
+    distribution write, separate from this physical publish. Returns None
+    when the artifact is not published, otherwise the publish result.
     """
     from y5n.apps.yak.resolver.github import GithubReleaseRepository
 
@@ -64,6 +64,4 @@ def deploy_artifact(name: str, target: str, location: str = ".") -> bool | None:
     if published is None or published.path is None:
         return None
 
-    return GithubReleaseRepository(target).deploy(
-        name, published.path, location=location
-    )
+    return GithubReleaseRepository(target).deploy(name, published.path)

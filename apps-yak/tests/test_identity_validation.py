@@ -70,7 +70,7 @@ def test_artifact_identity_mismatch_fails_loudly(monkeypatch, tmp_path):
     wrong = tmp_path / "wrong"
     artifact(wrong, "other", "/opt/x")
     monkeypatch.setattr(
-        type(mgr), "_materialize_release", lambda self, catalog, name, location: wrong
+        type(mgr), "_materialize_release", lambda self, catalog, name: wrong
     )
 
     with pytest.raises(Exception, match="identity mismatch.*acme-widget.*other"):

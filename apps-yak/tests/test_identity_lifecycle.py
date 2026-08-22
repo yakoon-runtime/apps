@@ -127,7 +127,7 @@ def test_deploy_expands_bundle_members(monkeypatch):
         monkeypatch.setattr(
             deploy_cmd,
             "deploy_artifact",
-            lambda name, target, location: calls.append(name) or True,
+            lambda name, target: calls.append(name) or True,
         )
         # All members are local-source components — deploy without --to
         # refuses (their distribution is local) instead of guessing.
@@ -174,16 +174,12 @@ def test_deploy_defaults_to_own_catalog_source(monkeypatch):
         monkeypatch.setattr(
             deploy_cmd,
             "deploy_artifact",
-            lambda name, target, location: calls.append((name, target, location))
-            or True,
+            lambda name, target: calls.append((name, target)) or True,
         )
         deploy_cmd.run(_args(name="runtime", to=None), mgr)
 
         # Each member goes to its own repo — never to a shared dists.
-        assert calls == [
-            ("a", "github:acme/a-repo", "."),
-            ("b", "github:acme/b-repo", "."),
-        ]
+        assert calls == [("a", "github:acme/a-repo"), ("b", "github:acme/b-repo")]
 
 
 def test_update_preserves_created_timestamp(monkeypatch):

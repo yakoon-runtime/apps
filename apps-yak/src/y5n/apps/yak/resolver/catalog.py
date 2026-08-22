@@ -4,12 +4,10 @@ A source provides a catalog. A catalog answers two questions: which
 components exist here and where each is located. Since ADR-23 Step 4 the
 catalog is a ``name → location`` mapping: the catalog key is a discovery
 binding / index key only — never a normative identity. Identity and
-version live in each component's ``.yak/component.yml``; the published
-builds of each component resolve through the component's own
-``.yak/releases.yml`` next to it (same transport as the catalog). The
-source list knows catalog locations; the catalog knows component names and
-locations; each component's release catalog owns the builds that component
-has published. Nothing else.
+version live in each component's ``.yak/component.yml``. What can be
+*installed* resolves through the distribution (ADR-24) — never through a
+remote catalog crawl. The source list knows catalog locations; the catalog
+knows component names and locations; nothing else.
 """
 
 from __future__ import annotations
@@ -23,13 +21,11 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import yaml
 
 CATALOG_FILENAME = "catalog.yml"
-RELEASES_FILENAME = "releases.yml"
 
 # Diagnostics: when set to a list, every outbound URL (API + download) is
 # appended before the request is made. Used by the E2E harness to count
@@ -66,9 +62,9 @@ class ComponentRef:
     ``name`` is the discovery binding / index key the catalog declares
     (ADR-23 Step 4) — it is *not* a normative identity. ``location`` is
     the source-relative path of the component's source. Identity and
-    version live in ``.yak/component.yml``; the published builds resolve
-    through the component's own ``.yak/releases.yml``. The catalog never
-    declares a version, a release, a digest or a distribution.
+    version live in ``.yak/component.yml``; what is installable resolves
+    through the distribution (ADR-24). The catalog never declares a
+    version, a release, a digest or a distribution.
     """
 
     name: str
@@ -234,255 +230,9 @@ def _store_remote_catalog(spec: str, repo: str, catalog_path: str, data: dict) -
         pass
 
 
-def fetch_github_release(spec: str, name: str, location: str) -> Path | None:
-    """Fetch a component's currently offered artifact from a GitHub source.
-
-    The offered release is the component's own ``.yak/releases.yml`` at its
-    catalog ``location`` (ADR-23 Step 4) — the catalog carries no version
-    and the GitHub Releases API is never scanned. The currently offered
-    build is the catalog's highest released version. The download goes
-    through the release asset CDN; the recorded digest (written by
-    ``deploy`` at publish time) is checked against the downloaded bytes
-    before the artifact is used or reused. When the digest is unchanged and
-    the local content is present, the download is skipped entirely. The
-    digest is a transport identity — distinct from the artifact's own
-    fingerprint (the build identity), which is read from the artifact
-    afterwards.
-    """
-    releases = _fetch_releases(spec, location)
-    selected = _select_offered(releases)
-    if selected is None:
-        raise CatalogError(
-            f"component '{name}' is not offered by {spec} (no releases.yml "
-            "entry) — use a --path catalog instead"
-        )
-    tag = selected.tag
-    digest = selected.digest
-
-    repo = github_repo(spec)
-    cache_root = Path.home() / ".yak" / "cache" / "github" / repo / f"{name}-{tag}"
-    if digest is not None:
-        stored = _cached_release(cache_root, digest)
-        if stored is not None:
-            return stored
-
-    url = (
-        f"https://github.com/{repo}/releases/download/" f"{tag}/{name}.artifact.tar.gz"
-    )
-    with tempfile.TemporaryDirectory() as tmp:
-        tarpath = Path(tmp) / f"{name}.artifact.tar.gz"
-        _trace(url)
-        try:
-            with urlopen(url) as resp:
-                tarpath.write_bytes(resp.read())
-        except Exception as exc:
-            raise CatalogError(f"cannot fetch {url}: {exc}") from exc
-        if digest is not None:
-            actual = _sha256_hex(tarpath.read_bytes())
-            if actual != digest:
-                raise CatalogError(
-                    f"digest mismatch for {name}: release.yml records "
-                    f"{digest}, downloaded {actual} — the published asset "
-                    "changed after deploy"
-                )
-        try:
-            with tarfile.open(tarpath, "r:gz") as tar:
-                tar.extractall(path=tmp, filter="data")
-        except Exception as exc:
-            raise CatalogError(f"cannot extract {url}: {exc}") from exc
-        artifact_dir = _find_artifact_dir(Path(tmp))
-        if artifact_dir is None:
-            raise CatalogError(f"no artifact for {name} in {url}")
-        return _store_release(cache_root, artifact_dir, digest)
-
-
 def _sha256_hex(data: bytes) -> str:
     """The artifact digest format shared with deploy: ``sha256:<hex>``."""
     return "sha256:" + hashlib.sha256(data).hexdigest()
-
-
-@dataclass(frozen=True)
-class ReleaseRef:
-    """One published build of a component (``.yak/releases.yml``).
-
-    The release catalog of a component is keyed by ``version`` — the
-    version is the identifier of a published build, not a second authority
-    (the component owns its version in ``.yak/component.yml``). ``tag``
-    selects the release asset (``{name}.artifact.tar.gz`` at
-    ``releases/download/{tag}/``); ``digest`` is the sha256 of the
-    published tarball and identifies the concrete build.
-    """
-
-    version: str
-    tag: str
-    digest: str | None
-
-
-def release_index_path(location: str) -> str:
-    """The ``releases.yml`` path where a component keeps its releases.
-
-    The release catalog belongs to the component, not the repository: it
-    lives beside the component's own ``.yak/component.yml`` at its catalog
-    ``location`` (``{location}/.yak/releases.yml``, ADR-23 Step 4). A
-    component grouped by a repo root uses ``.yak/releases.yml``.
-    """
-    loc = location.lstrip("./")
-    return f"{loc}/.yak/{RELEASES_FILENAME}" if loc else f".yak/{RELEASES_FILENAME}"
-
-
-def _version_key(version: str) -> tuple:
-    """A comparable version key: ``0.9.0 < 0.10.0``, never lexical."""
-    parts = []
-    for segment in version.replace("-", ".").split("."):
-        try:
-            parts.append(int(segment))
-        except ValueError:
-            parts.append(0)
-    return tuple(parts)
-
-
-def _select_offered(releases: dict[str, ReleaseRef]) -> ReleaseRef | None:
-    """The currently offered build: the highest released version.
-
-    ``install`` resolves the highest version of the component's release
-    catalog today; a version pin (``runtime-engine@0.7.0``) or constraint
-    (``>=0.7,<0.9``) is a later resolver concern that reads the same
-    catalog.
-    """
-    if not releases:
-        return None
-    return max(releases.values(), key=lambda ref: _version_key(ref.version))
-
-
-def _parse_releases(spec: str, data: dict) -> dict[str, ReleaseRef]:
-    """Parse a component's release catalog (``.yak/releases.yml``).
-
-    Contract (ADR-23 Step 4): ``releases: {version: {tag, digest}}``. The
-    version is the identifier of a published build — the component owns it
-    in ``component.yml``, deploy only registers that a concrete artifact
-    exists for it. No name, no dependencies: the catalog owns published
-    builds only.
-    """
-    raw = data.get("releases") or {}
-    if not isinstance(raw, dict):
-        raise CatalogError(f"release catalog '{spec}': 'releases' must be a mapping")
-    releases: dict[str, ReleaseRef] = {}
-    for version, entry in raw.items():
-        if not isinstance(version, str) or not version:
-            raise CatalogError(
-                f"release catalog '{spec}': release keys must be non-empty versions"
-            )
-        if not isinstance(entry, dict):
-            raise CatalogError(
-                f"release catalog '{spec}': release '{version}' must be a "
-                "mapping with tag and digest"
-            )
-        tag = entry.get("tag")
-        if not isinstance(tag, str) or not tag:
-            raise CatalogError(
-                f"release catalog '{spec}': release '{version}' needs a 'tag'"
-            )
-        digest = entry.get("digest")
-        if digest is not None and not isinstance(digest, str):
-            raise CatalogError(
-                f"release catalog '{spec}': release '{version}' digest must "
-                "be a string"
-            )
-        releases[version] = ReleaseRef(version=version, tag=tag, digest=digest)
-    return releases
-
-
-def _release_cache_path(repo: str, release_path: str) -> Path:
-    return _catalog_cache_path(repo, release_path)
-
-
-def _cached_releases(
-    spec: str, repo: str, release_path: str
-) -> dict[str, ReleaseRef] | None:
-    path = _release_cache_path(repo, release_path)
-    if not path.exists() or time.time() - path.stat().st_mtime > CATALOG_TTL_SECONDS:
-        return None
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
-    return _parse_releases(spec, data)
-
-
-def _store_releases(spec: str, repo: str, release_path: str, data: dict) -> None:
-    try:
-        path = _release_cache_path(repo, release_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(yaml.safe_dump(data, default_flow_style=False, sort_keys=False))
-    except Exception:
-        pass
-
-
-def _fetch_releases(spec: str, location: str) -> dict[str, ReleaseRef]:
-    """A component's release catalog (its own ``.yak/releases.yml``).
-
-    Read through the Contents API like catalogs — fresh the moment deploy
-    commits, cached briefly, and the cache survives across processes (it
-    is on disk). The path is derived from the component's catalog
-    ``location`` — two components in one repository own independent
-    release catalogs. An empty catalog (404) means nothing is published.
-    """
-    repo = github_repo(spec)
-    release_path = release_index_path(location)
-    cached = _cached_releases(spec, repo, release_path)
-    if cached is not None:
-        return cached
-    url = f"https://api.github.com/repos/{repo}/contents/{release_path}"
-    headers = {"Accept": "application/vnd.github.raw+json"}
-    _trace(url)
-    try:
-        with urlopen(Request(url, headers=headers)) as resp:
-            data = yaml.safe_load(resp.read().decode()) or {}
-    except HTTPError as exc:
-        if exc.code == 404:
-            return {}
-        raise CatalogError(f"cannot fetch {url}: {exc}") from exc
-    except Exception as exc:
-        raise CatalogError(f"cannot fetch {url}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise CatalogError(f"{url} must be a mapping")
-    _store_releases(spec, repo, release_path, data)
-    return _parse_releases(spec, data)
-
-
-def _cached_release(cache_root: Path, digest: str) -> Path | None:
-    """The locally stored artifact whose recorded digest matches the remote.
-
-    The digest guards the mutable release: the cache is only reused when
-    the published asset is unchanged, so a tag alone is never a cache key.
-    """
-    manifest = cache_root / "manifest.json"
-    if not manifest.exists():
-        return None
-    try:
-        meta = json.loads(manifest.read_text())
-    except Exception:
-        return None
-    if meta.get("digest") != digest:
-        return None
-    artifact_dir = _find_artifact_dir(cache_root / "artifact")
-    if artifact_dir is None:
-        return None
-    return artifact_dir
-
-
-def _store_release(cache_root: Path, artifact_dir: Path, digest: str | None) -> Path:
-    """Persist a fetched release under its manifest-guarded cache spot."""
-    store = cache_root / "artifact"
-    if store.exists():
-        shutil.rmtree(store, ignore_errors=True)
-    store.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(artifact_dir, store / artifact_dir.name)
-    meta = {"digest": digest} if digest else {}
-    (cache_root / "manifest.json").write_text(json.dumps(meta))
-    return store / artifact_dir.name
 
 
 def fetch_github_artifact(spec: str, location: str) -> Path | None:
@@ -559,8 +309,7 @@ def _parse_catalog(spec: str, base: Path | None, data: dict) -> Catalog:
     raw_components = data.get("components") or {}
     if not isinstance(raw_components, dict):
         raise CatalogError(
-            f"catalog '{spec}': 'components' must be a mapping of "
-            "name → location (ADR-23 Step 4)"
+            f"catalog '{spec}': 'components' must be a mapping of " "name → location"
         )
     for name, entry in raw_components.items():
         if not isinstance(name, str) or not name:

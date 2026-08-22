@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 from conftest import artifact, make_source, source_pack
+
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -131,7 +132,7 @@ def test_install_without_release_is_an_error(tmp_path):
     make_source(src, {"acme-widget": {"location": "acme-widget"}})
 
     mgr = _mgr(tmp_path, [str(src)])
-    with pytest.raises(Exception, match="no release"):
+    with pytest.raises(Exception, match="local release"):
         mgr.install(tmp_path / "inst", identity="acme-widget")
 
 
@@ -150,12 +151,9 @@ def test_install_mounts_explicit_source_into_target(tmp_path):
         "[project]\nname = 'acme-cap'\nversion = '0.1.0'\n"
     )
     (cap / ".yak").mkdir(parents=True)
-    (cap / ".yak" / "component.yml").write_text(
-        "name: acme-cap\nversion: 0.1.0\n"
-    )
+    (cap / ".yak" / "component.yml").write_text("name: acme-cap\nversion: 0.1.0\n")
     (cap / ".yak" / "mount.yml").write_text(
-        "source: deploy/commands\n"
-        "path: /usr/bin\n"
+        "source: deploy/commands\n" "path: /usr/bin\n"
     )
     make_source(src, {"acme-cap": {"location": "acme-cap"}})
 
