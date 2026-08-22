@@ -1,7 +1,9 @@
 # ADR 24: Distribution Index — Install Resolves Against a Distribution, Not Source Repositories
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-22
+**Verified:** 2026-08-22 — the central slice is proven end to end (see
+"Vertical proof" below).
 
 ## Context
 
@@ -263,8 +265,67 @@ consumer-optimized index incomplete. So:
    thereby contains complete resolver metadata (one fetch → full dependency
    graph), without ever being hand-authored.
 
-*Status stays `Proposed`: these decisions define the model; acceptance
-follows a successful vertical slice.*
+*Status: Accepted.* The three decisions are implemented by the vertical
+slice; the legacy remote-Catalog/`releases.yml` path is removed (see the
+follow-up).
+
+## Vertical proof
+
+The exact scenario that triggered this ADR, as an acceptance test: with a
+**fully exhausted GitHub Contents API budget** (`core remaining: 0/60`),
+the consumer path still installs, because it never touches the Contents
+API:
+
+```text
+yak init
+yak install system          ✓ resolve via one GET distribution.yml
+                            ✓ dependency closure from the distribution
+                            ✓ artifacts digest-verified over HTTP
+                            ✓ installed (state.yml written)
+yak install runtime         ✓ the same, for the full runtime bundle
+```
+
+- Distribution is served as a static HTTP object
+  (`raw.githubusercontent.com/yakoon-runtime/dists/main/distribution.yml`);
+  artifact downloads go over the release-asset CDN — no `api.github.com`.
+- `install system` installed `y5n-caps-system` plus its transitive
+  distribution-known dependencies (`y5n-runtime-api`, `y5n-sdk-python`).
+- `install runtime` installed all nine runtime components in one pip
+  transaction, each digest-verified.
+
+This proves the ADR's central claim: **distribution is independent of
+source discovery.**
+
+## Removing the legacy path
+
+After acceptance, the intermediate consumer route is deleted:
+
+```text
+remote catalog
+    ↓
+component location
+    ↓
+.yak/releases.yml
+    ↓
+GitHub Contents API
+    ↓
+artifact
+```
+
+Resolution becomes strictly:
+
+```text
+yak install <x>
+
+Distribution present?
+    ├── yes → DistributionResolver only
+    │         (no Contents API, no remote catalog crawl, no releases.yml)
+    └── --path / source mode → CatalogResolver, local sources
+```
+
+No silent fallback from a distribution to remote catalogs. Catalogs and the
+index remain the source/development model (ADR-0020); only the
+remote-distribution hybrid is gone.
 
 ## Implementation sketch
 
