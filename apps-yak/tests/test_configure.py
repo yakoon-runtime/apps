@@ -178,28 +178,68 @@ def test_command_configures_a_named_store_directly(tmp_path, monkeypatch):
     assert installation.binding_for("ident").config == {"backend": "memory"}
 
 
-def test_command_selects_interactively_when_no_store_given(tmp_path, monkeypatch):
+def test_command_walks_all_stores_when_no_store_given(tmp_path, monkeypatch):
     from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
     from y5n.apps.yak.installation.deployment import load_installation
 
     _make_env(tmp_path)
     monkeypatch.setattr(
-        configure_cmd, "_select_store", lambda installation, ui: "contacts"
-    )
-    monkeypatch.setattr(
         configure_cmd, "_ask_backend", lambda store, binding: "postgres"
     )
     monkeypatch.setattr(
-        configure_cmd, "_ask_dsn", lambda store, default: "postgresql://db/contacts"
+        configure_cmd,
+        "_ask_dsn",
+        lambda store, default: f"env://{store.upper()}_DATABASE",
     )
 
     configure_cmd.run(_args(target=str(tmp_path), store=None, verbose=False), None)
 
     installation = load_installation(tmp_path / ".yak" / "deployment.yml")
-    assert installation.binding_for("contacts").config == {
-        "backend": "postgres",
-        "dsn": "postgresql://db/contacts",
-    }
+    for name in ("runtime", "contacts", "ident"):
+        binding = installation.binding_for(name)
+        assert binding is not None
+        assert binding.config == {
+            "backend": "postgres",
+            "dsn": f"env://{name.upper()}_DATABASE",
+        }
+
+
+def test_command_defaults_to_the_existing_config(tmp_path, monkeypatch):
+    """Pressing Enter keeps the current binding — configure is an editor."""
+    from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
+
+    _write_deployment(
+        tmp_path / ".yak" / "deployment.yml",
+        {
+            "runtime": {
+                "factory": "y5n.runtime.store.event.wire:EventStoreFactory",
+                "config": {"backend": "memory"},
+            },
+            "contacts": {
+                "factory": "y5n.runtime.store.event.wire:EventStoreFactory",
+                "config": {"backend": "postgres", "dsn": "postgresql://prod/db"},
+            },
+        },
+    )
+    before = (tmp_path / ".yak" / "deployment.yml").read_text()
+    captured: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        configure_cmd, "_ask_backend", lambda store, binding: "postgres"
+    )
+
+    def fake_dsn(store: str, default: str) -> str:
+        captured["default"] = default
+        return default
+
+    monkeypatch.setattr(configure_cmd, "_ask_dsn", fake_dsn)
+
+    configure_cmd.run(
+        _args(target=str(tmp_path), store="contacts", verbose=False), None
+    )
+
+    assert captured["default"] == "postgresql://prod/db"
+    assert (tmp_path / ".yak" / "deployment.yml").read_text() == before
 
 
 def test_command_refuses_an_uninstalled_store(tmp_path, monkeypatch):

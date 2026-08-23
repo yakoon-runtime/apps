@@ -141,17 +141,21 @@ the identity is already part of the environment.
 
 ## Configure the deployment
 
-Configure an existing store binding for the current installation. Stores
-are created during installation and use the in-memory backend by default;
-`yak configure` can switch a binding to another supported backend, such as
-PostgreSQL:
+Configure the store bindings of the current installation. Stores are
+created during installation and use the in-memory backend by default;
+`yak configure` can switch them to another supported backend, such as
+PostgreSQL. Without an argument it walks every materialized binding; with
+a store argument it configures exactly that one:
 
+    yak configure
     yak configure contacts
 
-`configure` never creates a store — need is declared by `install` — and a
-later `install`/`update` respects an already configured binding (it
-materializes missing bindings only). The change takes effect the next time
-the runtime starts.
+Existing values are the prompt defaults — pressing Enter keeps the
+current configuration, so the same command works as the initial setup and
+as a later editor. `configure` never creates a store — need is declared
+by `install` — and a later `install`/`update` respects an already
+configured binding (it materializes missing bindings only). The change
+takes effect the next time the runtime starts.
 
 ## Build and distribute a component
 

@@ -1,12 +1,16 @@
 """yak configure [<store>] — change the operator's deployment decisions.
 
-`yak configure` reads the materialized deployment (`.yak/deployment.yml`)
-and lets the administrator rebind existing stores — memory → postgres,
-another dsn, ... It never creates a store: need comes from `yak install`.
-The change takes effect the next time the runtime starts; there is no
-automatic restart.
+`yak configure` walks the materialized store bindings of the deployment
+(`.yak/deployment.yml`) and lets the administrator review each one —
+memory → postgres, another dsn, ... Without an argument it walks every
+bound store; with a store argument it configures exactly that one.
+Existing values are the prompt defaults: pressing Enter keeps a binding's
+current configuration, so the same command works as the initial setup and
+as a later editor. Configuring never creates a store — need comes from
+`yak install`. Changes take effect the next time the runtime starts;
+there is no automatic restart.
 
-    yak configure            # list stores, then pick one
+    yak configure            # walk all bound stores
     yak configure contacts   # configure a specific store directly
 """
 
@@ -42,28 +46,38 @@ def run(args, mgr) -> None:
         ui.fail("The deployment binds no stores — run 'yak install' first")
         return
 
-    store = getattr(args, "store", None)
-    if store is not None and store not in installation.stores:
-        ui.fail(f"Store '{store}' is not installed — configure never creates stores.")
+    requested = getattr(args, "store", None)
+    names = _resolve_names(installation, requested)
+    if names is None:
+        ui.fail(
+            f"Store '{requested}' is not installed — configure never creates stores."
+        )
         return
 
-    store = store or _select_store(installation, ui)
-    binding = installation.binding_for(store)
+    ui.title("Configuring stores")
+    updated = installation
+    for name in names:
+        binding = updated.binding_for(name)
+        current = (
+            binding.config.get("backend", "?")
+            if isinstance(binding.config, dict)
+            else "?"
+        )
+        ui.text(f"Store: {name}")
+        ui.text(f"Current backend: {current}")
 
-    backend = _ask_backend(store, binding)
-    dsn = None
-    if backend == POSTGRES_BACKEND:
-        dsn = _ask_dsn(store, default_dsn(binding, store))
-        if not dsn:
-            ui.fail(f"backend '{POSTGRES_BACKEND}' requires a dsn")
-            return
+        backend = _ask_backend(name, binding)
+        dsn = None
+        if backend == POSTGRES_BACKEND:
+            dsn = _ask_dsn(name, default_dsn(binding, name))
+            if not dsn:
+                ui.fail(f"backend '{POSTGRES_BACKEND}' requires a dsn")
+                return
+        updated = configure_store(updated, name, backend, dsn)
 
-    write_deployment(
-        configure_store(installation, store, backend, dsn),
-        deployment_file,
-    )
-    ui.ok(f"Configured store '{store}'")
-    ui.text("The change takes effect the next time the runtime starts.")
+    write_deployment(updated, deployment_file)
+    ui.ok("Configuration updated")
+    ui.text("The changes take effect the next time the runtime starts.")
 
 
 def _find_deployment_file(target: Path) -> Path | None:
@@ -78,28 +92,26 @@ def _find_deployment_file(target: Path) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-def _select_store(installation: Installation, ui: TerminalUI) -> str:
-    """Show the bound stores and let the operator pick one."""
-    ui.text("Stores:")
-    for name, binding in installation.stores.items():
-        backend = (
-            binding.config.get("backend", "?")
-            if isinstance(binding.config, dict)
-            else "?"
-        )
-        ui.text(f"  {name:<12} {backend}")
-    return Prompt.ask("Select store", choices=list(installation.stores))
+def _resolve_names(
+    installation: Installation, requested: str | None
+) -> list[str] | None:
+    """The stores to configure — every binding, or exactly the requested one.
+
+    ``None`` means the requested store is not installed: configure never
+    creates a store.
+    """
+    if requested is None:
+        return list(installation.stores)
+    if requested in installation.stores:
+        return [requested]
+    return None
 
 
 def _ask_backend(store: str, binding) -> str:
     current = (
         binding.config.get("backend")
         if isinstance(binding.config, dict)
-        and binding.config.get("backend")
-        in (
-            "memory",
-            "postgres",
-        )
+        and binding.config.get("backend") in ("memory", "postgres")
         else "memory"
     )
     return Prompt.ask(
