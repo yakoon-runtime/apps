@@ -139,6 +139,20 @@ source). `yak update` reconciles the two. Installing an identity on an
 existing environment adds its components; `install` returns nothing when
 the identity is already part of the environment.
 
+## Configure the deployment
+
+Configure an existing store binding for the current installation. Stores
+are created during installation and use the in-memory backend by default;
+`yak configure` can switch a binding to another supported backend, such as
+PostgreSQL:
+
+    yak configure contacts
+
+`configure` never creates a store — need is declared by `install` — and a
+later `install`/`update` respects an already configured binding (it
+materializes missing bindings only). The change takes effect the next time
+the runtime starts.
+
 ## Build and distribute a component
 
 `yak` builds a component from its own `.yak/component.yml` identity, then
@@ -196,6 +210,7 @@ stored in `.yak/` configuration.
     build      builds a component
     publish    makes a component available on this system
     deploy     makes a component available outside this system
+    configure  changes the deployment decision for an installed store
 
 ## Links
 

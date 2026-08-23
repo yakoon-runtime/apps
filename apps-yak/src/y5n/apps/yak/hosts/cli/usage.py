@@ -8,7 +8,7 @@ Usage:
     init                   Create a Yak context
 
   Typical workflow
-    create → build → install → shell
+    create → build → install → configure (optional) → shell
 
   Development
     create cap             Create a new cap
@@ -22,6 +22,7 @@ Usage:
   Installation
     install                Compose an environment (component or bundle)
     update                 Update the installation
+    configure              Change the deployment decision for an installed store
 
   Run
     shell                  Open the Yakoon shell
