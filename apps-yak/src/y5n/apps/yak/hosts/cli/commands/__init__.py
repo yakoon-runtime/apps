@@ -1,4 +1,5 @@
 from y5n.apps.yak.hosts.cli.commands import (
+    configure,
     doctor,
     install,
     publish,
@@ -9,6 +10,7 @@ from y5n.apps.yak.hosts.cli.commands import (
 )
 
 __all__ = [
+    "configure",
     "doctor",
     "install",
     "publish",

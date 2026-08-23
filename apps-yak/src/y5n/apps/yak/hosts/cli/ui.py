@@ -28,6 +28,9 @@ class TerminalUI:
             indent = "    " * self._indent
             _console.print(f"{indent}  {text}")
 
+    def text(self, text: str) -> None:
+        _console.print(f"  {text}")
+
     def ok(self, label: str) -> None:
         _console.print(f"  [green]✔[/green] {label}")
 

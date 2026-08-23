@@ -13,6 +13,7 @@ def _add_action(sub, name: str, actions: list[str], func):
 def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import build as _build
     from y5n.apps.yak.hosts.cli.commands import create_cap as _create_cap
+    from y5n.apps.yak.hosts.cli.commands import configure as _configure
     from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
     from y5n.apps.yak.hosts.cli.commands import deploy as _deploy
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
@@ -77,6 +78,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("status", help="Show installation status")
     p.set_defaults(func=_status.run)
+
+    p = sub.add_parser(
+        "configure",
+        help="Change the deployment decision for an installed store",
+    )
+    p.add_argument(
+        "store",
+        nargs="?",
+        help="Store to configure (default: pick interactively)",
+    )
+    p.add_argument(
+        "--target", "-t", default=".", help="Installation directory (default: current)"
+    )
+    p.add_argument("--verbose", "-v", action="store_true")
+    p.set_defaults(func=_configure.run)
 
     p = sub.add_parser("mount", help="Manage workspace mounts")
     mount_sub = p.add_subparsers(dest="mount_action", required=True)
