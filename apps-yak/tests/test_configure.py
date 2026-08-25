@@ -132,6 +132,21 @@ def _args(**kw) -> types.SimpleNamespace:
     return types.SimpleNamespace(**kw)
 
 
+ADMIN_MODULE = "y5n.runtime.store.event.backends.postgres.admin"
+
+
+def _admin_calls(run) -> int:
+    return sum(1 for c in run.calls if c[1:3] == ["-m", ADMIN_MODULE])
+
+
+def _missing_stderr(database: str) -> str:
+    return (
+        "Traceback (most recent call last):\n"
+        "...\n"
+        f'DatabaseDoesNotExist: database "{database}" does not exist'
+    )
+
+
 class _RecordingRun:
     """A fake subprocess.run that records commands and snapshots the
     deployment file at call time."""
@@ -151,6 +166,23 @@ class _RecordingRun:
                 returncode=1, stderr="provision failed", stdout=""
             )
         return types.SimpleNamespace(returncode=0, stderr="", stdout="")
+
+
+class _ScriptedRun:
+    """A fake subprocess.run returning a scripted result per call."""
+
+    def __init__(self, responses, *, deployment_file=None):
+        self.responses = list(responses)
+        self.calls: list[list[str]] = []
+        self.snapshots: list[str] = []
+        self._deployment_file = deployment_file
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(cmd)
+        if self._deployment_file is not None:
+            self.snapshots.append(self._deployment_file.read_text())
+        rc, stderr, stdout = self.responses.pop(0)
+        return types.SimpleNamespace(returncode=rc, stderr=stderr, stdout=stdout)
 
 
 def _make_env(tmp_path) -> None:
@@ -248,6 +280,8 @@ def test_command_walks_all_stores_when_no_store_given(tmp_path, monkeypatch):
         }
     assert len(recorder.calls) == 3
     assert recorder.calls[2][3] == "y5n.runtime.store.event.wire:EventStoreFactory"
+    # A reachable database needs no admin operation.
+    assert _admin_calls(recorder) == 0
 
 
 def test_command_writes_entire_deployment_before_provisioning(tmp_path, monkeypatch):
@@ -311,6 +345,118 @@ def test_command_aborts_on_first_provision_failure_and_keeps_deployment(
         "backend": "postgres",
         "dsn": "env://CONTACTS_DATABASE",
     }
+
+
+def test_command_creates_a_missing_database_and_retries_provisioning(
+    tmp_path, monkeypatch
+):
+    from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
+    from y5n.apps.yak.installation.deployment import load_installation
+
+    _make_env(tmp_path)
+    dsn = "postgresql://postgres:secret@localhost:5432/yakoon_provision_test"
+    recorder = _ScriptedRun(
+        [
+            (1, _missing_stderr("yakoon_provision_test"), ""),  # provision fails: no DB
+            (0, "", "created"),  # admin creates the database
+            (0, "", ""),  # provisioning retry succeeds
+        ],
+        deployment_file=tmp_path / ".yak" / "deployment.yml",
+    )
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
+    monkeypatch.setattr(
+        configure_cmd, "_ask_backend", lambda store, binding: "postgres"
+    )
+    monkeypatch.setattr(configure_cmd, "_ask_dsn", lambda store, default: dsn)
+    monkeypatch.setattr(configure_cmd, "_ask_create_database", lambda db: True)
+
+    configure_cmd.run(
+        _args(target=str(tmp_path), store="contacts", verbose=False), None
+    )
+
+    # The deployment was written before any provision attempt.
+    assert len(recorder.snapshots) == 3
+    installation = load_installation(tmp_path / ".yak" / "deployment.yml")
+    assert installation.binding_for("contacts").config == {
+        "backend": "postgres",
+        "dsn": dsn,
+    }
+    # create database is invoked exactly once, then provisioning is retried.
+    assert _admin_calls(recorder) == 1
+    admin_call = next(c for c in recorder.calls if c[1:3] == ["-m", ADMIN_MODULE])
+    assert admin_call[3] == dsn
+    # two provisioning attempts total (initial + retry).
+    provision_calls = [
+        c for c in recorder.calls if c[1:3] == ["-m", "y5n.runtime.engine.provision"]
+    ]
+    assert len(provision_calls) == 2
+
+
+def test_command_declining_database_creation_aborts_nonzero(tmp_path, monkeypatch):
+    from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
+    from y5n.apps.yak.installation.deployment import load_installation
+
+    _make_env(tmp_path)
+    recorder = _ScriptedRun(
+        [(1, _missing_stderr("yakoon_provision_test"), "")],
+        deployment_file=tmp_path / ".yak" / "deployment.yml",
+    )
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
+    monkeypatch.setattr(
+        configure_cmd, "_ask_backend", lambda store, binding: "postgres"
+    )
+    monkeypatch.setattr(
+        configure_cmd,
+        "_ask_dsn",
+        lambda store, default: "postgresql://postgres:secret@localhost:5432/yakoon_provision_test",
+    )
+    monkeypatch.setattr(configure_cmd, "_ask_create_database", lambda db: False)
+
+    with pytest.raises(SystemExit):
+        configure_cmd.run(
+            _args(target=str(tmp_path), store="contacts", verbose=False), None
+        )
+
+    # No admin operation, no retry; the deployment keeps the desired binding.
+    assert _admin_calls(recorder) == 0
+    assert len(recorder.calls) == 1
+    installation = load_installation(tmp_path / ".yak" / "deployment.yml")
+    assert installation.binding_for("contacts").config["backend"] == "postgres"
+
+
+def test_command_create_database_failure_aborts_without_retry(tmp_path, monkeypatch):
+    from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
+    from y5n.apps.yak.installation.deployment import load_installation
+
+    _make_env(tmp_path)
+    recorder = _ScriptedRun(
+        [
+            (1, _missing_stderr("yakoon_provision_test"), ""),  # provision fails
+            (1, "permission denied to create database", ""),  # admin fails
+        ],
+        deployment_file=tmp_path / ".yak" / "deployment.yml",
+    )
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
+    monkeypatch.setattr(
+        configure_cmd, "_ask_backend", lambda store, binding: "postgres"
+    )
+    monkeypatch.setattr(
+        configure_cmd,
+        "_ask_dsn",
+        lambda store, default: "postgresql://postgres:secret@localhost:5432/yakoon_provision_test",
+    )
+    monkeypatch.setattr(configure_cmd, "_ask_create_database", lambda db: True)
+
+    with pytest.raises(SystemExit):
+        configure_cmd.run(
+            _args(target=str(tmp_path), store="contacts", verbose=False), None
+        )
+
+    # The admin operation ran once; provisioning was not retried.
+    assert _admin_calls(recorder) == 1
+    assert len(recorder.calls) == 2
+    installation = load_installation(tmp_path / ".yak" / "deployment.yml")
+    assert installation.binding_for("contacts").config["backend"] == "postgres"
 
 
 def test_command_defaults_to_the_existing_config(tmp_path, monkeypatch):

@@ -23,6 +23,7 @@ deployment stays as-is. `apps-yak` knows no backend details.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -37,6 +38,7 @@ from y5n.apps.yak.installation.configure import (
     write_deployment,
 )
 from y5n.apps.yak.installation.deployment import Installation, load_installation
+from y5n.apps.yak.installation.postgres import ensure_database
 
 
 def run(args, mgr) -> None:
@@ -105,6 +107,10 @@ def _provision(
     deployment.yml is already persisted (write-before-provision). The
     first failing store aborts with a non-zero exit; the written
     deployment stays as-is.
+
+    When provisioning reports that the target database does not exist,
+    the operator is asked interactively to create it (via the store's
+    admin primitive) and provisioning is retried once.
     """
     python = deployment_file.parent.parent / ".venv" / "bin" / "python"
     if not python.is_file():
@@ -118,21 +124,74 @@ def _provision(
         config_json = (
             json.dumps(binding.config) if binding.config is not None else "null"
         )
-        with ui.step(f"Provisioning {name}"):
-            result = subprocess.run(
-                [
-                    str(python),
-                    "-m",
-                    "y5n.runtime.engine.provision",
-                    binding.factory,
-                    config_json,
-                ],
-                capture_output=True,
-                text=True,
-            )
-        if result.returncode != 0:
-            ui.fail(f"Provisioning store '{name}' failed:\n{result.stderr.strip()}")
+        result = _provision_store(python, binding, config_json)
+        if result.returncode == 0:
+            ui.ok(f"Provisioning {name}")
+            continue
+
+        missing = _missing_database(result.stderr)
+        if missing is None:
+            ui.fail(f"Provisioning '{name}' failed:\n{result.stderr.strip()}")
             raise SystemExit(1)
+
+        ui.text(f"Database '{missing}' does not exist.")
+        if not _ask_create_database(missing):
+            ui.fail(
+                f"Store '{name}' cannot be provisioned — database '{missing}' "
+                "does not exist."
+            )
+            raise SystemExit(1)
+
+        dsn = binding.config.get("dsn") if isinstance(binding.config, dict) else None
+        if not dsn:
+            ui.fail(f"Store '{name}' has no dsn configured — cannot create database")
+            raise SystemExit(1)
+
+        ui.text(f"Creating database '{missing}' ...")
+        try:
+            ensure_database(deployment_file.parent.parent, dsn)
+        except Exception as exc:
+            ui.fail(f"Database '{missing}' could not be created:\n{exc}")
+            raise SystemExit(1)
+        ui.ok(f"Database '{missing}' created")
+
+        result = _provision_store(python, binding, config_json)
+        if result.returncode != 0:
+            ui.fail(f"Provisioning '{name}' failed:\n{result.stderr.strip()}")
+            raise SystemExit(1)
+        ui.ok(f"Provisioning {name}")
+
+
+def _provision_store(python: Path, binding, config_json: str):
+    """Run the store factory's provisioning in the installation venv."""
+    return subprocess.run(
+        [
+            str(python),
+            "-m",
+            "y5n.runtime.engine.provision",
+            binding.factory,
+            config_json,
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+
+_MISSING_DATABASE = re.compile(r'database "([^"]+)" does not exist')
+
+
+def _missing_database(stderr: str) -> str | None:
+    """The database name reported missing by the store, or None."""
+    match = _MISSING_DATABASE.search(stderr or "")
+    return match.group(1) if match else None
+
+
+def _ask_create_database(database: str) -> bool:
+    answer = Prompt.ask(
+        f"Database '{database}' does not exist. Create it? [y/N]",
+        default="n",
+    )
+    return answer.strip().lower() in ("y", "yes")
 
 
 def _find_deployment_file(target: Path) -> Path | None:
