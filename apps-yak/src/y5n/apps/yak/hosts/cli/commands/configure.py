@@ -7,8 +7,14 @@ bound store; with a store argument it configures exactly that one.
 Existing values are the prompt defaults: pressing Enter keeps a binding's
 current configuration, so the same command works as the initial setup and
 as a later editor. Configuring never creates a store — need comes from
-`yak install`. Changes take effect the next time the runtime starts;
-there is no automatic restart.
+`yak install`.
+
+After deployment.yml is persisted, the stores walked by this run are
+provisioned through the installation venv (``<root>/.venv/bin/python -m
+y5n.runtime.engine.provision <factory> <config>``) — every binding without
+an argument, exactly the requested store with ``yak configure <store>``.
+The first failing store aborts with a non-zero exit; the written
+deployment stays as-is. `apps-yak` knows no backend details.
 
     yak configure            # walk all bound stores
     yak configure contacts   # configure a specific store directly
@@ -16,6 +22,8 @@ there is no automatic restart.
 
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
 
 from rich.prompt import Prompt
@@ -77,7 +85,54 @@ def run(args, mgr) -> None:
 
     write_deployment(updated, deployment_file)
     ui.ok("Configuration updated")
+    _provision(updated, names, deployment_file, ui)
     ui.text("The changes take effect the next time the runtime starts.")
+
+
+def _provision(
+    installation: Installation,
+    names: list[str],
+    deployment_file: Path,
+    ui,
+) -> None:
+    """Provision the configured store bindings in the installation venv.
+
+    The stores walked by this run are provisioned — everything when the
+    command ran without an argument, exactly the requested store when it
+    ran as ``yak configure <store>``. `apps-yak` knows no backend details:
+    each binding's factory and opaque config are handed to the engine's
+    provisioning entrypoint, which runs with the installation's python.
+    deployment.yml is already persisted (write-before-provision). The
+    first failing store aborts with a non-zero exit; the written
+    deployment stays as-is.
+    """
+    python = deployment_file.parent.parent / ".venv" / "bin" / "python"
+    if not python.is_file():
+        ui.fail(f"No environment python at {python} — run 'yak install' first")
+        raise SystemExit(1)
+
+    for name in names:
+        binding = installation.binding_for(name)
+        if binding is None:
+            continue
+        config_json = (
+            json.dumps(binding.config) if binding.config is not None else "null"
+        )
+        with ui.step(f"Provisioning {name}"):
+            result = subprocess.run(
+                [
+                    str(python),
+                    "-m",
+                    "y5n.runtime.engine.provision",
+                    binding.factory,
+                    config_json,
+                ],
+                capture_output=True,
+                text=True,
+            )
+        if result.returncode != 0:
+            ui.fail(f"Provisioning store '{name}' failed:\n{result.stderr.strip()}")
+            raise SystemExit(1)
 
 
 def _find_deployment_file(target: Path) -> Path | None:

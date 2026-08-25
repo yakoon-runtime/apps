@@ -132,6 +132,27 @@ def _args(**kw) -> types.SimpleNamespace:
     return types.SimpleNamespace(**kw)
 
 
+class _RecordingRun:
+    """A fake subprocess.run that records commands and snapshots the
+    deployment file at call time."""
+
+    def __init__(self, *, fail_at: int | None = None, deployment_file=None):
+        self.calls: list[list[str]] = []
+        self.snapshots: list[str] = []
+        self._fail_at = fail_at
+        self._deployment_file = deployment_file
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(cmd)
+        if self._deployment_file is not None:
+            self.snapshots.append(self._deployment_file.read_text())
+        if self._fail_at is not None and len(self.calls) == self._fail_at:
+            return types.SimpleNamespace(
+                returncode=1, stderr="provision failed", stdout=""
+            )
+        return types.SimpleNamespace(returncode=0, stderr="", stdout="")
+
+
 def _make_env(tmp_path) -> None:
     _write_deployment(
         tmp_path / ".yak" / "deployment.yml",
@@ -150,6 +171,17 @@ def _make_env(tmp_path) -> None:
             },
         },
     )
+    _venv_python(tmp_path)
+
+
+def _venv_python(tmp_path) -> None:
+    bin_dir = tmp_path / ".venv" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    (bin_dir / "python").touch()
+
+
+def _patch_provision_run(monkeypatch, configure_cmd, recorder) -> None:
+    monkeypatch.setattr(configure_cmd.subprocess, "run", recorder)
 
 
 def test_command_configures_a_named_store_directly(tmp_path, monkeypatch):
@@ -157,6 +189,8 @@ def test_command_configures_a_named_store_directly(tmp_path, monkeypatch):
     from y5n.apps.yak.installation.deployment import load_installation
 
     _make_env(tmp_path)
+    recorder = _RecordingRun(deployment_file=tmp_path / ".yak" / "deployment.yml")
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
     monkeypatch.setattr(
         configure_cmd, "_ask_backend", lambda store, binding: "postgres"
     )
@@ -177,12 +211,22 @@ def test_command_configures_a_named_store_directly(tmp_path, monkeypatch):
     assert installation.binding_for("runtime").config == {"backend": "memory"}
     assert installation.binding_for("ident").config == {"backend": "memory"}
 
+    # `yak configure <store>` provisions exactly that one store.
+    assert len(recorder.calls) == 1
+    contacts_call = recorder.calls[0]
+    assert contacts_call[0] == str(tmp_path / ".venv" / "bin" / "python")
+    assert contacts_call[1:3] == ["-m", "y5n.runtime.engine.provision"]
+    assert '"backend": "postgres"' in contacts_call[4]
+    assert '"env://CONTACTS_DATABASE"' in contacts_call[4]
+
 
 def test_command_walks_all_stores_when_no_store_given(tmp_path, monkeypatch):
     from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
     from y5n.apps.yak.installation.deployment import load_installation
 
     _make_env(tmp_path)
+    recorder = _RecordingRun(deployment_file=tmp_path / ".yak" / "deployment.yml")
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
     monkeypatch.setattr(
         configure_cmd, "_ask_backend", lambda store, binding: "postgres"
     )
@@ -202,6 +246,71 @@ def test_command_walks_all_stores_when_no_store_given(tmp_path, monkeypatch):
             "backend": "postgres",
             "dsn": f"env://{name.upper()}_DATABASE",
         }
+    assert len(recorder.calls) == 3
+    assert recorder.calls[2][3] == "y5n.runtime.store.event.wire:EventStoreFactory"
+
+
+def test_command_writes_entire_deployment_before_provisioning(tmp_path, monkeypatch):
+    """write-before-provision: at the first provision call the deployment
+    file already carries the final state."""
+    from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
+
+    _make_env(tmp_path)
+    recorder = _RecordingRun(deployment_file=tmp_path / ".yak" / "deployment.yml")
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
+    monkeypatch.setattr(
+        configure_cmd, "_ask_backend", lambda store, binding: "postgres"
+    )
+    monkeypatch.setattr(
+        configure_cmd,
+        "_ask_dsn",
+        lambda store, default: f"env://{store.upper()}_DATABASE",
+    )
+
+    configure_cmd.run(_args(target=str(tmp_path), store=None, verbose=False), None)
+
+    assert len(recorder.snapshots) == 3
+    final = (tmp_path / ".yak" / "deployment.yml").read_text()
+    for snapshot in recorder.snapshots:
+        assert snapshot == final
+    assert (
+        '"backend: postgres"' in final.replace("\n", "") or "backend: postgres" in final
+    )
+
+
+def test_command_aborts_on_first_provision_failure_and_keeps_deployment(
+    tmp_path,
+    monkeypatch,
+):
+    """The first failing store aborts non-zero; the written deployment stays."""
+    from y5n.apps.yak.hosts.cli.commands import configure as configure_cmd
+    from y5n.apps.yak.installation.deployment import load_installation
+
+    _make_env(tmp_path)
+    recorder = _RecordingRun(
+        fail_at=2, deployment_file=tmp_path / ".yak" / "deployment.yml"
+    )
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
+    monkeypatch.setattr(
+        configure_cmd, "_ask_backend", lambda store, binding: "postgres"
+    )
+    monkeypatch.setattr(
+        configure_cmd,
+        "_ask_dsn",
+        lambda store, default: f"env://{store.upper()}_DATABASE",
+    )
+
+    with pytest.raises(SystemExit):
+        configure_cmd.run(_args(target=str(tmp_path), store=None, verbose=False), None)
+
+    # provisioning stopped at the first failing store (runtime OK, contacts failed).
+    assert len(recorder.calls) == 2
+    # deployment.yml was written and persists with the final configuration.
+    installation = load_installation(tmp_path / ".yak" / "deployment.yml")
+    assert installation.binding_for("contacts").config == {
+        "backend": "postgres",
+        "dsn": "env://CONTACTS_DATABASE",
+    }
 
 
 def test_command_defaults_to_the_existing_config(tmp_path, monkeypatch):
@@ -221,8 +330,11 @@ def test_command_defaults_to_the_existing_config(tmp_path, monkeypatch):
             },
         },
     )
+    _venv_python(tmp_path)
     before = (tmp_path / ".yak" / "deployment.yml").read_text()
     captured: dict[str, str] = {}
+    recorder = _RecordingRun(deployment_file=tmp_path / ".yak" / "deployment.yml")
+    _patch_provision_run(monkeypatch, configure_cmd, recorder)
 
     monkeypatch.setattr(
         configure_cmd, "_ask_backend", lambda store, binding: "postgres"
@@ -240,6 +352,9 @@ def test_command_defaults_to_the_existing_config(tmp_path, monkeypatch):
 
     assert captured["default"] == "postgresql://prod/db"
     assert (tmp_path / ".yak" / "deployment.yml").read_text() == before
+    # `yak configure <store>` re-provisions exactly that one store.
+    assert len(recorder.calls) == 1
+    assert "postgresql://prod/db" in recorder.calls[0][4]
 
 
 def test_command_refuses_an_uninstalled_store(tmp_path, monkeypatch):
