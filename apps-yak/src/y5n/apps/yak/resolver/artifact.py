@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import yaml
-
 from y5n.apps.yak.resolver.distribution import version_key
 
 
@@ -166,61 +164,10 @@ def _mount_target(mount) -> str | None:
 
 
 def _parse_manifest(path: Path) -> dict:
+    """Read an ``artifact.yml`` manifest (canonical YAML)."""
     try:
         text = path.read_text()
         data = yaml.safe_load(text)
-        if isinstance(data, dict):
-            return data
-    except Exception:
-        pass
-    try:
-        meta: dict = {}
-        deps: list[str] = []
-        in_deps = False
-        for line in path.read_text().splitlines():
-            if in_deps:
-                line = line.strip()
-                if line.startswith("- "):
-                    deps.append(line[2:])
-                continue
-            if ":" in line:
-                key, _, val = line.partition(":")
-                if key.strip() == "dependencies":
-                    in_deps = True
-                else:
-                    meta[key.strip()] = val.strip()
-        if deps:
-            meta["dependencies"] = deps
-        return meta
     except Exception:
         return {}
-
-
-@dataclass(frozen=True)
-class WorkspaceManifest:
-    """The ``workspace`` section of a meta artifact's manifest.
-
-    ``path`` is relative to the environment root and says where the
-    structure goes — ``structure`` for standalone environments,
-    ``workspace/structure`` for the dev environment hosted in its source
-    repo.
-    """
-
-    path: str = "structure"
-    packs: list[str] = field(default_factory=list)
-    mounts: list[dict] = field(default_factory=list)
-    dependencies: list[str] = field(default_factory=list)
-
-
-def load_workspace_manifest(path: Path) -> WorkspaceManifest | None:
-    """Read a meta artifact's workspace manifest, or None when absent."""
-    data = _parse_manifest(path)
-    ws = data.get("workspace")
-    if not isinstance(ws, dict):
-        return None
-    return WorkspaceManifest(
-        path=ws.get("path", "structure"),
-        packs=ws.get("packs", []) or [],
-        mounts=ws.get("mounts", []) or [],
-        dependencies=data.get("dependencies", []) or [],
-    )
+    return data if isinstance(data, dict) else {}
