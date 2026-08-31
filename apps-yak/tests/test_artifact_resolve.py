@@ -20,7 +20,8 @@ def _artifact_dir(
     entry.mkdir(parents=True)
     (entry / "artifact.yml").write_text(
         f"name: {name}\nversion: {version}\nkind: package\n"
-        f"host: python\nbuilder: python\nmount: {mount}\n" + "dependencies:\n"
+        f"host: python\nbuilder: python\n"
+        f"mount:\n  source: structure\n  path: {mount}\n"
     )
     return entry
 

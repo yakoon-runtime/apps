@@ -124,7 +124,9 @@ def artifact(
         "kind: package\n"
         "builder: python\n"
         "host: python\n"
-        "mount: " + mount + "\n"
+        "mount:\n"
+        "  source: structure\n"
+        "  path: " + mount + "\n"
         "fingerprint: sha256:" + (fingerprint or name) + "\n"
     )
     return path
@@ -141,14 +143,14 @@ def wheel_artifact(
     (path / "mount").mkdir(parents=True, exist_ok=True)
     (path / "mount" / "payload.txt").write_text("data")
     _write_wheel(path, name, version, deps)
-    mount_line = f"mount: {mount}\n" if mount else ""
+    mount_lines = f"mount:\n  source: structure\n  path: {mount}\n" if mount else ""
     (path / "artifact.yml").write_text(
         f"name: {name}\n"
         f"version: {version}\n"
         "kind: package\n"
         "builder: python\n"
         "host: python\n"
-        f"{mount_line}"
+        f"{mount_lines}"
         f"fingerprint: sha256:{name}\n"
     )
     return path

@@ -254,15 +254,17 @@ class FakeGithub:
 
 def _published_artifact(home: Path) -> Path:
     store = home / ".yak" / "artifacts" / "crm-1.0.0.python.artifact"
-    (store / "structure").mkdir(parents=True)
-    (store / "structure" / "x.txt").write_text("data")
+    (store / "mount").mkdir(parents=True)
+    (store / "mount" / "x.txt").write_text("data")
     (store / "artifact.yml").write_text(
         "name: crm\n"
         "version: 1.0.0\n"
         "kind: package\n"
         "builder: python\n"
         "host: python\n"
-        "mount: /opt/contacts\n"
+        "mount:\n"
+        "  source: structure\n"
+        "  path: /opt/contacts\n"
         "fingerprint: sha256:abc123\n"
     )
     return store
@@ -310,7 +312,7 @@ def test_redeploy_same_version_is_noop_until_content_changes(monkeypatch):
 
         # A changed build of the same version: the asset is replaced, the
         # release itself is never recreated.
-        (store / "structure" / "x.txt").write_text("changed")
+        (store / "mount" / "x.txt").write_text("changed")
         assert repo.deploy("crm", store) is True
         assert fake.releases["acme/packs"]["id"] == release_id
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 2
@@ -361,7 +363,7 @@ def test_redeploy_unchanged_is_noop_without_any_index_write(monkeypatch):
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 1
         assert fake.releases_yml == {}
 
-        (store / "structure" / "x.txt").write_text("changed")
+        (store / "mount" / "x.txt").write_text("changed")
         assert repo.deploy("crm", store) is True
         assert fake.uploaded_assets.count("crm.artifact.tar.gz") == 2
         assert fake.releases_yml == {}
@@ -388,15 +390,17 @@ def test_deploy_publishes_two_components_independently(monkeypatch):
 
 def _published(home: Path, name: str, version: str, mount: str = "/opt/x") -> Path:
     store = home / ".yak" / "artifacts" / f"{name}-{version}.python.artifact"
-    (store / "structure").mkdir(parents=True, exist_ok=True)
-    (store / "structure" / "x.txt").write_text("data")
+    (store / "mount").mkdir(parents=True, exist_ok=True)
+    (store / "mount" / "x.txt").write_text("data")
     (store / "artifact.yml").write_text(
         "name: " + name + "\n"
         "version: " + version + "\n"
         "kind: package\n"
         "builder: python\n"
         "host: python\n"
-        "mount: " + mount + "\n"
+        "mount:\n"
+        "  source: structure\n"
+        "  path: " + mount + "\n"
         "fingerprint: sha256:" + version + "\n"
     )
     return store

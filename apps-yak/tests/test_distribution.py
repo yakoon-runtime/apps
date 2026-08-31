@@ -12,7 +12,6 @@ import tarfile
 from pathlib import Path
 
 import pytest
-
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
 from y5n.apps.yak.repository.file_repo import FileRepository
@@ -179,11 +178,12 @@ def _tarball(name: str, content: bytes = b"data") -> bytes:
         payload = (
             f"name: {name}\nversion: 0.1.0\n"
             "kind: package\nbuilder: python\nhost: python\n"
-            "mount: /opt/x\nfingerprint: sha256:fp\n"
+            "mount:\n  source: structure\n  path: /opt/x\n"
+            f"fingerprint: sha256:fp\n"
         ).encode()
         info.size = len(payload)
         tar.addfile(info, io.BytesIO(payload))
-        info = tarfile.TarInfo(f"{name}/structure/payload.txt")
+        info = tarfile.TarInfo(f"{name}/mount/payload.txt")
         info.size = len(content)
         tar.addfile(info, io.BytesIO(content))
     return gzip.compress(buf.getvalue(), mtime=0)

@@ -45,7 +45,9 @@ def _dotnet_artifact(staging: Path) -> Path:
         "kind: package\n"
         "builder: dotnet\n"
         "host: dotnet\n"
-        "mount: /opt/acme\n"
+        "mount:\n"
+        "  source: structure\n"
+        "  path: /opt/acme\n"
         "fingerprint: sha256:xyz\n"
     )
     return store
