@@ -127,10 +127,12 @@ class Distribution:
         releases = self.components.get(name)
         if not releases:
             return None
-        return max(releases.values(), key=lambda rel: _version_key(rel.version))
+        return max(releases.values(), key=lambda rel: version_key(rel.version))
 
 
-def _version_key(version: str) -> tuple:
+def version_key(version: str) -> tuple:
+    """Deterministic ordering key for a dotted version string."""
+
     parts = []
     for segment in version.replace("-", ".").split("."):
         try:

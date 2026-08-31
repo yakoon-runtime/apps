@@ -8,6 +8,8 @@ from typing import Protocol, runtime_checkable
 
 import yaml
 
+from y5n.apps.yak.resolver.distribution import version_key
+
 
 class Artifact:
     """A resolved artifact — metadata + bytes on disk."""
@@ -87,9 +89,18 @@ class DirectorySource:
         self._root = root
 
     def resolve(self, name: str) -> Artifact | None:
+        """Resolve ``name`` to its newest artifact in this directory.
+
+        The store may hold several versions of one artifact; the chosen
+        one is the highest version, deterministically (version key, then
+        directory name on ties) — never the first file the OS happens to
+        list. Without an explicit version request, ``newest`` is the
+        contract (mirrors the distribution's ``latest``).
+        """
         if not self._root.is_dir():
             return None
-        for entry in self._root.iterdir():
+        candidates: list[tuple[Path, dict]] = []
+        for entry in sorted(self._root.iterdir()):
             if not entry.is_dir():
                 continue
             manifest = entry / "artifact.yml"
@@ -97,21 +108,30 @@ class DirectorySource:
                 continue
             meta = _parse_manifest(manifest)
             if meta is not None and meta.get("name") == name:
-                fp = meta.get("fingerprint", "")
-                if fp.startswith("sha256:"):
-                    fp = fp[7:]
-                return Artifact(
-                    name=meta["name"],
-                    version=meta.get("version", "0"),
-                    kind=meta.get("kind", "package"),
-                    host=meta.get("host", "python"),
-                    builder=meta.get("builder", "python"),
-                    dependencies=meta.get("dependencies", []),
-                    fingerprint=fp,
-                    path=entry,
-                    mount=_mount_target(meta.get("mount")),
-                )
-        return None
+                candidates.append((entry, meta))
+        if not candidates:
+            return None
+        entry, meta = max(
+            candidates,
+            key=lambda item: (
+                version_key(item[1].get("version", "0")),
+                item[0].name,
+            ),
+        )
+        fp = meta.get("fingerprint", "")
+        if fp.startswith("sha256:"):
+            fp = fp[7:]
+        return Artifact(
+            name=meta["name"],
+            version=meta.get("version", "0"),
+            kind=meta.get("kind", "package"),
+            host=meta.get("host", "python"),
+            builder=meta.get("builder", "python"),
+            dependencies=meta.get("dependencies", []),
+            fingerprint=fp,
+            path=entry,
+            mount=_mount_target(meta.get("mount")),
+        )
 
     def list_artifacts(self) -> list[tuple[str, str]]:
         """List the artifacts in this root as (name, kind version)."""
