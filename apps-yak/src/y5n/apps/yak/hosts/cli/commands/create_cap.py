@@ -14,7 +14,7 @@ def run(args, mgr) -> None:
         root = create_cap(name, target=target, force=force)
     except FileExistsError as e:
         print(f"\nError: {e}")
-        return
+        raise SystemExit(1)
 
     print(f"\nPack '{name}' created at {root}\n")
 

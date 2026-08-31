@@ -20,15 +20,17 @@ def run(args, mgr) -> None:
             "A bundle deploys each member to its own distribution; "
             "--to is only for a single component."
         )
-        return
+        raise SystemExit(1)
 
     override = getattr(args, "to", None)
+    failed = False
     for name in names:
         target = override
         if target is None:
             hit = mgr._index().resolve(name)
             if hit is None:
                 print(f"Component '{name}' is not discoverable from any source.")
+                failed = True
                 continue
             catalog, _ref = hit
             if catalog.base is not None:
@@ -36,18 +38,24 @@ def run(args, mgr) -> None:
                     f"Component '{name}' has a local source ({catalog.spec}); "
                     "use --to <repository> to deploy it."
                 )
+                failed = True
                 continue
             target = catalog.spec
         try:
             result = deploy_artifact(name, target)
         except RuntimeError as exc:
             print(str(exc))
+            failed = True
             continue
         if result is None:
             print(f"Artifact '{name}' is not published.")
             print("Run 'yak publish <name>' first.")
+            failed = True
             continue
         if not result:
             print(f"Deploy to '{target}' failed.")
+            failed = True
             continue
         print(f"Deployed {name} to {target}")
+    if failed:
+        raise SystemExit(1)

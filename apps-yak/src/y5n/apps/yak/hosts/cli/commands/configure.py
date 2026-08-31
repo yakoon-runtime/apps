@@ -28,7 +28,6 @@ import subprocess
 from pathlib import Path
 
 from rich.prompt import Prompt
-
 from y5n.apps.yak.hosts.cli.cwd import find_runtime_root
 from y5n.apps.yak.hosts.cli.ui import TerminalUI
 from y5n.apps.yak.installation.configure import (
@@ -49,12 +48,12 @@ def run(args, mgr) -> None:
     )
     if deployment_file is None:
         ui.fail("No deployment found — run 'yak install' first")
-        return
+        raise SystemExit(1)
 
     installation = load_installation(deployment_file)
     if installation is None or not installation.stores:
         ui.fail("The deployment binds no stores — run 'yak install' first")
-        return
+        raise SystemExit(1)
 
     requested = getattr(args, "store", None)
     names = _resolve_names(installation, requested)
@@ -62,7 +61,7 @@ def run(args, mgr) -> None:
         ui.fail(
             f"Store '{requested}' is not installed — configure never creates stores."
         )
-        return
+        raise SystemExit(1)
 
     ui.title("Configuring stores")
     updated = installation
@@ -82,7 +81,7 @@ def run(args, mgr) -> None:
             dsn = _ask_dsn(name, default_dsn(binding, name))
             if not dsn:
                 ui.fail(f"backend '{POSTGRES_BACKEND}' requires a dsn")
-                return
+                raise SystemExit(1)
         updated = configure_store(updated, name, backend, dsn)
 
     write_deployment(updated, deployment_file)

@@ -10,7 +10,7 @@ def run(args, mgr) -> None:
     if ctx is None:
         print("Not inside a Yak context.")
         print("Run 'yak init' first or cd into one.")
-        return
+        raise SystemExit(1)
 
     log_dir = ctx / ".yak" / "logs"
     if not log_dir.exists() or not any(log_dir.iterdir()):

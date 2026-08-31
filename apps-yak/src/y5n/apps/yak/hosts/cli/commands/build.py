@@ -19,18 +19,19 @@ def run(args, mgr) -> None:
     raw = getattr(args, "source", None)
     if not raw:
         ui.fail("No source given — usage: yak build <bundle|path>")
-        return
+        raise SystemExit(1)
 
     targets = _resolve_targets(raw, mgr)
     if targets is None:
         ui.fail(f"Unknown identity: {raw} — usage: yak build <bundle|path>")
-        return
+        raise SystemExit(1)
 
     ok = True
     for target in targets:
         ok = build_workflow(project_dir=target) and ok
     if not ok:
         ui.fail("Build failed")
+        raise SystemExit(1)
 
 
 def _resolve_targets(raw: str, mgr) -> list[Path] | None:

@@ -12,7 +12,7 @@ def run(args, mgr) -> None:
     if path is None:
         print("Not inside a Yak context or installation.")
         print("Run 'yak install' first or cd into one.")
-        return
+        raise SystemExit(1)
 
     python = path / ".venv" / "bin" / "python"
 
@@ -24,6 +24,6 @@ def run(args, mgr) -> None:
     if check.returncode != 0:
         print("Yakoon shell is not installed in this context.")
         print("Run 'yak install shell' to install it.")
-        return
+        raise SystemExit(1)
 
     subprocess.run([str(python), "-m", "y5n.apps.shell"], cwd=path)

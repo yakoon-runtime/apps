@@ -16,7 +16,7 @@ def run(args, mgr) -> None:
         found = find_runtime_root()
         if found is None:
             ui.fail("No installation found — run 'yak install' first")
-            return
+            raise SystemExit(1)
         target = found
 
     try:
@@ -24,3 +24,4 @@ def run(args, mgr) -> None:
         ui.ok(f"Updated {target}")
     except Exception as e:
         ui.fail(f"Update failed: {e}")
+        raise SystemExit(1)

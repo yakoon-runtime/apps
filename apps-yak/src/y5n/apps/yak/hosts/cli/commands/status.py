@@ -10,7 +10,7 @@ def run(args, mgr) -> None:
     ctx = find_context_root()
     if ctx is None:
         print("Not inside a Yak context.")
-        return
+        raise SystemExit(1)
 
     print(f"  Context: {ctx.name} ({ctx})")
 

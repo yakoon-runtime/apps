@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from y5n.apps.yak.cap.models import Mount
 from y5n.apps.yak.environment.io import load, save
 from y5n.apps.yak.hosts.cli.cwd import find_context_root
-from y5n.apps.yak.cap.models import Mount
 from y5n.apps.yak.workspace.materializer import Materializer
 
 
@@ -15,17 +15,17 @@ def run_add(args, mgr) -> None:
     if ctx is None:
         print("Not inside a Yak context.")
         print("Run 'yak init' first or cd into one.")
-        return
+        raise SystemExit(1)
 
     env = load(ctx)
     if env is None:
         print("No .yak/environment.yml found. Run 'yak install' first.")
-        return
+        raise SystemExit(1)
 
     source = Path(args.source).resolve()
     if not source.is_dir():
         print(f"  ✘ Source not found: {source}")
-        return
+        raise SystemExit(1)
 
     _warn_large_mount(source)
 
@@ -54,7 +54,7 @@ def run_remove(args, mgr) -> None:
     ctx = find_context_root()
     if ctx is None:
         print("Not inside a Yak context.")
-        return
+        raise SystemExit(1)
 
     env = load(ctx)
     if env is None:
@@ -85,7 +85,7 @@ def run_list(args, mgr) -> None:
     ctx = find_context_root()
     if ctx is None:
         print("Not inside a Yak context.")
-        return
+        raise SystemExit(1)
 
     env = load(ctx)
     if env is None or not env.mounts:

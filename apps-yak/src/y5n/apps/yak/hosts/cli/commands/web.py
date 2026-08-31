@@ -13,7 +13,7 @@ def run(args, mgr) -> None:
     if path is None:
         print("Not inside a Yak context.")
         print("Run 'yak init' first or cd into one.")
-        return
+        raise SystemExit(1)
 
     match args.action:
         case "start":

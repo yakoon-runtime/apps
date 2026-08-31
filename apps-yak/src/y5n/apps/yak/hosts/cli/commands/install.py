@@ -27,7 +27,7 @@ def run(args, mgr) -> None:
             f"'{identity}' is not a bundle — install identities are bundles "
             f"(e.g. 'runtime', 'system')."
         )
-        return
+        raise SystemExit(1)
 
     _ensure_context(root)
 
@@ -37,6 +37,7 @@ def run(args, mgr) -> None:
         ui.ok(f"Installed {identity}")
     except Exception as e:
         ui.fail(f"Installation failed: {e}")
+        raise SystemExit(1)
 
 
 def _is_bundle_or_component(mgr, identity: str, paths) -> bool:

@@ -19,15 +19,15 @@ def _create(args) -> None:
     if root.exists():
         if not root.is_dir():
             print(f"Error: {name} exists and is not a directory")
-            return
+            raise SystemExit(1)
         if list(root.iterdir()):
             print(f"Error: {name} is not empty")
-            return
+            raise SystemExit(1)
 
     ws_parent = _find_workspace_parent(root)
     if ws_parent:
         print(f"Error: {name} is inside an existing Yakoon Workspace ({ws_parent})")
-        return
+        raise SystemExit(1)
 
     root.mkdir(parents=True, exist_ok=True)
     (root / "packs").mkdir(exist_ok=True)

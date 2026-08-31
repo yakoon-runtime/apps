@@ -19,8 +19,8 @@ import types
 from pathlib import Path
 from urllib.error import HTTPError
 
+import pytest
 from conftest import make_source
-
 from y5n.apps.yak.publisher.publish import deploy_artifact
 from y5n.apps.yak.resolver.github import GithubReleaseRepository
 
@@ -429,7 +429,8 @@ def test_deploy_requires_to_for_a_local_component(monkeypatch):
             FileRepository(), DirectoryArtifactStore(), context=ctx
         )
 
-        deploy_cmd.run(_args(name="cool-shell", to=None), mgr)
+        with pytest.raises(SystemExit):
+            deploy_cmd.run(_args(name="cool-shell", to=None), mgr)
         assert calls == []  # local default is refused, not guessed
 
         deploy_cmd.run(_args(name="cool-shell", to="github:acme/shell-repo"), mgr)

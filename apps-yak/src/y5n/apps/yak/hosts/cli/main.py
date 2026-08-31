@@ -36,19 +36,33 @@ def _build_manager() -> InstallationManager:
     return InstallationManager(repo, artifacts, context=ctx)
 
 
-def main() -> None:
+def main() -> int:
+    """Run the CLI.
+
+    The command contract: a command returns normally on success and
+    raises SystemExit for a reported failure; any other exception is an
+    unexpected error and exits non-zero with a message. The process exit
+    code therefore reflects the command's outcome.
+    """
     if len(sys.argv) <= 1:
         _show_banner()
-        return
+        return 0
     if sys.argv[1] in ("-V", "--version"):
         print(f"Yakoon {VERSION}")
-        return
+        return 0
 
     parser = build_parser()
     args = parser.parse_args()
     manager = _build_manager()
-    args.func(args, manager)
+    try:
+        args.func(args, manager)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

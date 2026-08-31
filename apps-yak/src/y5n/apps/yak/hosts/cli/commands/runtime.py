@@ -18,7 +18,7 @@ def run(args, mgr) -> None:
         if path is None:
             print("Not inside a Yak context or installation.")
             print("Run 'yak install <name>' or 'yak init' first.")
-            return
+            raise SystemExit(1)
 
     svc = RuntimeService()
     match args.action:
@@ -50,10 +50,10 @@ def _start(svc: RuntimeService, path: Path) -> None:
     except RuntimeError as exc:
         print("Runtime start failed.")
         print(str(exc))
-        return
+        raise SystemExit(1)
     if pid is None:
         print("Runtime start failed")
-        return
+        raise SystemExit(1)
     print(f"Runtime started (pid {pid})")
     print(f"Logs     : {path / '.yak' / 'logs' / 'runtime.log'}")
 

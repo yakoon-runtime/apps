@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import types
 
-import yaml
 import pytest
+import yaml
 
 
 def _write_deployment(path, stores) -> None:
@@ -106,9 +106,7 @@ def test_configure_postgres_requires_a_dsn(installation):
 
 
 def test_default_dsn_keeps_an_existing_one(installation):
-    from y5n.apps.yak.installation.configure import default_dsn
-
-    from y5n.apps.yak.installation.configure import configure_store
+    from y5n.apps.yak.installation.configure import configure_store, default_dsn
 
     postgres = configure_store(
         installation, "contacts", "postgres", "postgresql://prod/db"
@@ -509,7 +507,11 @@ def test_command_refuses_an_uninstalled_store(tmp_path, monkeypatch):
     _make_env(tmp_path)
     before = (tmp_path / ".yak" / "deployment.yml").read_text()
 
-    configure_cmd.run(_args(target=str(tmp_path), store="worlds", verbose=False), None)
+    with pytest.raises(SystemExit) as exc:
+        configure_cmd.run(
+            _args(target=str(tmp_path), store="worlds", verbose=False), None
+        )
+    assert exc.value.code == 1
 
     assert (tmp_path / ".yak" / "deployment.yml").read_text() == before
 
@@ -519,8 +521,10 @@ def test_command_no_deployment_is_a_clean_fail(tmp_path, monkeypatch):
 
     monkeypatch.setattr(configure_cmd, "find_runtime_root", lambda: None)
 
-    configure_cmd.run(
-        _args(target=str(tmp_path / "empty"), store=None, verbose=False), None
-    )
+    with pytest.raises(SystemExit) as exc:
+        configure_cmd.run(
+            _args(target=str(tmp_path / "empty"), store=None, verbose=False), None
+        )
+    assert exc.value.code == 1
 
     assert not (tmp_path / "empty" / ".yak" / "deployment.yml").exists()

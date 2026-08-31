@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 from conftest import make_source
-
 from y5n.apps.yak.hosts.cli.cwd import Context
 from y5n.apps.yak.installation.manager import InstallationManager
 from y5n.apps.yak.repository.artifact import DirectoryArtifactStore
@@ -131,8 +130,10 @@ def test_deploy_expands_bundle_members(monkeypatch):
         )
         # All members are local-source components — deploy without --to
         # refuses (their distribution is local) instead of guessing.
-        deploy_cmd.run(_args(name="runtime", to=None), mgr)
+        with pytest.raises(SystemExit) as exc:
+            deploy_cmd.run(_args(name="runtime", to=None), mgr)
 
+        assert exc.value.code == 1
         assert calls == []
 
 
@@ -220,6 +221,8 @@ def test_deploy_rejects_to_for_a_bundle(monkeypatch):
             lambda name, target, location: calls.append((name, target, location))
             or True,
         )
-        deploy_cmd.run(_args(name="runtime", to="github:acme/packs"), mgr)
+        with pytest.raises(SystemExit) as exc:
+            deploy_cmd.run(_args(name="runtime", to="github:acme/packs"), mgr)
 
+        assert exc.value.code == 1
         assert calls == []

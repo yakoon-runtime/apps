@@ -11,7 +11,7 @@ def run(args, mgr) -> None:
     ctx = find_context_root()
     if ctx is None:
         print("Not inside a Yak context.")
-        return
+        raise SystemExit(1)
 
     issues: list[str] = []
 
@@ -25,9 +25,7 @@ def run(args, mgr) -> None:
         issues.append(f"✓ Environment:  {env_yml}")
     else:
         issues.append("— Environment:  none")
-        issues.append(
-            "  Run 'yak install <bundle>' (e.g. 'yak install runtime')"
-        )
+        issues.append("  Run 'yak install <bundle>' (e.g. 'yak install runtime')")
 
     from y5n.apps.yak.environment.io import load as load_env
 

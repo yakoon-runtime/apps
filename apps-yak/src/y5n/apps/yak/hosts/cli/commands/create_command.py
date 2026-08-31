@@ -25,7 +25,7 @@ def run(args, mgr) -> None:
         structure_dir = create_command(name, cap_name=cap_name, force=force)
     except (FileExistsError, RuntimeError) as e:
         print(f"\nError: {e}")
-        return
+        raise SystemExit(1)
 
     cap_root = structure_dir.parent.parent
     pname = _cap_name_from_root(cap_root)
