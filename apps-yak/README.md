@@ -157,6 +157,26 @@ by `install` — and a later `install`/`update` respects an already
 configured binding (it materializes missing bindings only). The change
 takes effect the next time the runtime starts.
 
+A postgres DSN is either a literal connection string or an `env://NAME`
+reference to an environment variable — the recommended form for
+real deployments, so no secret ends up in `.yak/deployment.yml`:
+
+```bash
+export IDENT_DATABASE='postgresql://postgres:secret@localhost:5432/yakoon_demo'
+yak configure ident
+```
+
+```text
+Backend for store 'ident' [memory/postgres] (memory): postgres
+DSN for store 'ident' (literal or env://NAME) (env://IDENT_DATABASE):
+```
+
+Provisioning runs against the chosen backend after `deployment.yml` is
+persisted; if the target database does not exist, configure asks whether
+to create it. A referenced environment variable must be set — a store
+bound to postgres never silently falls back to memory (see
+[runtime/docs/concepts/deployment.md](https://github.com/yakoon-runtime/runtime/blob/main/docs/concepts/deployment.md)).
+
 ## Build and distribute a component
 
 `yak` builds a component from its own `.yak/component.yml` identity, then
