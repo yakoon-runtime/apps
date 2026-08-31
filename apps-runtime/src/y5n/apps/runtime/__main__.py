@@ -68,9 +68,7 @@ def main(args: list[str] | None = None) -> None:
         runtime=RuntimeSettings(
             known=cfg.known,
             workspace_path=workspace_path,
-            installation_path=str(
-                Path(workspace_path).parent / "deployment.yml"
-            ),
+            installation_path=str(Path(workspace_path).parent / "deployment.yml"),
         )
     )
 
@@ -94,6 +92,9 @@ def main(args: list[str] | None = None) -> None:
 
     try:
         asyncio.run(_run())
+    except RuntimeError as exc:
+        print(f"Runtime start failed: {exc}", file=sys.stderr)
+        raise SystemExit(1)
     except KeyboardInterrupt:
         pass
 
