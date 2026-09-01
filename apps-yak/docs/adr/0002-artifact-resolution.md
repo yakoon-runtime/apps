@@ -1,7 +1,11 @@
 # ADR 002: Artifact Resolution
 
 **Status:** Accepted  
-**Date:** 2026-07-25
+**Date:** 2026-07-25  
+**Update (2026-08-31):** Corrected the build-output contract and documented
+the artifact lifecycle scopes. The original text claimed `yak build` writes
+to `~/.yak/artifacts/` — that was never the implemented behavior (see the
+lifecycle section below).
 
 ---
 
@@ -61,7 +65,52 @@ build delegates to a **build backend** selected by the project's metadata.
 The first implementation produces Python wheels. Future backends may produce
 other formats (tarballs, gems, dotnet DLLs).
 
-Build output goes to a configurable artifact store (default `~/.yak/artifacts/`).
+Build output goes to the **context-local store** `<context>/.yak/artifacts/`.
+A build requires a Yak context (`yak init`) — there is no global fallback.
+Builds never touch any store outside the context (ADR-5, ee34e49: "No
+global state for builds — artifacts belong to the context").
+
+### 1a. Artifact lifecycle — three scopes
+
+Artifacts cross exactly two boundaries, each crossed by one explicit verb.
+No verb ever performs another verb's crossing implicitly.
+
+```text
+              Scope widens →
+  Development            Local / User              Remote
+  Context                Global
+     │                      │                        │
+     │ yak build            │                        │
+     ▼                      │                        │
+  <ctx>/.yak/artifacts      │                        │
+     │                      │                        │
+     │    yak publish       │                        │
+     └─────────────────────►│                        │
+                            ▼                        │
+                     ~/.yak/artifacts                │
+                            │                        │
+                            │      yak deploy        │
+                            └───────────────────────►│
+                                                     ▼
+                                               Distribution
+```
+
+| Verb   | Reads                              | Writes                     | Scope crossed   |
+|--------|------------------------------------|----------------------------|-----------------|
+| build  | source repositories                | `<ctx>/.yak/artifacts/`    | none (in-context) |
+| publish | context store first (`_collect_roots`) | `~/.yak/artifacts/`   | context → user  |
+| deploy | **only** `~/.yak/artifacts/`       | remote repository (GitHub Releases today) | user → remote |
+
+Consequences of this contract:
+
+- `yak build` while an unrelated Yakoon installation runs on the same
+  machine cannot disturb it — dev artifacts stay in the context.
+- `yak deploy` never publishes implicitly: an artifact that was not
+  published first is rejected with "Run 'yak publish' first". Deploy
+  deliberately does not auto-publish.
+- Install resolution searches context-local first, then the user-global
+  store (read-only fallback), then the legacy pre-context cache
+  `~/.yak/cache/artifacts/` (historical; no producer since 2026-07-26).
 
 ### 2. Sources — where bytes come from
 
