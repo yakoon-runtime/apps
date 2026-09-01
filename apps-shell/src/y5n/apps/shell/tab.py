@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Static, TabPane
-from y5n.runtime.api.clients import ClientConnection
+from y5n.runtime.api.clients import ClientConnection, SessionNotFound
 from y5n.runtime.api.document import DocumentEvent
 from y5n.runtime.api.flow.patterns.public import FormAction
 from y5n.runtime.api.runtime import Event, Routing
@@ -119,9 +119,15 @@ class RuntimeTab:
         # Reconnect supplies the remembered session key (RESUME); a fresh
         # tab has none (CREATE). The runtime decides and returns the
         # actual key on the connection.
-        connection = await transport.connect(
-            self._make_view_callback(), session_key=self._session_key
-        )
+        try:
+            connection = await transport.connect(
+                self._make_view_callback(), session_key=self._session_key
+            )
+        except SessionNotFound:
+            # The retained session no longer exists (e.g. a runtime restart
+            # with a volatile store). The reconnect intention continues
+            # with a fresh session — any other failure still propagates.
+            connection = await transport.connect(self._make_view_callback())
         self.connection = connection
         self._session_key = connection.session_key
 
