@@ -29,6 +29,7 @@ class RuntimeTab:
         self.pane_id = pane_id
         self.connection: ClientConnection | None = None
         self._url: str | None = None
+        self._session_key: str | None = None
         self._on_connect = on_connect
         self._on_disconnect = on_disconnect
         self._built = False
@@ -115,8 +116,14 @@ class RuntimeTab:
 
     async def connect(self, transport: WebSocketClientTransport) -> None:
         self._url = transport._url
-        connection = await transport.connect(self._make_view_callback())
+        # Reconnect supplies the remembered session key (RESUME); a fresh
+        # tab has none (CREATE). The runtime decides and returns the
+        # actual key on the connection.
+        connection = await transport.connect(
+            self._make_view_callback(), session_key=self._session_key
+        )
         self.connection = connection
+        self._session_key = connection.session_key
 
     # ── View ──
 
