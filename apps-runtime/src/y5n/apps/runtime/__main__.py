@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from websockets.asyncio.server import serve
+from y5n.runtime.api.clients import SessionNotFound
 from y5n.runtime.engine.settings import RuntimeSettings, Settings
 from y5n.runtime.engine.wire.runtime import build_runtime
 from y5n.runtime.transport.server import WebSocketServerTransport
@@ -51,7 +52,13 @@ def _resolve_workspace() -> str:
 
 async def handler(websocket):
     transport = WebSocketServerTransport(_host)
-    _, recv = await transport.connect(websocket)
+    try:
+        _, recv = await transport.connect(websocket)
+    except SessionNotFound:
+        # Expected resume miss: the structured error frame is already on
+        # the wire and the client reconnects with CREATE. Returning
+        # normally keeps websockets from logging a handler failure.
+        return
     await recv()
 
 
