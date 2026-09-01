@@ -12,9 +12,7 @@ def _add_action(sub, name: str, actions: list[str], func):
 
 def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import build as _build
-    from y5n.apps.yak.hosts.cli.commands import create_cap as _create_cap
     from y5n.apps.yak.hosts.cli.commands import configure as _configure
-    from y5n.apps.yak.hosts.cli.commands import create_command as _create_command
     from y5n.apps.yak.hosts.cli.commands import deploy as _deploy
     from y5n.apps.yak.hosts.cli.commands import doctor as _doctor
     from y5n.apps.yak.hosts.cli.commands import init_cmd as _init
@@ -27,7 +25,6 @@ def build_parser() -> argparse.ArgumentParser:
     from y5n.apps.yak.hosts.cli.commands import status as _status
     from y5n.apps.yak.hosts.cli.commands import update as _update
     from y5n.apps.yak.hosts.cli.commands import web as _web
-    from y5n.apps.yak.hosts.cli.commands import workspace as _workspace
     from y5n.apps.yak.hosts.cli.usage import USAGE
 
     parser = argparse.ArgumentParser(
@@ -150,30 +147,5 @@ def build_parser() -> argparse.ArgumentParser:
         help="Bundle or source path (e.g. runtime, ./runtime/packages/runtime-engine)",
     )
     p.set_defaults(func=_build.run)
-
-    p = sub.add_parser("create", help="Scaffold new Yakoon projects")
-    create_sub = p.add_subparsers(dest="create_action", required=True)
-    p_cap = create_sub.add_parser("cap", help="Create a new cap")
-    p_cap.add_argument("name", help="Cap name (e.g. hello)")
-    p_cap.add_argument("--target", help="Target directory (default: CWD)")
-    p_cap.add_argument(
-        "--force", "-f", action="store_true", help="Overwrite existing directory"
-    )
-    p_cap.set_defaults(func=_create_cap.run)
-    p_cmd = create_sub.add_parser(
-        "command", help="Create a new command in the current cap"
-    )
-    p_cmd.add_argument("name", help="Command name (e.g. greet)")
-    p_cmd.add_argument("--cap", help="Cap name (auto-detected from CWD if omitted)")
-    p_cmd.add_argument(
-        "--force", "-f", action="store_true", help="Overwrite existing files"
-    )
-    p_cmd.set_defaults(func=_create_command.run)
-
-    p = sub.add_parser("workspace", help="Manage Yakoon workspaces")
-    ws_sub = p.add_subparsers(dest="ws_action", required=True)
-    p_create = ws_sub.add_parser("create", help="Create a new workspace")
-    p_create.add_argument("name")
-    p_create.set_defaults(func=_workspace.run)
 
     return parser

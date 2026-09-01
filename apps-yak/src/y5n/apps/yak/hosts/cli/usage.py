@@ -8,11 +8,7 @@ Usage:
     init                   Create a Yak context
 
   Typical workflow
-    create → build → install → configure (optional) → shell
-
-  Development
-    create cap             Create a new cap
-    create command         Add a command to the current cap
+    build → install → configure (optional) → shell
 
   Packaging
     build                  Build artifacts
