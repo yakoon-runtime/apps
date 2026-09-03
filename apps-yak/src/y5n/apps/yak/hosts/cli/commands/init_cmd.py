@@ -8,6 +8,7 @@ deployments — the sources are data.
 
 from __future__ import annotations
 
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -59,7 +60,25 @@ def _init(root: Path) -> None:
 
     (yak_dir / "context.toml").write_text("\n".join(ctx_lines))
 
+    _seed_startup(root, yak_dir)
+
     if already:
         print(f"Reinitialized existing Yak context in {yak_dir}")
     else:
         print(f"Initialized empty Yak context in {yak_dir}")
+
+
+def _seed_startup(root: Path, yak_dir: Path) -> None:
+    """Seed ``.yak/startup.yml`` from the developer workspace — once.
+
+    A ``startup.yml`` beside the workspace root is the initial startup
+    policy (ADR-25). The installation owns the seeded copy: an existing
+    target is never touched, and a workspace without the source stays
+    exactly as it is.
+    """
+    target = yak_dir / "startup.yml"
+    if target.exists():
+        return
+    source = root / "startup.yml"
+    if source.is_file():
+        shutil.copy2(source, target)

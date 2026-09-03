@@ -104,3 +104,39 @@ def test_install_ensures_context_when_missing():
         # A second call is a no-op.
         _ensure_context(root)
         assert ctx.exists()
+
+
+def test_init_seeds_startup_from_developer_workspace(tmp_path):
+    """The developer workspace's startup.yml seeds the installation — as-is."""
+    from y5n.apps.yak.hosts.cli.commands import init_cmd
+
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "startup.yml").write_text("startup:\n  - welcome\n")
+    init_cmd._init(root)
+    target = root / ".yak" / "startup.yml"
+    assert target.read_bytes() == (root / "startup.yml").read_bytes()
+
+
+def test_init_never_overwrites_seeded_startup(tmp_path):
+    """The installation owns the seeded copy — re-init leaves it untouched."""
+    from y5n.apps.yak.hosts.cli.commands import init_cmd
+
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "startup.yml").write_text("startup:\n  - welcome\n")
+    init_cmd._init(root)
+    target = root / ".yak" / "startup.yml"
+    target.write_text("startup:\n  - locally-changed\n")
+
+    init_cmd._init(root)
+
+    assert target.read_text() == "startup:\n  - locally-changed\n"
+
+
+def test_init_without_developer_startup_creates_none(tmp_path):
+    from y5n.apps.yak.hosts.cli.commands import init_cmd
+
+    root = tmp_path / "proj"
+    init_cmd._init(root)
+    assert not (root / ".yak" / "startup.yml").exists()
