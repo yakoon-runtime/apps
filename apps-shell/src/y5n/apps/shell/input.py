@@ -7,6 +7,8 @@ from textual import events
 from textual.widgets import TextArea
 from y5n.runtime.api.flow.patterns.public import FormAction
 
+MASK = "\u2022"
+
 
 class ShellInput(TextArea):
 
@@ -26,6 +28,42 @@ class ShellInput(TextArea):
         super().__init__(**kwargs)
         self._on_submit = on_submit
         self._on_action = on_action
+        self._secret = False
+        self._raw = ""
+
+    # ── Secret mode (presentation only — the raw value is preserved) ──
+
+    @property
+    def secret(self) -> bool:
+        return self._secret
+
+    def set_secret(self, secret: bool, value: str | None = None) -> None:
+        if secret:
+            value = value or ""
+            if self._secret and self._raw == value:
+                return
+            self._secret = True
+            self._raw = value
+            self.text = MASK * len(self._raw)
+            self.cursor_location = self.document.end
+        else:
+            if self._secret:
+                self._secret = False
+                self._raw = ""
+                self.text = ""
+            if value is not None:
+                self.text = value
+
+    def submit_value(self) -> str:
+        return (self._raw if self._secret else self.text).strip()
+
+    def _redraw_masked(self) -> None:
+        self.text = MASK * len(self._raw)
+        self.cursor_location = self.document.end
+
+    def clear(self) -> None:
+        self._raw = ""
+        super().clear()
 
     async def action_submit_form(self) -> None:
         if self._on_action:
@@ -35,7 +73,11 @@ class ShellInput(TextArea):
     def action_paste(self) -> None:
         text = self.app.clipboard
         if text:
-            self.insert(text)
+            if self._secret:
+                self._raw += text
+                self._redraw_masked()
+            else:
+                self.insert(text)
 
     def action_scroll_page_up(self) -> None:
         self._scroll_output_page(-1)
@@ -61,7 +103,7 @@ class ShellInput(TextArea):
         elif event.key == "enter":
             event.stop()
             event.prevent_default()
-            text = self.text.strip()
+            text = self.submit_value()
             self.clear()
             await self._on_submit(text, False)
         elif event.key == "ctrl+up" and self._on_action:
@@ -77,6 +119,18 @@ class ShellInput(TextArea):
             event.prevent_default()
             self.clear()
             await self._on_submit("/jobs/stop --current", True)
+        elif self._secret and event.is_printable:
+            # Secret mode: capture the raw character, never echo it.
+            event.stop()
+            event.prevent_default()
+            self._raw += event.character
+            self._redraw_masked()
+        elif self._secret and event.key == "backspace":
+            event.stop()
+            event.prevent_default()
+            if self._raw:
+                self._raw = self._raw[:-1]
+                self._redraw_masked()
         else:
             await super()._on_key(event)
 

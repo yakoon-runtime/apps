@@ -56,13 +56,19 @@ class TextualOutput:
         self._current_job_id: str | None = None
         self._pending_input: str | None = None
         self._active_field_value: str | None = None
+        self._active_field_secret: bool = False
 
     @property
     def active_field_value(self) -> str | None:
         return self._active_field_value
 
+    @property
+    def active_field_secret(self) -> bool:
+        return self._active_field_secret
+
     async def view(self, event: DocumentEvent) -> None:
         self._active_field_value = None
+        self._active_field_secret = False
 
         if event.ctx and event.ctx.echo:
             self._pending_input = event.ctx.echo
@@ -287,26 +293,31 @@ class TextualOutput:
             state = f.get("state")
             required = f.get("required", False)
             error = f.get("error")
+            secret = bool(f.get("secret", False))
+            # Secret fields never visibly echo their value — in any state.
+            shown = "•" * len(value) if secret and value else value
             req = " *" if required else ""
 
             if state == "active":
                 self._active_field_value = value or ""
+                self._active_field_secret = secret
                 line = (
-                    Text(f"\u25b6 {label}{req}: {value}", style="bold")
-                    if value
+                    Text(f"\u25b6 {label}{req}: {shown}", style="bold")
+                    if shown
                     else Text(f"\u25b6 {label}{req}: ", style="bold")
                 )
                 found_active = True
             elif state == "done":
-                line = Text(f"  {label}{req}: {value}")
+                line = Text(f"  {label}{req}: {shown}")
             elif state == "idle":
                 line = Text(f"  {label}{req}:", style="dim")
             elif not found_active and value is None:
                 self._active_field_value = ""
+                self._active_field_secret = secret
                 line = Text(f"\u25b6 {label}{req}: ", style="bold")
                 found_active = True
             elif value is not None:
-                line = Text(f"  {label}{req}: {value}")
+                line = Text(f"  {label}{req}: {shown}")
             else:
                 line = Text(f"  {label}{req}:", style="dim")
             lines.append(line)

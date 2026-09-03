@@ -220,9 +220,10 @@ class RuntimeTab:
     # ── Form field support ──
 
     def _sync_input_with_form(self) -> None:
-        value = self.output.active_field_value
-        if value is not None:
-            self._input.text = value
+        self._input.set_secret(
+            self.output.active_field_secret,
+            self.output.active_field_value,
+        )
 
     # ── Focus ──
 
