@@ -149,6 +149,7 @@ async def test_secret_typing_is_masked_but_raw_is_preserved():
         await pilot.press("enter")
         assert app.submitted == [("hunter2", False, MASK * 7)]  # raw reaches submit
         assert inp.text == ""
+        assert inp.secret is False  # submit ends the secret presentation
 
 
 @pytest.mark.asyncio
@@ -338,3 +339,43 @@ async def test_secret_submit_echo_never_renders_raw():
             rendered.append(content.plain if hasattr(content, "plain") else str(content))
         text = "\n".join(rendered)
         assert raw not in text
+
+
+@pytest.mark.asyncio
+async def test_secret_mode_ends_on_submit_before_next_projection():
+    """The latency window: after submitting the password, ordinary typing
+    is visible immediately — even before ANY result projection arrives.
+
+    Regression: ShellInput kept secret mode after submit, so typing the
+    next command within the runtime round-trip showed masked characters
+    (ls displayed as **). A later secret Field projection must
+    re-establish secret mode independently.
+    """
+    app = _RealShellHarness(await _real_su_password_events())
+    async with app.run_test() as pilot:
+        app.input.focus()
+        await pilot.pause()
+
+        await app.feed()
+        await pilot.pause()
+        assert app.input.secret is True  # secret field projection → ON
+
+        await pilot.press(*"hunter2")
+        assert "hunter2" not in app.input.text  # typing displayed masked
+        await pilot.press("enter")
+        (text, echo) = app.submitted[0]
+        assert text == "hunter2"  # payload remains raw
+        assert echo == MASK * 7  # echo remains masked
+        assert app.input.secret is False  # secret immediately OFF
+
+        # NO projection has arrived yet — ordinary typing is visible
+        await pilot.press(*"ls")
+        assert app.input.text == "ls"
+        assert app.input._raw == ""
+
+        # a fresh secret Field projection establishes secret mode again
+        app.events = await _real_su_password_events()
+        await app.feed()
+        await pilot.pause()
+        assert app.input.secret is True
+        assert app.input.text == ""

@@ -62,6 +62,10 @@ class ShellInput(TextArea):
         self.cursor_location = self.document.end
 
     def clear(self) -> None:
+        # Clearing ends the current input acquisition: secret presentation
+        # state belongs to the active input only. A later secret Field
+        # projection re-establishes it.
+        self._secret = False
         self._raw = ""
         super().clear()
 
