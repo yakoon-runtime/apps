@@ -67,9 +67,6 @@ class TextualOutput:
         return self._active_field_secret
 
     async def view(self, event: DocumentEvent) -> None:
-        self._active_field_value = None
-        self._active_field_secret = False
-
         if event.ctx and event.ctx.echo:
             self._pending_input = event.ctx.echo
 
@@ -100,6 +97,8 @@ class TextualOutput:
 
     def _replace_group(self) -> None:
         self._widgets.clear()
+        self._active_field_value = None
+        self._active_field_secret = False
         if self._current_group is not None:
             self._current_group.remove_children()
         else:
@@ -116,6 +115,8 @@ class TextualOutput:
 
     def _start_group(self) -> None:
         self._widgets.clear()
+        self._active_field_value = None
+        self._active_field_secret = False
         group = Vertical(classes="document-group")
         self._container.mount(group)
 
@@ -137,6 +138,8 @@ class TextualOutput:
 
     def _clear(self) -> None:
         self._widgets.clear()
+        self._active_field_value = None
+        self._active_field_secret = False
         self._current_group = None
         self._current_job_id = None
         self._container.query(".document-group").remove()

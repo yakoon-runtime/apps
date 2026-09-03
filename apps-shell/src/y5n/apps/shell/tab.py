@@ -80,7 +80,9 @@ class RuntimeTab:
 
     # ── Submit ──
 
-    async def _handle_submit(self, text: str, direct: bool = False) -> None:
+    async def _handle_submit(
+        self, text: str, direct: bool = False, echo: str | None = None
+    ) -> None:
         if text.startswith("/connect "):
             url = text[len("/connect ") :].strip()
             await self._on_connect(url, url)
@@ -103,7 +105,7 @@ class RuntimeTab:
                         context=InputContext(
                             origin=Origin.HUMAN,
                             channel="textual",
-                            echo=text,
+                            echo=echo if echo is not None else text,
                         ),
                         routing=routing,
                     )

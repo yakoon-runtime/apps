@@ -21,7 +21,7 @@ class ShellInput(TextArea):
 
     def __init__(
         self,
-        on_submit: Callable[[str, bool], Awaitable[None]],
+        on_submit: Callable[[str, bool, str | None], Awaitable[None]],
         on_action: Callable[[FormAction], Awaitable[None]] | None = None,
         **kwargs: Any,
     ):
@@ -99,13 +99,16 @@ class ShellInput(TextArea):
             event.stop()
             event.prevent_default()
             self.clear()
-            await self._on_submit("/jobs/bg", True)
+            await self._on_submit("/jobs/bg", True, None)
         elif event.key == "enter":
             event.stop()
             event.prevent_default()
             text = self.submit_value()
+            # Secret input never travels as raw echo — the renderer shows a
+            # masked representation instead.
+            echo = MASK * len(text) if self._secret else text
             self.clear()
-            await self._on_submit(text, False)
+            await self._on_submit(text, False, echo)
         elif event.key == "ctrl+up" and self._on_action:
             event.stop()
             event.prevent_default()
@@ -118,7 +121,7 @@ class ShellInput(TextArea):
             event.stop()
             event.prevent_default()
             self.clear()
-            await self._on_submit("/jobs/stop --current", True)
+            await self._on_submit("/jobs/stop --current", True, None)
         elif self._secret and event.is_printable:
             # Secret mode: capture the raw character, never echo it.
             event.stop()
